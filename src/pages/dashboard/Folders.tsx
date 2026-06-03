@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Icon } from '@/components/layout/DashboardIcon'
 import { IC } from '@/components/layout/dashboardIconPaths'
 import { Badge, Button, EmptyState, Input } from '@/components/ui'
-import { mockCurrentUser, mockFolders } from '@/lib/mockData'
+import { useAuth } from '@/context/auth'
+import { requireSupabase } from '@/lib/supabase'
 import { ShareModal } from '@/components/ShareModal'
 import type { Folder, Visibility } from '@/types'
 
@@ -12,8 +13,12 @@ function formatDate(iso: string) {
 }
 
 export function DashboardFolders() {
-  const user = mockCurrentUser
-  const [foldersList, setFoldersList] = useState<Folder[]>(mockFolders)
+  const { profile } = useAuth()
+  const user = profile
+
+  const [loading, setLoading] = useState(true)
+  const [foldersList, setFoldersList] = useState<Folder[]>([])
+  const [notesList, setNotesList] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [vis, setVis] = useState<'all' | 'public' | 'private'>('all')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
@@ -27,6 +32,37 @@ export function DashboardFolders() {
   const [newDesc, setNewDesc] = useState('')
   const [newVisibility, setNewVisibility] = useState<Visibility>('public') // notes/folders public by default!
 
+  const loadData = async () => {
+    if (!user) return
+    try {
+      const supabase = requireSupabase()
+      
+      const { data: folders, error: foldersErr } = await supabase
+        .from('folders')
+        .select('*')
+        .eq('owner_id', user.id)
+
+      const { data: notes, error: notesErr } = await supabase
+        .from('notes')
+        .select('id, folder_id')
+        .eq('owner_id', user.id)
+
+      if (foldersErr) throw foldersErr
+      if (notesErr) throw notesErr
+
+      setFoldersList(folders || [])
+      setNotesList(notes || [])
+    } catch (err) {
+      console.error('Error fetching folders:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadData()
+  }, [user])
+
   const rootFolders = foldersList.filter(f => f.parent_id === null)
   const filtered = rootFolders.filter(f => {
     const q = search.toLowerCase()
@@ -36,46 +72,73 @@ export function DashboardFolders() {
     )
   })
 
-  const handleCreateFolder = (e: React.FormEvent) => {
+  const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newTitle.trim()) return
+    if (!newTitle.trim() || !user) return
 
     const slug = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    const newFolder: Folder = {
-      id: `folder-${Date.now()}`,
-      owner_id: user.id,
-      parent_id: null,
-      title: newTitle.trim(),
-      description: newDesc.trim() || null,
-      slug,
-      visibility: newVisibility,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      note_count: 0,
-      subfolders: [],
-    }
-
-    // Insert at index 1 (right below general folder)
-    const list = [...foldersList]
-    list.splice(1, 0, newFolder)
-    mockFolders.splice(1, 0, newFolder) // sync mock store
     
-    setFoldersList(list)
-    setIsCreateOpen(false)
-    setNewTitle('')
-    setNewDesc('')
-    setNewVisibility('public')
+    try {
+      const supabase = requireSupabase()
+      const { error } = await supabase
+        .from('folders')
+        .insert({
+          owner_id: user.id,
+          parent_id: null,
+          title: newTitle.trim(),
+          description: newDesc.trim() || null,
+          slug,
+          visibility: newVisibility,
+        })
+
+      if (error) throw error
+
+      await loadData()
+      setIsCreateOpen(false)
+      setNewTitle('')
+      setNewDesc('')
+      setNewVisibility('public')
+    } catch (err) {
+      console.error('Error creating folder:', err)
+    }
   }
 
-  const handleDeleteFolder = (id: string) => {
-    const list = foldersList.filter(f => f.id !== id)
-    setFoldersList(list)
-    
-    // Sync with mock store
-    const idx = mockFolders.findIndex(f => f.id === id)
-    if (idx !== -1) mockFolders.splice(idx, 1)
+  const handleDeleteFolder = async (id: string) => {
+    try {
+      const supabase = requireSupabase()
+      const { error } = await supabase
+        .from('folders')
+        .delete()
+        .eq('id', id)
 
-    setConfirmDelete(null)
+      if (error) throw error
+
+      await loadData()
+      setConfirmDelete(null)
+    } catch (err) {
+      console.error('Error deleting folder:', err)
+    }
+  }
+
+  // Pre-calculate subfolders and notes count for rendering
+  const enrichedFolders = filtered.map(folder => {
+    const subCount = foldersList.filter(f => f.parent_id === folder.id).length
+    const noteCount = notesList.filter(n => n.folder_id === folder.id).length
+    return {
+      ...folder,
+      note_count: noteCount,
+      subCount,
+    }
+  })
+
+  if (!user || loading) {
+    return (
+      <DashboardLayout user={user || { id: '', full_name: 'Loading...', user_type: 'user', created_at: '' }} variant="user">
+        <div style={{ padding: 'var(--space-20)', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          Loading folders…
+        </div>
+      </DashboardLayout>
+    )
   }
 
   return (
@@ -106,7 +169,7 @@ export function DashboardFolders() {
       </div>
 
       {/* Table */}
-      {filtered.length > 0 ? (
+      {enrichedFolders.length > 0 ? (
         <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
           {/* Table head */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 120px 140px', gap: 'var(--space-4)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-subtle)' }}>
@@ -115,12 +178,12 @@ export function DashboardFolders() {
             ))}
           </div>
 
-          {filtered.map((folder, i) => (
+          {enrichedFolders.map((folder, i) => (
             <div key={folder.id} style={{
               display: 'grid', gridTemplateColumns: '1fr 80px 100px 120px 140px',
               gap: 'var(--space-4)', alignItems: 'center',
               padding: 'var(--space-4) var(--space-5)',
-              borderBottom: i < filtered.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+              borderBottom: i < enrichedFolders.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
               transition: 'background var(--duration-fast)',
             }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-subtle)'}
@@ -145,7 +208,6 @@ export function DashboardFolders() {
                 {folder.visibility === 'private' && (
                   <Button variant="accent-ghost" size="xs" onClick={() => setShareItem(folder)}>Share</Button>
                 )}
-                <Button variant="ghost" size="xs">Edit</Button>
                 <Button variant="danger" size="xs" onClick={() => setConfirmDelete(folder.id)}>Delete</Button>
               </div>
             </div>
@@ -161,7 +223,7 @@ export function DashboardFolders() {
           <div onClick={() => setConfirmDelete(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200 }} />
           <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 201, background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)', width: '360px', boxShadow: 'var(--shadow-xl)' }}>
             <h4 style={{ marginBottom: 'var(--space-3)' }}>Delete folder?</h4>
-            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>This will permanently delete the folder and all its notes. This cannot be undone.</p>
+            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>This will permanently delete the folder, all its subfolders, and all its notes. This cannot be undone.</p>
             <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
               <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(null)}>Cancel</Button>
               <Button variant="danger" size="sm" onClick={() => handleDeleteFolder(confirmDelete)}>Delete</Button>

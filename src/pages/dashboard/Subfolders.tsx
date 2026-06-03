@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Icon } from '@/components/layout/DashboardIcon'
 import { IC } from '@/components/layout/dashboardIconPaths'
 import { Button, EmptyState, Input, Badge } from '@/components/ui'
-import { mockCurrentUser, mockFolders } from '@/lib/mockData'
+import { useAuth } from '@/context/auth'
+import { requireSupabase } from '@/lib/supabase'
 import { ShareModal } from '@/components/ShareModal'
 import type { Folder, Visibility } from '@/types'
 
@@ -12,8 +13,12 @@ function formatDate(iso: string) {
 }
 
 export function DashboardSubfolders() {
-  const user = mockCurrentUser
-  const [foldersList, setFoldersList] = useState<Folder[]>(mockFolders)
+  const { profile } = useAuth()
+  const user = profile
+
+  const [loading, setLoading] = useState(true)
+  const [foldersList, setFoldersList] = useState<Folder[]>([])
+  const [notesList, setNotesList] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [shareItem, setShareItem] = useState<Folder | null>(null)
 
@@ -24,59 +29,113 @@ export function DashboardSubfolders() {
   const [parentId, setParentId] = useState('')
   const [newVisibility, setNewVisibility] = useState<Visibility>('public') // default public!
 
+  const loadData = async () => {
+    if (!user) return
+    try {
+      const supabase = requireSupabase()
+      const { data: folders, error: foldersErr } = await supabase
+        .from('folders')
+        .select('*')
+        .eq('owner_id', user.id)
+
+      const { data: notes, error: notesErr } = await supabase
+        .from('notes')
+        .select('id, folder_id')
+        .eq('owner_id', user.id)
+
+      if (foldersErr) throw foldersErr
+      if (notesErr) throw notesErr
+
+      setFoldersList(folders || [])
+      setNotesList(notes || [])
+    } catch (err) {
+      console.error('Error fetching folders:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadData()
+  }, [user])
+
+  const rootFolders = foldersList.filter(f => f.parent_id === null)
+  
   // Flatten all subfolders with their parent details
   const allSubfolders = foldersList
-    .filter(f => f.parent_id === null)
-    .flatMap(parent =>
-      (parent.subfolders ?? []).map(sf => ({ ...sf, parentTitle: parent.title, parentSlug: parent.slug }))
-    )
+    .filter(f => f.parent_id !== null)
+    .map(sf => {
+      const parent = rootFolders.find(rf => rf.id === sf.parent_id)
+      const noteCount = notesList.filter(n => n.folder_id === sf.id).length
+      return {
+        ...sf,
+        parentTitle: parent ? parent.title : 'Unknown Parent',
+        parentSlug: parent ? parent.slug : '',
+        note_count: noteCount,
+      }
+    })
 
   const filtered = allSubfolders.filter(sf => {
     const q = search.toLowerCase()
     return sf.title.toLowerCase().includes(q) || sf.parentTitle.toLowerCase().includes(q)
   })
 
-  const handleCreateSubfolder = (e: React.FormEvent) => {
+  const handleCreateSubfolder = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newTitle.trim() || !parentId) return
+    if (!newTitle.trim() || !parentId || !user) return
 
     const slug = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    const newSub: Folder = {
-      id: `subfolder-${Date.now()}`,
-      owner_id: user.id,
-      parent_id: parentId,
-      title: newTitle.trim(),
-      description: newDesc.trim() || null,
-      slug,
-      visibility: newVisibility,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      note_count: 0,
+    
+    try {
+      const supabase = requireSupabase()
+      const { error } = await supabase
+        .from('folders')
+        .insert({
+          owner_id: user.id,
+          parent_id: parentId,
+          title: newTitle.trim(),
+          description: newDesc.trim() || null,
+          slug,
+          visibility: newVisibility,
+        })
+
+      if (error) throw error
+
+      await loadData()
+      setIsCreateOpen(false)
+      setNewTitle('')
+      setNewDesc('')
+      setParentId('')
+      setNewVisibility('public')
+    } catch (err) {
+      console.error('Error creating subfolder:', err)
     }
+  }
 
-    // Update parent subfolders inside lists
-    const nextList = foldersList.map(folder => {
-      if (folder.id === parentId) {
-        return {
-          ...folder,
-          subfolders: [...(folder.subfolders ?? []), newSub],
-        }
-      }
-      return folder
-    })
+  const handleDeleteSubfolder = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this subfolder and all its notes?')) return
+    try {
+      const supabase = requireSupabase()
+      const { error } = await supabase
+        .from('folders')
+        .delete()
+        .eq('id', id)
 
-    // Also sync the global mock folders store
-    const mockParent = mockFolders.find(f => f.id === parentId)
-    if (mockParent) {
-      mockParent.subfolders = [...(mockParent.subfolders ?? []), newSub]
+      if (error) throw error
+      await loadData()
+    } catch (err) {
+      console.error('Error deleting subfolder:', err)
     }
+  }
 
-    setFoldersList(nextList)
-    setIsCreateOpen(false)
-    setNewTitle('')
-    setNewDesc('')
-    setParentId('')
-    setNewVisibility('public')
+  if (!user || loading) {
+    return (
+      <DashboardLayout user={user || { id: '', full_name: 'Loading...', user_type: 'user', created_at: '' }} variant="user">
+        <div style={{ padding: 'var(--space-20)', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          Loading subfolders…
+        </div>
+      </DashboardLayout>
+    )
   }
 
   return (
@@ -141,8 +200,7 @@ export function DashboardSubfolders() {
                 {sf.visibility === 'private' && (
                   <Button variant="accent-ghost" size="xs" onClick={() => setShareItem(sf as Folder)}>Share</Button>
                 )}
-                <Button variant="ghost" size="xs">Edit</Button>
-                <Button variant="danger" size="xs">Delete</Button>
+                <Button variant="danger" size="xs" onClick={() => handleDeleteSubfolder(sf.id)}>Delete</Button>
               </div>
             </div>
           ))}
@@ -180,7 +238,7 @@ export function DashboardSubfolders() {
                   }}
                 >
                   <option value="" disabled>Select a root folder…</option>
-                  {foldersList.filter(f => f.parent_id === null).map(f => (
+                  {rootFolders.map(f => (
                     <option key={f.id} value={f.id}>📁 {f.title}</option>
                   ))}
                 </select>

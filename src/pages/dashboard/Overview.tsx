@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Icon } from '@/components/layout/DashboardIcon'
 import { IC } from '@/components/layout/dashboardIconPaths'
 import { Badge, Button } from '@/components/ui'
-import { mockCurrentUser, mockFolders, mockNotes } from '@/lib/mockData'
+import { useAuth } from '@/context/auth'
+import { requireSupabase } from '@/lib/supabase'
 
 function StatCard({ label, value, icon, trend, trendLabel }: {
   label: string; value: string | number; icon: string; trend?: 'up' | 'down' | 'flat'; trendLabel?: string
@@ -42,12 +44,93 @@ function formatDate(iso: string) {
 }
 
 export function DashboardOverview() {
-  const user          = mockCurrentUser
-  const rootFolders   = mockFolders.filter(f => f.parent_id === null)
-  const subfolders    = mockFolders.filter(f => f.parent_id !== null)
-  const publicNotes   = mockNotes.filter(n => n.visibility === 'public')
-  const recentNotes   = [...mockNotes].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5)
-  const recentFolders = [...rootFolders].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 4)
+  const { profile } = useAuth()
+  const user = profile
+
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    rootFolders: 0,
+    subfolders: 0,
+    notes: 0,
+    publicNotes: 0,
+  })
+  const [recentNotes, setRecentNotes] = useState<any[]>([])
+  const [recentFolders, setRecentFolders] = useState<any[]>([])
+
+  useEffect(() => {
+    if (!user) return
+
+    const loadData = async () => {
+      try {
+        const supabase = requireSupabase()
+        
+        // 1. Fetch folders
+        const { data: folders } = await supabase
+          .from('folders')
+          .select('id, parent_id, title, visibility, updated_at, description, slug')
+          .eq('owner_id', user.id)
+
+        // 2. Fetch notes
+        const { data: notes } = await supabase
+          .from('notes')
+          .select('id, title, visibility, updated_at, folder_id, folder:folders(id, title, slug)')
+          .eq('owner_id', user.id)
+
+        const allFolders = folders || []
+        const allNotes = notes || []
+
+        const rootF = allFolders.filter(f => f.parent_id === null)
+        const subF = allFolders.filter(f => f.parent_id !== null)
+        const pubN = allNotes.filter(n => n.visibility === 'public')
+
+        setStats({
+          rootFolders: rootF.length,
+          subfolders: subF.length,
+          notes: allNotes.length,
+          publicNotes: pubN.length,
+        })
+
+        // Compute subfolders and notes counts per root folder
+        const computedFolders = rootF.map(rf => {
+          const subCount = allFolders.filter(f => f.parent_id === rf.id).length
+          const noteCount = allNotes.filter(n => n.folder_id === rf.id).length
+          return {
+            ...rf,
+            subfoldersCount: subCount,
+            noteCount: noteCount,
+          }
+        })
+
+        // Sort and slice recent items
+        const sortedNotes = [...allNotes]
+          .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+          .slice(0, 5)
+          
+        const sortedFolders = [...computedFolders]
+          .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+          .slice(0, 4)
+
+        setRecentNotes(sortedNotes)
+        setRecentFolders(sortedFolders)
+      } catch (err) {
+        console.error('Error fetching dashboard stats:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void loadData()
+  }, [user])
+
+  if (!user || loading) {
+    return (
+      <DashboardLayout user={user || { id: '', full_name: 'Loading...', user_type: 'user', created_at: '' }} variant="user">
+        <div style={{ padding: 'var(--space-20)', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          Loading workspace summary…
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout user={user} variant="user">
@@ -64,10 +147,10 @@ export function DashboardOverview() {
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
-        <StatCard label="Folders"    value={rootFolders.length}  icon={IC.folder}    trend="up"   trendLabel="2 this month" />
-        <StatCard label="Subfolders" value={subfolders.length}   icon={IC.subfolder} trend="up"   trendLabel="1 this week"  />
-        <StatCard label="Notes"      value={mockNotes.length}    icon={IC.notes}     trend="up"   trendLabel="3 this week"  />
-        <StatCard label="Public"     value={publicNotes.length}  icon={IC.globe}     trend="flat" trendLabel="no change"    />
+        <StatCard label="Folders"    value={stats.rootFolders}  icon={IC.folder}    trend="up"   trendLabel="Updated" />
+        <StatCard label="Subfolders" value={stats.subfolders}   icon={IC.subfolder} trend="up"   trendLabel="Updated"  />
+        <StatCard label="Notes"      value={stats.notes}    icon={IC.notes}     trend="up"   trendLabel="Updated"  />
+        <StatCard label="Public"     value={stats.publicNotes}  icon={IC.globe}     trend="flat" trendLabel="No change"    />
       </div>
 
       {/* Two-column lower */}
@@ -80,22 +163,28 @@ export function DashboardOverview() {
             <Link to="/dashboard/notes"><Button variant="ghost" size="xs">View all →</Button></Link>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {recentNotes.map(note => (
-              <div key={note.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: 'var(--space-3) var(--space-4)',
-                background: 'var(--color-bg-elevated)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-lg)',
-                gap: 'var(--space-3)',
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{note.title}</p>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '2px' }}>{formatDate(note.updated_at)}</p>
+            {recentNotes.length > 0 ? (
+              recentNotes.map(note => (
+                <div key={note.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: 'var(--space-3) var(--space-4)',
+                  background: 'var(--color-bg-elevated)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  gap: 'var(--space-3)',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{note.title}</p>
+                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '2px' }}>{formatDate(note.updated_at)}</p>
+                  </div>
+                  <Badge variant={note.visibility === 'public' ? 'accent' : 'muted'}>{note.visibility}</Badge>
                 </div>
-                <Badge variant={note.visibility === 'public' ? 'accent' : 'muted'}>{note.visibility}</Badge>
+              ))
+            ) : (
+              <div style={{ padding: 'var(--space-6)', textAlign: 'center', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-lg)', color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)' }}>
+                No notes created yet.
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -106,27 +195,33 @@ export function DashboardOverview() {
             <Link to="/dashboard/folders"><Button variant="ghost" size="xs">View all →</Button></Link>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {recentFolders.map(folder => (
-              <div key={folder.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: 'var(--space-3) var(--space-4)',
-                background: 'var(--color-bg-elevated)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-lg)',
-                gap: 'var(--space-3)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
-                  <span style={{ color: 'var(--color-accent)', flexShrink: 0 }}><Icon d={IC.folder} size={15} /></span>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.title}</p>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                      {folder.subfolders?.length ?? 0} subfolders · {folder.note_count ?? 0} notes
-                    </p>
+            {recentFolders.length > 0 ? (
+              recentFolders.map(folder => (
+                <div key={folder.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: 'var(--space-3) var(--space-4)',
+                  background: 'var(--color-bg-elevated)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  gap: 'var(--space-3)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
+                    <span style={{ color: 'var(--color-accent)', flexShrink: 0 }}><Icon d={IC.folder} size={15} /></span>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.title}</p>
+                      <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                        {folder.subfoldersCount} subfolders · {folder.noteCount} notes
+                      </p>
+                    </div>
                   </div>
+                  <Badge variant={folder.visibility === 'public' ? 'accent' : 'muted'}>{folder.visibility}</Badge>
                 </div>
-                <Badge variant={folder.visibility === 'public' ? 'accent' : 'muted'}>{folder.visibility}</Badge>
+              ))
+            ) : (
+              <div style={{ padding: 'var(--space-6)', textAlign: 'center', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-lg)', color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)' }}>
+                No folders created yet.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Icon } from '@/components/layout/DashboardIcon'
 import { IC } from '@/components/layout/dashboardIconPaths'
 import { Badge, Button, EmptyState } from '@/components/ui'
-import { mockCurrentUser, mockNotes } from '@/lib/mockData'
+import { useAuth } from '@/context/auth'
+import { requireSupabase } from '@/lib/supabase'
 import { ShareModal } from '@/components/ShareModal'
 import type { Note } from '@/types'
 
@@ -13,13 +14,39 @@ function formatDate(iso: string) {
 }
 
 export function DashboardNotes() {
-  const user = mockCurrentUser
+  const { profile } = useAuth()
+  const user = profile
+
+  const [loading, setLoading] = useState(true)
+  const [notesList, setNotesList] = useState<Note[]>([])
   const [search, setSearch] = useState('')
   const [vis, setVis] = useState<'all' | 'public' | 'private'>('all')
   const [shareItem, setShareItem] = useState<Note | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
-  const filtered = mockNotes.filter(n => {
+  const loadData = async () => {
+    if (!user) return
+    try {
+      const supabase = requireSupabase()
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*, folder:folders(id, title, slug)')
+        .eq('owner_id', user.id)
+
+      if (error) throw error
+      setNotesList(data || [])
+    } catch (err) {
+      console.error('Error loading notes:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadData()
+  }, [user])
+
+  const filtered = notesList.filter(n => {
     const q = search.toLowerCase()
     return (
       (n.title.toLowerCase().includes(q) || (n.description ?? '').toLowerCase().includes(q) || (n.folder?.title ?? '').toLowerCase().includes(q)) &&
@@ -36,12 +63,38 @@ export function DashboardNotes() {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
+  const handleDeleteNote = async (id: string) => {
+    if (!confirm('Are you sure you want to permanently delete this note?')) return
+    try {
+      const supabase = requireSupabase()
+      const { error } = await supabase
+        .from('notes')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      await loadData()
+    } catch (err) {
+      console.error('Error deleting note:', err)
+    }
+  }
+
+  if (!user || loading) {
+    return (
+      <DashboardLayout user={user || { id: '', full_name: 'Loading...', user_type: 'user', created_at: '' }} variant="user">
+        <div style={{ padding: 'var(--space-20)', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          Loading notes…
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   return (
     <DashboardLayout user={user} variant="user">
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)', letterSpacing: 'var(--letter-spacing-tight)', marginBottom: 'var(--space-1)' }}>Notes</h1>
-          <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)' }}>{mockNotes.length} note{mockNotes.length !== 1 ? 's' : ''} in your workspace</p>
+          <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)' }}>{notesList.length} note{notesList.length !== 1 ? 's' : ''} in your workspace</p>
         </div>
         <Link to="/dashboard/notes/new">
           <Button variant="primary" size="sm" leftIcon={<Icon d={IC.plus} size={14} />}>New note</Button>
@@ -126,8 +179,7 @@ export function DashboardNotes() {
                 {note.visibility === 'private' && (
                   <Button variant="accent-ghost" size="xs" onClick={() => setShareItem(note)}>Share</Button>
                 )}
-                <Button variant="ghost" size="xs">Edit</Button>
-                <Button variant="danger" size="xs">Delete</Button>
+                <Button variant="danger" size="xs" onClick={() => handleDeleteNote(note.id)}>Delete</Button>
               </div>
             </div>
           ))}
