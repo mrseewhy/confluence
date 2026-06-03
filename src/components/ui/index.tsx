@@ -141,9 +141,10 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   hint?: string
   error?: string
   leftIcon?: React.ReactNode
+  rightIcon?: React.ReactNode
 }
 
-export function Input({ label, hint, error, leftIcon, style, id, ...props }: InputProps) {
+export function Input({ label, hint, error, leftIcon, rightIcon, style, id, ...props }: InputProps) {
   const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-')
 
   return (
@@ -186,7 +187,10 @@ export function Input({ label, hint, error, leftIcon, style, id, ...props }: Inp
             background: 'var(--color-bg-elevated)',
             border: `1px solid ${error ? 'var(--color-danger)' : 'var(--color-border)'}`,
             borderRadius: 'var(--radius-md)',
-            padding: leftIcon ? 'var(--space-3) var(--space-3) var(--space-3) var(--space-8)' : 'var(--space-3)',
+            paddingLeft: leftIcon ? 'var(--space-8)' : 'var(--space-3)',
+            paddingRight: rightIcon ? 'var(--space-8)' : 'var(--space-3)',
+            paddingTop: 'var(--space-3)',
+            paddingBottom: 'var(--space-3)',
             outline: 'none',
             transition: 'border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default)',
             ...style,
@@ -201,6 +205,20 @@ export function Input({ label, hint, error, leftIcon, style, id, ...props }: Inp
           }}
           {...props}
         />
+        {rightIcon && (
+          <span style={{
+            position: 'absolute',
+            right: 'var(--space-3)',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'var(--color-text-muted)',
+            display: 'flex',
+            alignItems: 'center',
+            zIndex: 10,
+          }}>
+            {rightIcon}
+          </span>
+        )}
       </div>
       {hint && !error && (
         <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>{hint}</span>

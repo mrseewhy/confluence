@@ -10,6 +10,7 @@ import { NotesPage}            from '@/pages/NotesPage'
 import { SignUpPage }           from '@/pages/SignUpPage'
 import { SignInPage }           from '@/pages/SignInPage'
 import { PasswordRecoveryPage } from '@/pages/PasswordRecoveryPage'
+import { ResetPasswordPage }    from '@/pages/ResetPasswordPage'
 import { AuthRedirectPage }     from '@/pages/AuthRedirectPage'
 import { NoteDetailPage }       from '@/pages/NoteDetailPage'
 import { FolderDetailPage }     from '@/pages/FolderDetailPage'
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/signup"  element={<SignUpPage />} />
           <Route path="/login"   element={<SignInPage />} />
           <Route path="/recover" element={<PasswordRecoveryPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/auth/redirect" element={<AuthRedirectPage />} />
 
           {/* ── User dashboard ── */}
