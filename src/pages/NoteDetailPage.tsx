@@ -1,372 +1,385 @@
-import { use } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
-import { PageLayout } from '@/components/layout/PageLayout'
-import { Button, Badge, Card } from '@/components/ui'
-import { AuthContext } from '@/context/auth'
-import { mockNotes, hasNoteAccess } from '@/lib/mockData'
-import type { NoteBlock } from '@/types'
+import { useState, useEffect } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { Badge, Button } from "@/components/ui";
+import { requireSupabase } from "@/lib/supabase";
 
-// Mock rich blocks for the initial notes to make the detail view premium
-const INITIAL_NOTE_BLOCKS: Record<string, NoteBlock[]> = {
-  'getting-started-with-confluence': [
-    {
-      id: 'b-gen-1',
-      note_id: 'n-gen1',
-      type: 'text',
-      content: 'Welcome to **Confluence**, your ultimate knowledge hub. Confluence is designed to help engineers, authors, and designers construct beautiful documentation, personal wikis, or tutorials and share them publicly or collaborate in private. Notes in Confluence are structured as content blocks.',
-      order_index: 0,
-      metadata: {},
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: 'b-gen-2',
-      note_id: 'n-gen1',
-      type: 'code',
-      content: 'const confluence = {\n  type: "note-sharing-platform",\n  features: ["rich-editor", "cascading-permissions", "google-auth"],\n  isPremium: true\n};\nconsole.log(`Confluence initialized:`, confluence);',
-      order_index: 1,
-      metadata: { language: 'javascript' },
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: 'b-gen-3',
-      note_id: 'n-gen1',
-      type: 'text',
-      content: 'You can insert live image uploads or embeds like the one below, alongside fully interactive high-definition media players.',
-      order_index: 2,
-      metadata: {},
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: 'b-gen-4',
-      note_id: 'n-gen1',
-      type: 'image',
-      content: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=800&q=80',
-      order_index: 3,
-      metadata: { caption: 'Confluence visual workspaces.' },
-      created_at: new Date().toISOString(),
-    },
-  ],
-  'how-to-set-up-a-react-project': [
-    {
-      id: 'b1',
-      note_id: 'n1',
-      type: 'text',
-      content: 'React 19 with Vite is the modern standard for fast web application scaffolding. This guide will walk you through building a high-performance boilerplate.',
-      order_index: 0,
-      metadata: {},
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: 'b2',
-      note_id: 'n1',
-      type: 'code',
-      content: '# Create Vite app in modern typescript\nnpx create-vite@latest my-app --template react-ts\ncd my-app\nnpm install',
-      order_index: 1,
-      metadata: { language: 'bash' },
-      created_at: new Date().toISOString(),
-    },
-  ],
-  'jwt-authentication-express': [
-    {
-      id: 'b-jwt-1',
-      note_id: 'n2',
-      type: 'text',
-      content: 'Securing API endpoints using JSON Web Tokens (JWT) guarantees safe, stateless data transfers. Here is how you can establish a middleware verify block in Express.',
-      order_index: 0,
-      metadata: {},
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: 'b-jwt-2',
-      note_id: 'n2',
-      type: 'code',
-      content: 'const jwt = require("jsonwebtoken");\n\nfunction authenticateToken(req, res, next) {\n  const authHeader = req.headers["authorization"];\n  const token = authHeader && authHeader.split(" ")[1];\n  \n  if (token == null) return res.sendStatus(401);\n\n  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {\n    if (err) return res.sendStatus(403);\n    req.user = user;\n    next();\n  });\n}',
-      order_index: 1,
-      metadata: { language: 'javascript' },
-      created_at: new Date().toISOString(),
-    },
-  ],
-  'cap-theorem-explained': [
-    {
-      id: 'b-cap-1',
-      note_id: 'n3',
-      type: 'text',
-      content: 'In theoretical computer science, the CAP theorem states that a distributed data store can simultaneously provide at most two of the three guarantees: Consistency, Availability, and Partition Tolerance.',
-      order_index: 0,
-      metadata: {},
-      created_at: new Date().toISOString(),
-    },
-  ],
-  'reading-list-q1-2025': [
-    {
-      id: 'b-read-1',
-      note_id: 'n6',
-      type: 'text',
-      content: 'This private note contains sensitive planning lists for Q1 2025 technology books and research papers.',
-      order_index: 0,
-      metadata: {},
-      created_at: new Date().toISOString(),
-    },
-  ],
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export function NoteDetailPage() {
-  const { slug } = useParams<{ slug: string }>()
-  const navigate = useNavigate()
-  const authCtx = use(AuthContext)
-  const user = authCtx?.profile ?? null
-  const userEmail = authCtx?.user?.email ?? ''
+  const { slug } = useParams<{ slug: string }>();
+  const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [note, setNote] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [blocks, setBlocks] = useState<any[]>([]);
 
-  // Locate the note by slug
-  const note = mockNotes.find(n => n.slug === slug)
+  useEffect(() => {
+    if (!slug) return;
+    const load = async () => {
+      try {
+        const supabase = requireSupabase();
+
+        // Find note by slug
+        const { data: noteData } = await supabase
+          .from("notes")
+          .select("*, folder:folders(id, title, slug)")
+          .eq("slug", slug)
+          .single();
+
+        if (!noteData) {
+          setLoading(false);
+          return;
+        }
+
+        setNote(noteData);
+
+        // Get blocks
+        const { data: blocksData } = await supabase
+          .from("note_blocks")
+          .select("*")
+          .eq("note_id", noteData.id)
+          .order("order_index", { ascending: true });
+
+        setBlocks(blocksData || []);
+      } catch (err) {
+        console.error("Error loading note:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div
+          style={{
+            maxWidth: "900px",
+            margin: "0 auto",
+            padding: "var(--space-16) var(--space-8)",
+            textAlign: "center",
+            color: "var(--color-text-muted)",
+          }}
+        >
+          Loading note…
+        </div>
+        <Footer />
+      </>
+    );
+  }
 
   if (!note) {
     return (
-      <PageLayout>
-        <div style={{ textAlign: 'center', padding: '120px 0', color: 'var(--color-text-muted)' }}>
-          <h2>404 — Note Not Found</h2>
-          <p>The note you are looking for does not exist or has been deleted.</p>
-          <Link to="/notes" style={{ color: 'var(--color-accent)' }}>Back to public notes</Link>
+      <>
+        <Navbar />
+        <div
+          style={{
+            maxWidth: "900px",
+            margin: "0 auto",
+            padding: "var(--space-16) var(--space-8)",
+            textAlign: "center",
+          }}
+        >
+          <h2>Note not found</h2>
+          <p style={{ color: "var(--color-text-muted)" }}>
+            This note may be private or does not exist.
+          </p>
+          <Link to="/notes">
+            <Button variant="primary" size="sm">
+              Browse notes
+            </Button>
+          </Link>
         </div>
-      </PageLayout>
-    )
+        <Footer />
+      </>
+    );
   }
 
-  // Security Check (Cascading authorization)
-  const isAuthorized = hasNoteAccess(
-    note.id,
-    user?.id ?? '',
-    userEmail,
-    user?.user_type ?? ''
-  )
+  const isPublic = note.visibility === "public";
 
-  if (!isAuthorized) {
+  if (!isPublic) {
     return (
-      <PageLayout noFooter>
-        <div style={{
-          minHeight: '80vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 'var(--space-8)',
-        }}>
-          <Card style={{
-            maxWidth: '440px',
-            textAlign: 'center',
-            padding: 'var(--space-10) var(--space-8)',
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-bg-elevated)',
-            boxShadow: 'var(--shadow-2xl)',
-            borderRadius: 'var(--radius-2xl)',
-          }}>
-            <span style={{ fontSize: '48px', display: 'block', marginBottom: 'var(--space-4)' }}>🔒</span>
-            <h3 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 'var(--font-weight-bold)', marginBottom: 'var(--space-2)' }}>
-              This note is private
-            </h3>
-            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', lineHeight: 'var(--line-height-normal)', marginBottom: 'var(--space-6)' }}>
-              You do not have access to view this note. If you believe this is a mistake, request access from the owner or switch to an invited account.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              {!user ? (
-                <>
-                  <Button variant="primary" onClick={() => navigate('/login')}>
-                    Sign in to request access
-                  </Button>
-                  <Link to="/notes" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-accent)', textDecoration: 'none' }}>
-                    Browse other public notes
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <Badge variant="muted" style={{ padding: '8px', marginBottom: 'var(--space-3)' }}>
-                    Logged in as: {userEmail}
-                  </Badge>
-                  <Button variant="secondary" onClick={() => navigate('/notes')}>
-                    Browse public notes
-                  </Button>
-                </>
-              )}
-            </div>
-          </Card>
+      <>
+        <Navbar />
+        <div
+          style={{
+            maxWidth: "900px",
+            margin: "0 auto",
+            padding: "var(--space-16) var(--space-8)",
+            textAlign: "center",
+          }}
+        >
+          <h2>Private note</h2>
+          <p style={{ color: "var(--color-text-muted)" }}>
+            This note is private and cannot be viewed publicly.
+          </p>
+          <Link to="/notes">
+            <Button variant="primary" size="sm">
+              Browse notes
+            </Button>
+          </Link>
         </div>
-      </PageLayout>
-    )
+        <Footer />
+      </>
+    );
   }
-
-  // Get blocks
-  const blocks: NoteBlock[] = INITIAL_NOTE_BLOCKS[note.slug] ?? [
-    {
-      id: 'default-text',
-      note_id: note.id,
-      type: 'text',
-      content: note.description || 'This note has no additional content yet.',
-      order_index: 0,
-      metadata: {},
-      created_at: new Date().toISOString(),
-    }
-  ]
 
   return (
-    <PageLayout>
-      <div style={{ maxWidth: '800px', margin: '0 auto', paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-24)' }}>
-        
-        {/* Navigation Breadcrumbs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-8)' }}>
-          <Link to="/notes" style={{ color: 'var(--color-text-muted)', textDecoration: 'none' }}>Notes</Link>
-          <span style={{ color: 'var(--color-border-strong)' }}>/</span>
+    <>
+      <Navbar />
+      <div
+        style={{
+          maxWidth: "900px",
+          margin: "0 auto",
+          padding: "var(--space-16) var(--space-8)",
+        }}
+      >
+        {/* Breadcrumb */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-2)",
+            fontSize: "var(--font-size-sm)",
+            marginBottom: "var(--space-6)",
+          }}
+        >
+          <Link
+            to="/notes"
+            style={{ color: "var(--color-text-muted)", textDecoration: "none" }}
+          >
+            Notes
+          </Link>
           {note.folder && (
             <>
-              <Link to={`/folder/${note.folder.slug}`} style={{ color: 'var(--color-text-muted)', textDecoration: 'none' }}>
+              <span style={{ color: "var(--color-border-strong)" }}>/</span>
+              <Link
+                to={`/folder/${note.folder.slug}`}
+                style={{
+                  color: "var(--color-text-muted)",
+                  textDecoration: "none",
+                }}
+              >
                 {note.folder.title}
               </Link>
-              <span style={{ color: 'var(--color-border-strong)' }}>/</span>
             </>
           )}
-          <span style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--font-weight-semibold)' }}>
+          <span style={{ color: "var(--color-border-strong)" }}>/</span>
+          <span
+            style={{
+              fontWeight: "var(--font-weight-semibold)",
+              color: "var(--color-text-primary)",
+            }}
+          >
             {note.title}
           </span>
         </div>
 
-        {/* Note Metadata Card */}
-        <div style={{ marginBottom: 'var(--space-10)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-            <Badge variant={note.visibility === 'public' ? 'accent' : 'muted'}>
-              {note.visibility === 'public' ? '🌎 Public' : '🔒 Private'}
-            </Badge>
-            {note.folder && <Badge variant="default">📁 {note.folder.title}</Badge>}
-            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-              Updated {new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </span>
-          </div>
-
-          <h1 style={{
-            fontSize: 'var(--font-size-4xl)',
-            fontWeight: 'var(--font-weight-bold)',
-            letterSpacing: 'var(--letter-spacing-tight)',
-            lineHeight: 'var(--line-height-tight)',
-            color: 'var(--color-text-primary)',
-            marginBottom: 'var(--space-4)',
-          }}>
+        {/* Header */}
+        <div style={{ marginBottom: "var(--space-6)" }}>
+          <h1
+            style={{
+              fontSize: "var(--font-size-3xl)",
+              fontWeight: "var(--font-weight-bold)",
+              marginBottom: "var(--space-3)",
+            }}
+          >
             {note.title}
           </h1>
-
           {note.description && (
-            <p style={{
-              fontSize: 'var(--font-size-lg)',
-              color: 'var(--color-text-secondary)',
-              lineHeight: 'var(--line-height-normal)',
-              margin: 0,
-            }}>
+            <p
+              style={{
+                color: "var(--color-text-secondary)",
+                fontSize: "var(--font-size-lg)",
+              }}
+            >
               {note.description}
             </p>
           )}
+          <div
+            style={{
+              display: "flex",
+              gap: "var(--space-3)",
+              marginTop: "var(--space-4)",
+              flexWrap: "wrap",
+            }}
+          >
+            {note.folder && <Badge variant="muted">{note.folder.title}</Badge>}
+            <Badge variant="accent">Public</Badge>
+            <span
+              style={{
+                fontSize: "var(--font-size-xs)",
+                color: "var(--color-text-muted)",
+                alignSelf: "center",
+              }}
+            >
+              Updated {formatDate(note.updated_at)}
+            </span>
+          </div>
         </div>
 
-        <hr style={{ border: 'none', borderTop: '1px solid var(--color-border-subtle)', margin: 'var(--space-8) 0' }} />
-
-        {/* Content Blocks */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          {blocks.map(block => {
-            if (block.type === 'text') {
-              return (
-                <p 
-                  key={block.id}
+        {/* Blocks */}
+        {blocks.length > 0 ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-6)",
+            }}
+          >
+            {blocks.map((block) => (
+              <div
+                key={block.id}
+                style={{
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius-xl)",
+                  overflow: "hidden",
+                  background:
+                    block.type === "code"
+                      ? "var(--color-code-bg)"
+                      : "var(--color-bg-elevated)",
+                }}
+              >
+                <div
                   style={{
-                    fontSize: 'var(--font-size-base)',
-                    lineHeight: '1.75',
-                    color: 'var(--color-text-primary)',
-                    margin: 0,
-                    whiteSpace: 'pre-wrap',
+                    padding: "var(--space-3) var(--space-4)",
+                    borderBottom: "1px solid var(--color-border)",
+                    background:
+                      block.type === "code"
+                        ? "rgba(0,0,0,0.3)"
+                        : "var(--color-bg-subtle)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--space-2)",
                   }}
                 >
-                  {block.content}
-                </p>
-              )
-            }
-
-            if (block.type === 'code') {
-              return (
-                <div 
-                  key={block.id}
-                  style={{
-                    background: 'var(--color-code-bg)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: 'var(--radius-xl)',
-                    padding: 'var(--space-5)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--font-size-sm)',
-                    color: 'var(--color-code-text)',
-                    overflowX: 'auto',
-                    whiteSpace: 'pre',
-                    lineHeight: '1.6',
-                  }}
-                >
-                  {block.content}
-                </div>
-              )
-            }
-
-            if (block.type === 'image') {
-              return (
-                <div key={block.id} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  <img
-                    src={block.content}
-                    alt={block.metadata?.alt || 'Note Image'}
+                  <span
                     style={{
-                      width: '100%',
-                      maxHeight: '480px',
-                      objectFit: 'cover',
-                      borderRadius: 'var(--radius-xl)',
-                      border: '1px solid var(--color-border)',
+                      fontSize: "var(--font-size-xs)",
+                      fontWeight: "var(--font-weight-semibold)",
+                      letterSpacing: "0.07em",
+                      textTransform: "uppercase",
+                      color:
+                        block.type === "code"
+                          ? "rgba(232,230,242,0.45)"
+                          : "var(--color-text-muted)",
                     }}
-                  />
-                  {block.metadata?.caption && (
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', textAlign: 'center' }}>
-                      {block.metadata.caption}
-                    </span>
-                  )}
-                </div>
-              )
-            }
-
-            if (block.type === 'video') {
-              return (
-                <div key={block.id} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  <div style={{
-                    position: 'relative',
-                    paddingBottom: '56.25%',
-                    height: 0,
-                    overflow: 'hidden',
-                    borderRadius: 'var(--radius-xl)',
-                    border: '1px solid var(--color-border)',
-                  }}>
-                    <iframe
-                      src={block.content}
+                  >
+                    {block.type}
+                  </span>
+                  {block.metadata?.language && (
+                    <span
                       style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                        border: 'none',
+                        fontSize: "10px",
+                        color: "var(--color-text-muted)",
+                        fontFamily: "var(--font-mono)",
                       }}
-                      allowFullScreen
-                      title="Video Embed"
-                    />
-                  </div>
-                  {block.metadata?.caption && (
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', textAlign: 'center' }}>
-                      {block.metadata.caption}
+                    >
+                      {block.metadata.language}
                     </span>
                   )}
                 </div>
-              )
-            }
-
-            return null
-          })}
-        </div>
+                <div
+                  style={{
+                    padding: block.type === "code" ? "0" : "var(--space-4)",
+                  }}
+                >
+                  {block.type === "code" ? (
+                    <pre
+                      style={{
+                        margin: 0,
+                        padding: "var(--space-4)",
+                        overflow: "auto",
+                        fontSize: "var(--font-size-sm)",
+                        fontFamily: "var(--font-mono)",
+                        color: "var(--color-code-text)",
+                      }}
+                    >
+                      <code>{block.content}</code>
+                    </pre>
+                  ) : block.type === "image" ? (
+                    <div>
+                      <img
+                        src={block.content}
+                        alt={block.metadata?.alt || ""}
+                        style={{
+                          maxWidth: "100%",
+                          borderRadius: "var(--radius-md)",
+                        }}
+                      />
+                      {block.metadata?.caption && (
+                        <p
+                          style={{
+                            fontSize: "var(--font-size-xs)",
+                            color: "var(--color-text-muted)",
+                            marginTop: "var(--space-2)",
+                          }}
+                        >
+                          {block.metadata.caption}
+                        </p>
+                      )}
+                    </div>
+                  ) : block.type === "video" ? (
+                    <div
+                      style={{
+                        position: "relative",
+                        paddingBottom: "56.25%",
+                        height: 0,
+                      }}
+                    >
+                      <iframe
+                        src={block.content}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: "var(--radius-md)",
+                          border: "none",
+                        }}
+                        allowFullScreen
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: "var(--font-size-base)",
+                        lineHeight: "var(--line-height-loose)",
+                        color: "var(--color-text-primary)",
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {block.content}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "var(--space-16)",
+              color: "var(--color-text-muted)",
+            }}
+          >
+            <p>This note has no content blocks.</p>
+          </div>
+        )}
       </div>
-    </PageLayout>
-  )
+      <Footer />
+    </>
+  );
 }

@@ -1,172 +1,342 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { PageLayout } from '@/components/layout/PageLayout'
-import { Button, Badge, Card, EmptyState } from '@/components/ui'
-import { mockNotes } from '@/lib/mockData'
+// import { useState, useEffect } from "react";
+// import { Link } from "react-router-dom";
+// import { Navbar } from "@/components/layout/Navbar";
+// import { Footer } from "@/components/layout/Footer";
+// import { Badge } from "@/components/ui";
+// import { requireSupabase } from "@/lib/supabase";
+
+// function formatDate(iso: string) {
+//   return new Date(iso).toLocaleDateString("en-US", {
+//     month: "short",
+//     day: "numeric",
+//     year: "numeric",
+//   });
+// }
+
+// export function NotesPage() {
+//   const [loading, setLoading] = useState(true); // eslint-disable-line @typescript-eslint/no-unused-vars
+//   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+//   const [publicNotes, setPublicNotes] = useState<any[]>([]);
+
+//   useEffect(() => {
+//     const load = async () => {
+//       try {
+//         const supabase = requireSupabase();
+//         const { data } = await supabase
+//           .from("notes")
+//           .select(
+//             "id, title, description, slug, updated_at, visibility, folder:folders(id, title, slug)",
+//           )
+//           .eq("visibility", "public")
+//           .order("updated_at", { ascending: false });
+
+//         setPublicNotes(data || []);
+//       } catch (err) {
+//         console.error("Error loading notes:", err);
+//       } finally {
+//         setLoading(false);
+//       }
+//     };
+//     void load();
+//   }, []);
+
+//   return (
+//     <>
+//       <Navbar />
+//       <div
+//         style={{
+//           maxWidth: "900px",
+//           margin: "0 auto",
+//           padding: "var(--space-16) var(--space-8)",
+//         }}
+//       >
+//         <div style={{ marginBottom: "var(--space-8)" }}>
+//           <h1
+//             style={{
+//               fontSize: "var(--font-size-3xl)",
+//               fontWeight: "var(--font-weight-bold)",
+//               marginBottom: "var(--space-2)",
+//             }}
+//           >
+//             Public Notes
+//           </h1>
+//           <p style={{ color: "var(--color-text-muted)", margin: 0 }}>
+//             Browse publicly shared notes from the community.
+//           </p>
+//         </div>
+
+//         {publicNotes.length > 0 ? (
+//           <div
+//             style={{
+//               display: "grid",
+//               gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+//               gap: "var(--space-4)",
+//             }}
+//           >
+//             {publicNotes.map((note) => (
+//               <Link
+//                 key={note.id}
+//                 to={`/n/${note.slug}`}
+//                 style={{ textDecoration: "none" }}
+//               >
+//                 <div
+//                   style={{
+//                     background: "var(--color-bg-elevated)",
+//                     border: "1px solid var(--color-border)",
+//                     borderRadius: "var(--radius-xl)",
+//                     padding: "var(--space-6)",
+//                     transition: "all var(--duration-normal)",
+//                   }}
+//                   onMouseEnter={(e) => {
+//                     e.currentTarget.style.boxShadow = "var(--shadow-md)";
+//                     e.currentTarget.style.borderColor =
+//                       "var(--color-accent-muted)";
+//                   }}
+//                   onMouseLeave={(e) => {
+//                     e.currentTarget.style.boxShadow = "none";
+//                     e.currentTarget.style.borderColor = "var(--color-border)";
+//                   }}
+//                 >
+//                   <h3
+//                     style={{
+//                       margin: 0,
+//                       fontSize: "var(--font-size-md)",
+//                       fontWeight: "var(--font-weight-semibold)",
+//                     }}
+//                   >
+//                     {note.title}
+//                   </h3>
+//                   {note.description && (
+//                     <p
+//                       style={{
+//                         margin: "var(--space-2) 0 0",
+//                         fontSize: "var(--font-size-sm)",
+//                         color: "var(--color-text-secondary)",
+//                       }}
+//                     >
+//                       {note.description}
+//                     </p>
+//                   )}
+//                   <div
+//                     style={{
+//                       display: "flex",
+//                       gap: "var(--space-2)",
+//                       marginTop: "var(--space-4)",
+//                       flexWrap: "wrap",
+//                     }}
+//                   >
+//                     <Badge variant="muted">{note.folder?.title}</Badge>
+//                     <span
+//                       style={{
+//                         fontSize: "var(--font-size-xs)",
+//                         color: "var(--color-text-muted)",
+//                         alignSelf: "center",
+//                       }}
+//                     >
+//                       {formatDate(note.updated_at)}
+//                     </span>
+//                   </div>
+//                 </div>
+//               </Link>
+//             ))}
+//           </div>
+//         ) : (
+//           <div
+//             style={{
+//               textAlign: "center",
+//               padding: "var(--space-20)",
+//               color: "var(--color-text-muted)",
+//             }}
+//           >
+//             <p style={{ fontSize: "40px", marginBottom: "var(--space-4)" }}>
+//               📝
+//             </p>
+//             <p>No public notes yet. Check back later!</p>
+//           </div>
+//         )}
+//       </div>
+//       <Footer />
+//     </>
+//   );
+// }
+
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { Badge } from "@/components/ui";
+import { requireSupabase } from "@/lib/supabase";
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export function NotesPage() {
-  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true);
+  const [publicNotes, setPublicNotes] = useState<any[]>([]);
 
-  const publicNotes = mockNotes.filter(n => n.visibility === 'public')
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const supabase = requireSupabase();
+        const { data } = await supabase
+          .from("notes")
+          .select(
+            "id, title, description, slug, updated_at, visibility, folder:folders(id, title, slug)",
+          )
+          .eq("visibility", "public")
+          .order("updated_at", { ascending: false });
 
-  const filtered = publicNotes.filter(n =>
-    n.title.toLowerCase().includes(search.toLowerCase()) ||
-    (n.description ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (n.folder?.title ?? '').toLowerCase().includes(search.toLowerCase())
-  )
+        setPublicNotes(data ?? []);
+      } catch (err) {
+        console.error("Error loading notes:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, []);
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div
+          style={{
+            maxWidth: "900px",
+            margin: "0 auto",
+            padding: "var(--space-16) var(--space-8)",
+            textAlign: "center",
+            color: "var(--color-text-muted)",
+          }}
+        >
+          Loading notes…
+        </div>
+        <Footer />
+      </>
+    );
+  }
 
   return (
-    <PageLayout>
-      <div style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-24)' }}>
-
-        {/* Header */}
-        <div style={{ marginBottom: 'var(--space-10)' }}>
-          <h1 style={{
-            fontSize: 'var(--font-size-3xl)',
-            fontWeight: 'var(--font-weight-bold)',
-            letterSpacing: 'var(--letter-spacing-tight)',
-            color: 'var(--color-text-primary)',
-            marginBottom: 'var(--space-3)',
-          }}>
-            Notes
+    <>
+      <Navbar />
+      <div
+        style={{
+          maxWidth: "900px",
+          margin: "0 auto",
+          padding: "var(--space-16) var(--space-8)",
+        }}
+      >
+        <div style={{ marginBottom: "var(--space-8)" }}>
+          <h1
+            style={{
+              fontSize: "var(--font-size-3xl)",
+              fontWeight: "var(--font-weight-bold)",
+              marginBottom: "var(--space-2)",
+            }}
+          >
+            Public Notes
           </h1>
-          <p style={{ margin: 0, fontSize: 'var(--font-size-md)', color: 'var(--color-text-secondary)' }}>
-            Browse all public notes from the community.
+          <p style={{ color: "var(--color-text-muted)", margin: 0 }}>
+            Browse publicly shared notes from the community.
           </p>
         </div>
 
-        {/* Search */}
-        <div style={{ marginBottom: 'var(--space-8)' }}>
-          <input
-            type="search"
-            placeholder="Search notes by title, description, or folder…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+        {publicNotes.length > 0 ? (
+          <div
             style={{
-              width: '100%',
-              maxWidth: '480px',
-              fontFamily: 'var(--font-sans)',
-              fontSize: 'var(--font-size-sm)',
-              color: 'var(--color-text-primary)',
-              background: 'var(--color-bg-elevated)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              padding: 'var(--space-3)',
-              outline: 'none',
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: "var(--space-4)",
             }}
-            onFocus={e => {
-              e.currentTarget.style.borderColor = 'var(--color-accent)'
-              e.currentTarget.style.boxShadow = '0 0 0 3px var(--color-accent-subtle)'
-            }}
-            onBlur={e => {
-              e.currentTarget.style.borderColor = 'var(--color-border)'
-              e.currentTarget.style.boxShadow = 'none'
-            }}
-          />
-        </div>
-
-        {/* Count */}
-        <p style={{
-          fontSize: 'var(--font-size-xs)',
-          color: 'var(--color-text-muted)',
-          marginBottom: 'var(--space-5)',
-          fontFamily: 'var(--font-mono)',
-        }}>
-          {filtered.length} note{filtered.length !== 1 ? 's' : ''} found
-        </p>
-
-        {/* Notes list */}
-        {filtered.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            {filtered.map(note => (
-              <Link key={note.id} to={`/n/${note.slug}`} style={{ textDecoration: 'none' }}>
-                <Card hoverable style={{ padding: 'var(--space-5) var(--space-6)' }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    gap: 'var(--space-6)',
-                  }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--space-2)',
-                        marginBottom: 'var(--space-2)',
-                      }}>
-                        <span style={{ fontSize: '16px' }}>📝</span>
-                        <h4 style={{
-                          color: 'var(--color-text-primary)',
-                          margin: 0,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {note.title}
-                        </h4>
-                      </div>
-
-                      {note.description && (
-                        <p style={{
-                          margin: '0 0 var(--space-3)',
-                          fontSize: 'var(--font-size-sm)',
-                          color: 'var(--color-text-secondary)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {note.description}
-                        </p>
-                      )}
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                        {note.folder && (
-                          <Badge variant="accent">📁 {note.folder.title}</Badge>
-                        )}
-                        <span style={{
-                          fontSize: 'var(--font-size-xs)',
-                          color: 'var(--color-text-muted)',
-                          fontFamily: 'var(--font-mono)',
-                        }}>
-                          {formatDate(note.updated_at)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      style={{ flexShrink: 0 }}
-                      onClick={e => e.preventDefault()}
+          >
+            {publicNotes.map((note) => (
+              <Link
+                key={note.id}
+                to={`/n/${note.slug}`}
+                style={{ textDecoration: "none" }}
+              >
+                <div
+                  style={{
+                    background: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "var(--radius-xl)",
+                    padding: "var(--space-6)",
+                    transition: "all var(--duration-normal)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = "var(--shadow-md)";
+                    e.currentTarget.style.borderColor =
+                      "var(--color-accent-muted)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.borderColor = "var(--color-border)";
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: "var(--font-size-md)",
+                      fontWeight: "var(--font-weight-semibold)",
+                    }}
+                  >
+                    {note.title}
+                  </h3>
+                  {note.description && (
+                    <p
+                      style={{
+                        margin: "var(--space-2) 0 0",
+                        fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                      }}
                     >
-                      Read →
-                    </Button>
+                      {note.description}
+                    </p>
+                  )}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "var(--space-2)",
+                      marginTop: "var(--space-4)",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <Badge variant="muted">{note.folder?.title}</Badge>
+                    <span
+                      style={{
+                        fontSize: "var(--font-size-xs)",
+                        color: "var(--color-text-muted)",
+                        alignSelf: "center",
+                      }}
+                    >
+                      {formatDate(note.updated_at)}
+                    </span>
                   </div>
-                </Card>
+                </div>
               </Link>
             ))}
           </div>
         ) : (
-          <EmptyState
-            icon="📭"
-            title="No notes found"
-            description="Try adjusting your search."
-            action={
-              <Button variant="secondary" size="sm" onClick={() => setSearch('')}>
-                Clear search
-              </Button>
-            }
-          />
+          <div
+            style={{
+              textAlign: "center",
+              padding: "var(--space-20)",
+              color: "var(--color-text-muted)",
+            }}
+          >
+            <p style={{ fontSize: "40px", marginBottom: "var(--space-4)" }}>
+              📝
+            </p>
+            <p>No public notes yet. Check back later!</p>
+          </div>
         )}
       </div>
-    </PageLayout>
-  )
+      <Footer />
+    </>
+  );
 }

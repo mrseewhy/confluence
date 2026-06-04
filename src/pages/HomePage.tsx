@@ -1,346 +1,781 @@
-import { Link } from 'react-router-dom'
-import { PageLayout } from '@/components/layout/PageLayout'
-import { Button, Badge, Card } from '@/components/ui'
-import { mockFolders, mockNotes } from '@/lib/mockData'
+// import { useState, useEffect } from "react";
+// import { Link } from "react-router-dom";
+// import { Navbar } from "@/components/layout/Navbar";
+// import { Footer } from "@/components/layout/Footer";
+// import { Button, Badge } from "@/components/ui";
+// import { requireSupabase } from "@/lib/supabase";
 
-// ── Feature card data ────────────────────────────────────────
+// function formatDate(iso: string) {
+//   return new Date(iso).toLocaleDateString("en-US", {
+//     month: "short",
+//     day: "numeric",
+//     year: "numeric",
+//   });
+// }
 
-const features = [
-  {
-    icon: '📁',
-    title: 'Folders & Subfolders',
-    description: 'Organise your notes into folders and subfolders. Build any hierarchy that fits your mental model.',
-  },
-  {
-    icon: '⚡',
-    title: 'Block-based Editor',
-    description: 'Mix text, code, images, and videos in a single note. Every block renders exactly as intended.',
-  },
-  {
-    icon: '🔒',
-    title: 'Public or Private',
-    description: 'Keep notes private for yourself or share them publicly with a clean, permanent URL.',
-  },
-  {
-    icon: '💻',
-    title: 'Syntax Highlighting',
-    description: 'Code blocks with language-aware highlighting. Supports dozens of programming languages.',
-  },
-  {
-    icon: '🔗',
-    title: 'Shareable Links',
-    description: 'Every public note gets a clean slug-based URL you can drop into any chat or email.',
-  },
-  {
-    icon: '🌐',
-    title: 'Works for Everyone',
-    description: 'Docs, tutorials, research, onboarding — confluence adapts to how you think and work.',
-  },
-]
+// export function HomePage() {
+//   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+//   const [publicFolders, setPublicFolders] = useState<any[]>([]);
+//   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+//   const [publicNotes, setPublicNotes] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(true); // eslint-disable-line @typescript-eslint/no-unused-vars
+
+//   useEffect(() => {
+//     const loadPublicContent = async () => {
+//       try {
+//         const supabase = requireSupabase();
+
+//         const { data: folders } = await supabase
+//           .from("folders")
+//           .select("id, title, description, slug, updated_at, note_count")
+//           .is("parent_id", null)
+//           .eq("visibility", "public")
+//           .order("updated_at", { ascending: false })
+//           .limit(3);
+
+//         const { data: notes } = await supabase
+//           .from("notes")
+//           .select(
+//             "id, title, description, slug, updated_at, visibility, folder:folders(id, title, slug)",
+//           )
+//           .eq("visibility", "public")
+//           .order("updated_at", { ascending: false })
+//           .limit(3);
+
+//         setPublicFolders(folders || []);
+//         setPublicNotes(notes || []);
+//       } catch (err) {
+//         console.error("Error loading public content:", err);
+//       } finally {
+//         setLoading(false);
+//       }
+//     };
+//     void loadPublicContent();
+//   }, []);
+
+//   return (
+//     <>
+//       <Navbar />
+
+//       {/* Hero */}
+//       <section
+//         style={{
+//           minHeight: "80vh",
+//           display: "flex",
+//           alignItems: "center",
+//           justifyContent: "center",
+//           padding: "var(--space-8)",
+//           textAlign: "center",
+//           position: "relative",
+//           overflow: "hidden",
+//         }}
+//       >
+//         <div style={{ maxWidth: "680px", position: "relative", zIndex: 2 }}>
+//           <h1
+//             style={{
+//               fontSize: "clamp(2.5rem, 6vw, 4.5rem)",
+//               fontWeight: "var(--font-weight-bold)",
+//               letterSpacing: "var(--letter-spacing-tight)",
+//               lineHeight: "var(--line-height-tight)",
+//               marginBottom: "var(--space-6)",
+//               color: "var(--color-text-primary)",
+//             }}
+//           >
+//             Share what you know,{" "}
+//             <span style={{ color: "var(--color-accent)" }}>simply.</span>
+//           </h1>
+//           <p
+//             style={{
+//               fontSize: "var(--font-size-lg)",
+//               color: "var(--color-text-secondary)",
+//               lineHeight: "var(--line-height-normal)",
+//               marginBottom: "var(--space-8)",
+//               maxWidth: "520px",
+//               marginLeft: "auto",
+//               marginRight: "auto",
+//             }}
+//           >
+//             Confluence is a structured, block-based note-sharing platform.
+//             Organise your knowledge, collaborate in real-time, and publish
+//             publicly or keep it private.
+//           </p>
+//           <div
+//             style={{
+//               display: "flex",
+//               gap: "var(--space-4)",
+//               justifyContent: "center",
+//               flexWrap: "wrap",
+//             }}
+//           >
+//             <Link to="/signup">
+//               <Button
+//                 variant="primary"
+//                 size="lg"
+//                 style={{ fontSize: "1rem", padding: "0.8em 2em" }}
+//               >
+//                 Get started free
+//               </Button>
+//             </Link>
+//             <Link to="/notes">
+//               <Button
+//                 variant="secondary"
+//                 size="lg"
+//                 style={{ fontSize: "1rem", padding: "0.8em 2em" }}
+//               >
+//                 Browse public notes
+//               </Button>
+//             </Link>
+//           </div>
+//         </div>
+//       </section>
+
+//       {/* Public Folders */}
+//       <section
+//         style={{
+//           padding: "var(--space-16) var(--space-8)",
+//           background: "var(--color-bg-subtle)",
+//           borderTop: "1px solid var(--color-border)",
+//           borderBottom: "1px solid var(--color-border)",
+//         }}
+//       >
+//         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+//           <div
+//             style={{
+//               display: "flex",
+//               alignItems: "center",
+//               justifyContent: "space-between",
+//               marginBottom: "var(--space-8)",
+//             }}
+//           >
+//             <div>
+//               <h2
+//                 style={{
+//                   fontSize: "var(--font-size-2xl)",
+//                   fontWeight: "var(--font-weight-bold)",
+//                   margin: 0,
+//                 }}
+//               >
+//                 Public folders
+//               </h2>
+//               <p
+//                 style={{
+//                   margin: 0,
+//                   color: "var(--color-text-muted)",
+//                   fontSize: "var(--font-size-sm)",
+//                   marginTop: "var(--space-1)",
+//                 }}
+//               >
+//                 Explore shared knowledge spaces.
+//               </p>
+//             </div>
+//             <Link to="/folders">
+//               <Button variant="ghost" size="sm">
+//                 View all →
+//               </Button>
+//             </Link>
+//           </div>
+//           <div
+//             style={{
+//               display: "grid",
+//               gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+//               gap: "var(--space-4)",
+//             }}
+//           >
+//             {publicFolders.map((folder) => (
+//               <Link
+//                 key={folder.id}
+//                 to={`/folder/${folder.slug}`}
+//                 style={{ textDecoration: "none" }}
+//               >
+//                 <div
+//                   style={{
+//                     background: "var(--color-bg-elevated)",
+//                     border: "1px solid var(--color-border)",
+//                     borderRadius: "var(--radius-xl)",
+//                     padding: "var(--space-6)",
+//                     transition: "all var(--duration-normal)",
+//                     boxShadow: "var(--shadow-xs)",
+//                   }}
+//                   onMouseEnter={(e) => {
+//                     e.currentTarget.style.boxShadow = "var(--shadow-md)";
+//                     e.currentTarget.style.borderColor =
+//                       "var(--color-accent-muted)";
+//                   }}
+//                   onMouseLeave={(e) => {
+//                     e.currentTarget.style.boxShadow = "var(--shadow-xs)";
+//                     e.currentTarget.style.borderColor = "var(--color-border)";
+//                   }}
+//                 >
+//                   <h3
+//                     style={{
+//                       margin: 0,
+//                       fontSize: "var(--font-size-md)",
+//                       fontWeight: "var(--font-weight-semibold)",
+//                       color: "var(--color-text-primary)",
+//                     }}
+//                   >
+//                     {folder.title}
+//                   </h3>
+//                   {folder.description && (
+//                     <p
+//                       style={{
+//                         margin: "var(--space-2) 0 0",
+//                         fontSize: "var(--font-size-sm)",
+//                         color: "var(--color-text-secondary)",
+//                       }}
+//                     >
+//                       {folder.description}
+//                     </p>
+//                   )}
+//                   <Badge
+//                     variant="accent"
+//                     style={{ marginTop: "var(--space-4)" }}
+//                   >
+//                     {folder.note_count ?? 0} notes
+//                   </Badge>
+//                 </div>
+//               </Link>
+//             ))}
+//           </div>
+//         </div>
+//       </section>
+
+//       {/* Public Notes */}
+//       <section style={{ padding: "var(--space-16) var(--space-8)" }}>
+//         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+//           <div
+//             style={{
+//               display: "flex",
+//               alignItems: "center",
+//               justifyContent: "space-between",
+//               marginBottom: "var(--space-8)",
+//             }}
+//           >
+//             <div>
+//               <h2
+//                 style={{
+//                   fontSize: "var(--font-size-2xl)",
+//                   fontWeight: "var(--font-weight-bold)",
+//                   margin: 0,
+//                 }}
+//               >
+//                 Latest notes
+//               </h2>
+//               <p
+//                 style={{
+//                   margin: 0,
+//                   color: "var(--color-text-muted)",
+//                   fontSize: "var(--font-size-sm)",
+//                   marginTop: "var(--space-1)",
+//                 }}
+//               >
+//                 Recently published notes from the community.
+//               </p>
+//             </div>
+//             <Link to="/notes">
+//               <Button variant="ghost" size="sm">
+//                 View all →
+//               </Button>
+//             </Link>
+//           </div>
+//           <div
+//             style={{
+//               display: "grid",
+//               gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+//               gap: "var(--space-4)",
+//             }}
+//           >
+//             {publicNotes.map((note) => (
+//               <Link
+//                 key={note.id}
+//                 to={`/n/${note.slug}`}
+//                 style={{ textDecoration: "none" }}
+//               >
+//                 <div
+//                   style={{
+//                     background: "var(--color-bg-elevated)",
+//                     border: "1px solid var(--color-border)",
+//                     borderRadius: "var(--radius-xl)",
+//                     padding: "var(--space-6)",
+//                     transition: "all var(--duration-normal)",
+//                     boxShadow: "var(--shadow-xs)",
+//                   }}
+//                   onMouseEnter={(e) => {
+//                     e.currentTarget.style.boxShadow = "var(--shadow-md)";
+//                     e.currentTarget.style.borderColor =
+//                       "var(--color-accent-muted)";
+//                   }}
+//                   onMouseLeave={(e) => {
+//                     e.currentTarget.style.boxShadow = "var(--shadow-xs)";
+//                     e.currentTarget.style.borderColor = "var(--color-border)";
+//                   }}
+//                 >
+//                   <h3
+//                     style={{
+//                       margin: 0,
+//                       fontSize: "var(--font-size-md)",
+//                       fontWeight: "var(--font-weight-semibold)",
+//                       color: "var(--color-text-primary)",
+//                     }}
+//                   >
+//                     {note.title}
+//                   </h3>
+//                   {note.description && (
+//                     <p
+//                       style={{
+//                         margin: "var(--space-2) 0 0",
+//                         fontSize: "var(--font-size-sm)",
+//                         color: "var(--color-text-secondary)",
+//                       }}
+//                     >
+//                       {note.description}
+//                     </p>
+//                   )}
+//                   <div
+//                     style={{
+//                       display: "flex",
+//                       gap: "var(--space-2)",
+//                       marginTop: "var(--space-4)",
+//                       flexWrap: "wrap",
+//                     }}
+//                   >
+//                     <Badge variant="muted">{note.folder?.title}</Badge>
+//                     <span
+//                       style={{
+//                         fontSize: "var(--font-size-xs)",
+//                         color: "var(--color-text-muted)",
+//                         alignSelf: "center",
+//                       }}
+//                     >
+//                       {formatDate(note.updated_at)}
+//                     </span>
+//                   </div>
+//                 </div>
+//               </Link>
+//             ))}
+//           </div>
+//         </div>
+//       </section>
+
+//       <Footer />
+//     </>
+//   );
+// }
+
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { Button, Badge } from "@/components/ui";
+import { requireSupabase } from "@/lib/supabase";
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export function HomePage() {
-  const publicFolders = mockFolders.filter(f => f.visibility === 'public').slice(0, 3)
-  const publicNotes   = mockNotes.filter(n => n.visibility === 'public').slice(0, 3)
+  const [publicFolders, setPublicFolders] = useState<any[]>([]);
+  const [publicNotes, setPublicNotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadPublicContent = async () => {
+      try {
+        const supabase = requireSupabase();
+
+        const { data: folders } = await supabase
+          .from("folders")
+          .select("id, title, description, slug, updated_at, note_count")
+          .is("parent_id", null)
+          .eq("visibility", "public")
+          .order("updated_at", { ascending: false })
+          .limit(3);
+
+        const { data: notes } = await supabase
+          .from("notes")
+          .select(
+            "id, title, description, slug, updated_at, visibility, folder:folders(id, title, slug)",
+          )
+          .eq("visibility", "public")
+          .order("updated_at", { ascending: false })
+          .limit(3);
+
+        setPublicFolders(folders ?? []);
+        setPublicNotes(notes ?? []);
+      } catch (err) {
+        console.error("Error loading public content:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void loadPublicContent();
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Loading state
+  // ---------------------------------------------------------------------------
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div
+          style={{
+            minHeight: "60vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--color-text-muted)",
+          }}
+        >
+          Loading…
+        </div>
+        <Footer />
+      </>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Main render
+  // ---------------------------------------------------------------------------
 
   return (
-    <PageLayout>
-      {/* ── Hero ── */}
-      <section style={{
-        paddingTop: 'var(--space-24)',
-        paddingBottom: 'var(--space-24)',
-        textAlign: 'center',
-      }}>
-        <Badge variant="accent" style={{ marginBottom: 'var(--space-6)' }}>
-          Now in beta
-        </Badge>
+    <>
+      <Navbar />
 
-        <h1 style={{
-          fontSize: 'clamp(2.5rem, 6vw, 4rem)',
-          fontWeight: 'var(--font-weight-bold)',
-          letterSpacing: 'var(--letter-spacing-tight)',
-          lineHeight: 'var(--line-height-tight)',
-          color: 'var(--color-text-primary)',
-          marginBottom: 'var(--space-6)',
-          maxWidth: '760px',
-          margin: '0 auto var(--space-6)',
-        }}>
-          Notes that are worth
-          <br />
-          <span style={{ color: 'var(--color-accent)' }}>sharing.</span>
-        </h1>
-
-        <p style={{
-          fontSize: 'var(--font-size-lg)',
-          color: 'var(--color-text-secondary)',
-          lineHeight: 'var(--line-height-normal)',
-          maxWidth: '560px',
-          margin: '0 auto var(--space-10)',
-        }}>
-          Create rich notes with text, code, images, and video.
-          Organise them into folders. Share them with the world — or keep them private.
-        </p>
-
-        <div style={{
-          display: 'flex',
-          gap: 'var(--space-3)',
-          justifyContent: 'center',
-          flexWrap: 'wrap',
-        }}>
-          <Link to="/signup">
-            <Button variant="primary" size="lg">Start for free</Button>
-          </Link>
-          <Link to="/folders">
-            <Button variant="secondary" size="lg">Browse notes</Button>
-          </Link>
-        </div>
-      </section>
-
-      {/* ── Features grid ── */}
-      <section style={{ paddingBottom: 'var(--space-24)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 'var(--space-12)' }}>
-          <h2 style={{
-            fontSize: 'var(--font-size-3xl)',
-            fontWeight: 'var(--font-weight-bold)',
-            letterSpacing: 'var(--letter-spacing-tight)',
-            color: 'var(--color-text-primary)',
-            marginBottom: 'var(--space-3)',
-          }}>
-            Everything you need, nothing you don't
-          </h2>
-          <p style={{ fontSize: 'var(--font-size-md)', color: 'var(--color-text-secondary)', margin: 0 }}>
-            Designed for developers, teachers, writers, and thinkers.
+      {/* Hero */}
+      <section
+        style={{
+          minHeight: "80vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "var(--space-8)",
+          textAlign: "center",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ maxWidth: "680px", position: "relative", zIndex: 2 }}>
+          <h1
+            style={{
+              fontSize: "clamp(2.5rem, 6vw, 4.5rem)",
+              fontWeight: "var(--font-weight-bold)",
+              letterSpacing: "var(--letter-spacing-tight)",
+              lineHeight: "var(--line-height-tight)",
+              marginBottom: "var(--space-6)",
+              color: "var(--color-text-primary)",
+            }}
+          >
+            Share what you know,{" "}
+            <span style={{ color: "var(--color-accent)" }}>simply.</span>
+          </h1>
+          <p
+            style={{
+              fontSize: "var(--font-size-lg)",
+              color: "var(--color-text-secondary)",
+              lineHeight: "var(--line-height-normal)",
+              marginBottom: "var(--space-8)",
+              maxWidth: "520px",
+              marginLeft: "auto",
+              marginRight: "auto",
+            }}
+          >
+            Confluence is a structured, block-based note-sharing platform.
+            Organise your knowledge, collaborate in real-time, and publish
+            publicly or keep it private.
           </p>
-        </div>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: 'var(--space-4)',
-        }}>
-          {features.map(feature => (
-            <Card key={feature.title} hoverable>
-              <div style={{ fontSize: '28px', marginBottom: 'var(--space-3)' }}>
-                {feature.icon}
-              </div>
-              <h4 style={{ marginBottom: 'var(--space-2)', color: 'var(--color-text-primary)' }}>
-                {feature.title}
-              </h4>
-              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-                {feature.description}
-              </p>
-            </Card>
-          ))}
+          <div
+            style={{
+              display: "flex",
+              gap: "var(--space-4)",
+              justifyContent: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <Link to="/signup">
+              <Button
+                variant="primary"
+                size="lg"
+                style={{ fontSize: "1rem", padding: "0.8em 2em" }}
+              >
+                Get started free
+              </Button>
+            </Link>
+            <Link to="/notes">
+              <Button
+                variant="secondary"
+                size="lg"
+                style={{ fontSize: "1rem", padding: "0.8em 2em" }}
+              >
+                Browse public notes
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 
-      {/* ── How it works ── */}
-      <section style={{
-        paddingBottom: 'var(--space-24)',
-        borderTop: '1px solid var(--color-border)',
-        paddingTop: 'var(--space-16)',
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: 'var(--space-12)' }}>
-          <h2 style={{
-            fontSize: 'var(--font-size-3xl)',
-            fontWeight: 'var(--font-weight-bold)',
-            letterSpacing: 'var(--letter-spacing-tight)',
-            color: 'var(--color-text-primary)',
-            marginBottom: 'var(--space-3)',
-          }}>
-            How it works
-          </h2>
-        </div>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 'var(--space-6)',
-        }}>
-          {[
-            { step: '01', title: 'Create a folder', description: 'Group related notes under a topic, project, or subject.' },
-            { step: '02', title: 'Add subfolders', description: 'Break it down further with nested subfolders for better organisation.' },
-            { step: '03', title: 'Write your notes', description: 'Use text, code, images, and video blocks to build rich content.' },
-            { step: '04', title: 'Share or keep private', description: 'Control visibility per folder and per note.' },
-          ].map(item => (
-            <div key={item.step} style={{ textAlign: 'center', padding: 'var(--space-4)' }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'var(--font-size-sm)',
-                fontWeight: 'var(--font-weight-bold)',
-                color: 'var(--color-accent)',
-                letterSpacing: 'var(--letter-spacing-wider)',
-                display: 'block',
-                marginBottom: 'var(--space-3)',
-              }}>
-                {item.step}
-              </span>
-              <h4 style={{ marginBottom: 'var(--space-2)', color: 'var(--color-text-primary)' }}>
-                {item.title}
-              </h4>
-              <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
-                {item.description}
+      {/* Public Folders */}
+      <section
+        style={{
+          padding: "var(--space-16) var(--space-8)",
+          background: "var(--color-bg-subtle)",
+          borderTop: "1px solid var(--color-border)",
+          borderBottom: "1px solid var(--color-border)",
+        }}
+      >
+        <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "var(--space-8)",
+            }}
+          >
+            <div>
+              <h2
+                style={{
+                  fontSize: "var(--font-size-2xl)",
+                  fontWeight: "var(--font-weight-bold)",
+                  margin: 0,
+                }}
+              >
+                Public folders
+              </h2>
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--color-text-muted)",
+                  fontSize: "var(--font-size-sm)",
+                  marginTop: "var(--space-1)",
+                }}
+              >
+                Explore shared knowledge spaces.
               </p>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Public folders preview ── */}
-      <section style={{
-        paddingBottom: 'var(--space-24)',
-        borderTop: '1px solid var(--color-border)',
-        paddingTop: 'var(--space-16)',
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 'var(--space-8)',
-          flexWrap: 'wrap',
-          gap: 'var(--space-4)',
-        }}>
-          <div>
-            <h2 style={{
-              fontSize: 'var(--font-size-2xl)',
-              fontWeight: 'var(--font-weight-bold)',
-              letterSpacing: 'var(--letter-spacing-tight)',
-              color: 'var(--color-text-primary)',
-              marginBottom: 'var(--space-1)',
-            }}>
-              Recent folders
-            </h2>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
-              Shared publicly by the community.
-            </p>
+            <Link to="/folders">
+              <Button variant="ghost" size="sm">
+                View all →
+              </Button>
+            </Link>
           </div>
-          <Link to="/folders">
-            <Button variant="secondary" size="sm">View all →</Button>
-          </Link>
-        </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: 'var(--space-4)',
-        }}>
-          {publicFolders.map(folder => (
-            <Link key={folder.id} to={`/folder/${folder.slug}`} style={{ textDecoration: 'none' }}>
-              <Card hoverable>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-                  <span style={{ fontSize: '24px' }}>📁</span>
-                  <Badge variant="accent">{folder.note_count} notes</Badge>
-                </div>
-                <h4 style={{ marginBottom: 'var(--space-2)', color: 'var(--color-text-primary)' }}>
-                  {folder.title}
-                </h4>
-                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-                  {folder.description}
-                </p>
-                {folder.subfolders && folder.subfolders.length > 0 && (
-                  <div style={{ marginTop: 'var(--space-4)', display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                    {folder.subfolders.map(sf => (
-                      <Badge key={sf.id} variant="muted">📂 {sf.title}</Badge>
-                    ))}
+          {publicFolders.length > 0 ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: "var(--space-4)",
+              }}
+            >
+              {publicFolders.map((folder) => (
+                <Link
+                  key={folder.id}
+                  to={`/folder/${folder.slug}`}
+                  style={{ textDecoration: "none" }}
+                >
+                  <div
+                    style={{
+                      background: "var(--color-bg-elevated)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "var(--radius-xl)",
+                      padding: "var(--space-6)",
+                      transition: "all var(--duration-normal)",
+                      boxShadow: "var(--shadow-xs)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = "var(--shadow-md)";
+                      e.currentTarget.style.borderColor =
+                        "var(--color-accent-muted)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = "var(--shadow-xs)";
+                      e.currentTarget.style.borderColor = "var(--color-border)";
+                    }}
+                  >
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: "var(--font-size-md)",
+                        fontWeight: "var(--font-weight-semibold)",
+                        color: "var(--color-text-primary)",
+                      }}
+                    >
+                      {folder.title}
+                    </h3>
+                    {folder.description && (
+                      <p
+                        style={{
+                          margin: "var(--space-2) 0 0",
+                          fontSize: "var(--font-size-sm)",
+                          color: "var(--color-text-secondary)",
+                        }}
+                      >
+                        {folder.description}
+                      </p>
+                    )}
+                    <Badge
+                      variant="accent"
+                      style={{ marginTop: "var(--space-4)" }}
+                    >
+                      {folder.note_count ?? 0} notes
+                    </Badge>
                   </div>
-                )}
-              </Card>
-            </Link>
-          ))}
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "var(--space-12)",
+                color: "var(--color-text-muted)",
+                fontSize: "var(--font-size-sm)",
+              }}
+            >
+              No public folders yet. Check back later!
+            </div>
+          )}
         </div>
       </section>
 
-      {/* ── Recent notes preview ── */}
-      <section style={{
-        paddingBottom: 'var(--space-24)',
-        borderTop: '1px solid var(--color-border)',
-        paddingTop: 'var(--space-16)',
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 'var(--space-8)',
-          flexWrap: 'wrap',
-          gap: 'var(--space-4)',
-        }}>
-          <div>
-            <h2 style={{
-              fontSize: 'var(--font-size-2xl)',
-              fontWeight: 'var(--font-weight-bold)',
-              letterSpacing: 'var(--letter-spacing-tight)',
-              color: 'var(--color-text-primary)',
-              marginBottom: 'var(--space-1)',
-            }}>
-              Recent notes
-            </h2>
-            <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
-              Latest public notes from the community.
-            </p>
+      {/* Public Notes */}
+      <section style={{ padding: "var(--space-16) var(--space-8)" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "var(--space-8)",
+            }}
+          >
+            <div>
+              <h2
+                style={{
+                  fontSize: "var(--font-size-2xl)",
+                  fontWeight: "var(--font-weight-bold)",
+                  margin: 0,
+                }}
+              >
+                Latest notes
+              </h2>
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--color-text-muted)",
+                  fontSize: "var(--font-size-sm)",
+                  marginTop: "var(--space-1)",
+                }}
+              >
+                Recently published notes from the community.
+              </p>
+            </div>
+            <Link to="/notes">
+              <Button variant="ghost" size="sm">
+                View all →
+              </Button>
+            </Link>
           </div>
-          <Link to="/notes">
-            <Button variant="secondary" size="sm">View all →</Button>
-          </Link>
-        </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          {publicNotes.map(note => (
-            <Link key={note.id} to={`/n/${note.slug}`} style={{ textDecoration: 'none' }}>
-              <Card hoverable style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', padding: 'var(--space-4) var(--space-6)' }}>
-                <div>
-                  <h5 style={{ marginBottom: 'var(--space-1)', color: 'var(--color-text-primary)' }}>
-                    {note.title}
-                  </h5>
-                  <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
-                    {note.description}
-                  </p>
-                </div>
-                {note.folder && (
-                  <Badge variant="muted" style={{ flexShrink: 0 }}>
-                    {note.folder.title}
-                  </Badge>
-                )}
-              </Card>
-            </Link>
-          ))}
+          {publicNotes.length > 0 ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: "var(--space-4)",
+              }}
+            >
+              {publicNotes.map((note) => (
+                <Link
+                  key={note.id}
+                  to={`/n/${note.slug}`}
+                  style={{ textDecoration: "none" }}
+                >
+                  <div
+                    style={{
+                      background: "var(--color-bg-elevated)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "var(--radius-xl)",
+                      padding: "var(--space-6)",
+                      transition: "all var(--duration-normal)",
+                      boxShadow: "var(--shadow-xs)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = "var(--shadow-md)";
+                      e.currentTarget.style.borderColor =
+                        "var(--color-accent-muted)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = "var(--shadow-xs)";
+                      e.currentTarget.style.borderColor = "var(--color-border)";
+                    }}
+                  >
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: "var(--font-size-md)",
+                        fontWeight: "var(--font-weight-semibold)",
+                        color: "var(--color-text-primary)",
+                      }}
+                    >
+                      {note.title}
+                    </h3>
+                    {note.description && (
+                      <p
+                        style={{
+                          margin: "var(--space-2) 0 0",
+                          fontSize: "var(--font-size-sm)",
+                          color: "var(--color-text-secondary)",
+                        }}
+                      >
+                        {note.description}
+                      </p>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "var(--space-2)",
+                        marginTop: "var(--space-4)",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <Badge variant="muted">{note.folder?.title}</Badge>
+                      <span
+                        style={{
+                          fontSize: "var(--font-size-xs)",
+                          color: "var(--color-text-muted)",
+                          alignSelf: "center",
+                        }}
+                      >
+                        {formatDate(note.updated_at)}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "var(--space-12)",
+                color: "var(--color-text-muted)",
+                fontSize: "var(--font-size-sm)",
+              }}
+            >
+              No public notes yet. Check back later!
+            </div>
+          )}
         </div>
       </section>
 
-      {/* ── CTA ── */}
-      <section style={{
-        paddingBottom: 'var(--space-24)',
-        paddingTop: 'var(--space-4)',
-      }}>
-        <div style={{
-          background: 'var(--color-bg-elevated)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-2xl)',
-          padding: 'var(--space-16) var(--space-8)',
-          textAlign: 'center',
-          boxShadow: 'var(--shadow-md)',
-        }}>
-          <h2 style={{
-            fontSize: 'var(--font-size-3xl)',
-            fontWeight: 'var(--font-weight-bold)',
-            letterSpacing: 'var(--letter-spacing-tight)',
-            color: 'var(--color-text-primary)',
-            marginBottom: 'var(--space-4)',
-          }}>
-            Ready to get started?
-          </h2>
-          <p style={{
-            fontSize: 'var(--font-size-md)',
-            color: 'var(--color-text-secondary)',
-            marginBottom: 'var(--space-8)',
-            maxWidth: '400px',
-            margin: '0 auto var(--space-8)',
-          }}>
-            Create your first note in under a minute. Free forever.
-          </p>
-          <Link to="/signup">
-            <Button variant="primary" size="lg">Create your account →</Button>
-          </Link>
-        </div>
-      </section>
-    </PageLayout>
-  )
+      <Footer />
+    </>
+  );
 }
