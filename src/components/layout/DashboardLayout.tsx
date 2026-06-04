@@ -296,40 +296,7 @@ function SidebarInner({
             );
           })()}
 
-        {/* Back to site */}
-        <Link
-          to="/"
-          title={collapsed ? "Public site" : undefined}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--space-3)",
-            padding: collapsed
-              ? "var(--space-3)"
-              : "var(--space-2) var(--space-3)",
-            borderRadius: "var(--radius-lg)",
-            textDecoration: "none",
-            fontSize: "var(--font-size-sm)",
-            color: "var(--color-text-muted)",
-            justifyContent: collapsed ? "center" : "flex-start",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            transition: "all var(--duration-fast) var(--ease-default)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--color-bg-muted)";
-            e.currentTarget.style.color = "var(--color-text-primary)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--color-text-muted)";
-          }}
-        >
-          <span style={{ flexShrink: 0 }}>
-            <Icon d={IC.globe} />
-          </span>
-          {!collapsed && "Public site"}
-        </Link>
+        {/* Back to site - removed, confluence logo in topbar links to / */}
 
         {/* User row */}
         <div
@@ -715,17 +682,14 @@ export function DashboardLayout({
                     </div>
 
                     {[
-                      {
-                        label:
-                          variant === "admin"
-                            ? "User dashboard"
-                            : "Admin panel",
-                        href:
-                          variant === "admin"
-                            ? "/dashboard"
-                            : "/admin/dashboard",
-                        icon: IC.shield,
-                      },
+                      // Only show admin/user switch for admin users
+                      ...(user.user_type === "admin"
+                        ? [{
+                            label: variant === "admin" ? "User dashboard" : "Admin panel",
+                            href: variant === "admin" ? "/dashboard" : "/admin/dashboard",
+                            icon: IC.shield,
+                          }]
+                        : []),
                       {
                         label: "Settings",
                         href: `${rootHref === "/dashboard" ? "/dashboard" : "/admin/dashboard"}/settings`,

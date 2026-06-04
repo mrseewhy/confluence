@@ -377,6 +377,11 @@ export function DashboardNotes() {
                 {formatDate(note.updated_at)}
               </span>
               <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                <Link to={`/dashboard/notes/${note.slug}/edit`}>
+                  <Button variant="accent-ghost" size="xs">
+                    Edit
+                  </Button>
+                </Link>
                 {note.visibility === "private" && (
                   <Button
                     variant="accent-ghost"

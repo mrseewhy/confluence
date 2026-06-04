@@ -26,7 +26,7 @@ export function Footer() {
       marginTop: 'auto',
     }}>
       <div style={{
-        maxWidth: '1200px',
+        maxWidth: '1280px',
         margin: '0 auto',
       }}>
 

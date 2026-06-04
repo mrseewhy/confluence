@@ -35,7 +35,7 @@ export function Navbar() {
       WebkitBackdropFilter: 'blur(12px)',
     }}>
       <nav style={{
-        maxWidth: '1200px',
+        maxWidth: '1280px',
         margin: '0 auto',
         padding: '0 var(--space-6)',
         height: '60px',

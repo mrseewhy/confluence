@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import type { BlockType, BlockMetadata, Visibility } from '@/types'
+import { requireSupabase } from '@/lib/supabase'
 
 // ── EditorBlock (client-only, not a DB NoteBlock) ─────────────
 
@@ -14,6 +15,7 @@ export interface EditorBlock {
 // ── EditorState ───────────────────────────────────────────────
 
 interface EditorState {
+  noteId:      string | null  // null = creating new, string = editing existing
   title:       string
   description: string
   slug:        string
@@ -45,22 +47,25 @@ const DEFAULT_METADATA: Record<BlockType, BlockMetadata> = {
   code:  { language: 'javascript' },
   image: {},
   video: {},
+  heading: { level: 'h2' },
 }
 
 // ── useNoteEditor ─────────────────────────────────────────────
 
 export function useNoteEditor() {
   const [state, setState] = useState<EditorState>({
+    noteId:      null,
     title:       '',
     description: '',
     slug:        '',
-    folder_id:   'general',
+    folder_id:   '',
     visibility:  'public',
     blocks:      [],
   })
 
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // ── Metadata setters ────────────────────────────────────────
 
@@ -74,6 +79,7 @@ export function useNoteEditor() {
 
   const setSlug = useCallback((value: string) => {
     setSlugManuallyEdited(true)
+    setSaveError(null)
     setState(prev => ({ ...prev, slug: value }))
   }, [])
 
@@ -148,21 +154,152 @@ export function useNoteEditor() {
     })
   }, [])
 
-  // ── Save (stub — will wire to Supabase later) ───────────────
+  // ── Load existing note into editor ───────────────────────────
 
-  const save = useCallback(async (asDraft = false) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const loadFromExisting = useCallback((note: any, blocks: any[]) => {
+    setSlugManuallyEdited(true)
+    setState({
+      noteId:      note.id,
+      title:       note.title,
+      description: note.description ?? '',
+      slug:        note.slug,
+      folder_id:   note.folder_id,
+      visibility:  note.visibility,
+      blocks:      blocks.map((b: any, i: number) => ({
+        id:          `existing-${b.id}`,
+        type:        b.type as BlockType,
+        content:     b.content,
+        metadata:    b.metadata ?? {},
+        order_index: i,
+      })),
+    })
+  }, [])
+
+  // ── Reset editor to blank state ─────────────────────────────
+
+  const resetEditor = useCallback(() => {
+    setSlugManuallyEdited(false)
+    setState({
+      noteId:      null,
+      title:       '',
+      description: '',
+      slug:        '',
+      folder_id:   '',
+      visibility:  'public',
+      blocks:      [],
+    })
+  }, [])
+
+  // ── Save (insert or update note + blocks into Supabase) ─────
+
+  const save = useCallback(async (userId: string, asDraft = false) => {
+    if (!userId) {
+      setSaveStatus('error')
+      return
+    }
+
     setSaveStatus('saving')
-    try {
-      // TODO: replace with Supabase insert/upsert
-      await new Promise<void>(resolve => setTimeout(resolve, 600))
-      console.log('[useNoteEditor] save()', { asDraft, state })
-      setSaveStatus('saved')
+    setSaveError(null)
 
-      // Reset to idle after 2 s
-      setTimeout(() => setSaveStatus('idle'), 2000)
+    try {
+      const supabase = requireSupabase()
+      const slug = state.slug || slugify(state.title)
+
+      if (state.noteId) {
+        // ── UPDATE existing note ──
+        const { error: noteError } = await supabase
+          .from('notes')
+          .update({
+            folder_id:   state.folder_id,
+            title:       state.title.trim(),
+            description: state.description.trim() || null,
+            slug,
+            visibility:  state.visibility,
+          })
+          .eq('id', state.noteId)
+
+        if (noteError) throw noteError
+
+        // Replace blocks: delete existing, then insert new
+        const { error: deleteError } = await supabase
+          .from('note_blocks')
+          .delete()
+          .eq('note_id', state.noteId)
+
+        if (deleteError) throw deleteError
+
+        if (state.blocks.length > 0) {
+          const blocksToInsert = state.blocks.map((block, i) => ({
+            note_id:     state.noteId,
+            type:        block.type,
+            content:     block.content,
+            order_index: i,
+            metadata:    block.metadata,
+          }))
+
+          const { error: blocksError } = await supabase
+            .from('note_blocks')
+            .insert(blocksToInsert)
+
+          if (blocksError) throw blocksError
+        }
+
+        setSaveStatus('saved')
+        return slug
+      } else {
+        // ── INSERT new note ──
+        const { data: noteData, error: noteError } = await supabase
+          .from('notes')
+          .insert({
+            folder_id:   state.folder_id,
+            owner_id:    userId,
+            title:       state.title.trim(),
+            description: state.description.trim() || null,
+            slug,
+            visibility:  state.visibility,
+          })
+          .select('id, slug')
+          .single()
+
+        if (noteError) throw noteError
+        if (!noteData) throw new Error('Note was not created.')
+
+        // 2. Insert blocks (if any)
+        if (state.blocks.length > 0) {
+          const blocksToInsert = state.blocks.map((block, i) => ({
+            note_id:     noteData.id,
+            type:        block.type,
+            content:     block.content,
+            order_index: i,
+            metadata:    block.metadata,
+          }))
+
+          const { error: blocksError } = await supabase
+            .from('note_blocks')
+            .insert(blocksToInsert)
+
+          if (blocksError) throw blocksError
+        }
+
+        setSaveStatus('saved')
+        return noteData.slug
+      }
     } catch (err) {
       console.error('[useNoteEditor] save error', err)
       setSaveStatus('error')
+
+      // Detect PostgreSQL unique constraint violation (code 23505)
+      const pgErr = err as { code?: string; message?: string; details?: string } | null
+      if (pgErr?.code === '23505') {
+        setSaveError(
+          `A note with the slug "${slug}" already exists. Please edit the slug to make it unique.`
+        )
+      } else {
+        setSaveError(pgErr?.message ?? 'An unexpected error occurred while saving.')
+      }
+
+      throw err
     }
   }, [state])
 
@@ -176,6 +313,7 @@ export function useNoteEditor() {
   return {
     state,
     saveStatus,
+    saveError,
     isValid,
     // metadata
     setTitle,
@@ -191,5 +329,7 @@ export function useNoteEditor() {
     moveBlock,
     // actions
     save,
+    loadFromExisting,
+    resetEditor,
   }
 }

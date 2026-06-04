@@ -3,7 +3,7 @@
 // ============================================================
 
 export type Visibility = 'public' | 'private'
-export type BlockType  = 'text' | 'code' | 'image' | 'video'
+export type BlockType  = 'text' | 'code' | 'image' | 'video' | 'heading'
 
 // ── Role ─────────────────────────────────────────────────────
 // Default: 'user'. Promote to admin directly in Supabase:
@@ -16,6 +16,7 @@ export type UserType = 'user' | 'admin'
 export interface Profile {
   id: string
   full_name: string
+  username: string
   avatar_url: string | null
   user_type: UserType
   created_at: string
@@ -72,4 +73,5 @@ export interface BlockMetadata {
   alt?: string
   caption?: string
   filename?: string
+  level?: string
 }

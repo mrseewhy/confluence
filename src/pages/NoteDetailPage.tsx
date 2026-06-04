@@ -14,24 +14,41 @@ function formatDate(iso: string) {
 }
 
 export function NoteDetailPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { username, slug } = useParams<{ username: string; slug: string }>();
   const [loading, setLoading] = useState(true);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [note, setNote] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [blocks, setBlocks] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [ownerUsername, setOwnerUsername] = useState<string>("");
 
   useEffect(() => {
-    if (!slug) return;
+    if (!slug || !username) return;
     const load = async () => {
       try {
         const supabase = requireSupabase();
 
-        // Find note by slug
+        // Find owner by username
+        const { data: owner } = await supabase
+          .from("profiles")
+          .select("id, username")
+          .eq("username", username)
+          .single();
+
+        if (!owner) {
+          setLoading(false);
+          return;
+        }
+
+        setOwnerUsername(owner.username);
+
+        // Find note by slug AND owner_id
         const { data: noteData } = await supabase
           .from("notes")
-          .select("*, folder:folders(id, title, slug)")
+          .select("*, owner_id, folder:folders(id, title, slug)")
           .eq("slug", slug)
+          .eq("owner_id", owner.id)
           .single();
 
         if (!noteData) {
@@ -56,7 +73,7 @@ export function NoteDetailPage() {
       }
     };
     void load();
-  }, [slug]);
+  }, [slug, username]);
 
   if (loading) {
     return (
@@ -64,9 +81,10 @@ export function NoteDetailPage() {
         <Navbar />
         <div
           style={{
-            maxWidth: "900px",
+            maxWidth: 1280,
             margin: "0 auto",
             padding: "var(--space-16) var(--space-8)",
+            minHeight: "90vh",
             textAlign: "center",
             color: "var(--color-text-muted)",
           }}
@@ -84,9 +102,10 @@ export function NoteDetailPage() {
         <Navbar />
         <div
           style={{
-            maxWidth: "900px",
+            maxWidth: 1280,
             margin: "0 auto",
             padding: "var(--space-16) var(--space-8)",
+            minHeight: "90vh",
             textAlign: "center",
           }}
         >
@@ -94,9 +113,9 @@ export function NoteDetailPage() {
           <p style={{ color: "var(--color-text-muted)" }}>
             This note may be private or does not exist.
           </p>
-          <Link to="/notes">
+          <Link to="/">
             <Button variant="primary" size="sm">
-              Browse notes
+              Go home
             </Button>
           </Link>
         </div>
@@ -113,9 +132,10 @@ export function NoteDetailPage() {
         <Navbar />
         <div
           style={{
-            maxWidth: "900px",
+            maxWidth: 1280,
             margin: "0 auto",
             padding: "var(--space-16) var(--space-8)",
+            minHeight: "90vh",
             textAlign: "center",
           }}
         >
@@ -123,9 +143,9 @@ export function NoteDetailPage() {
           <p style={{ color: "var(--color-text-muted)" }}>
             This note is private and cannot be viewed publicly.
           </p>
-          <Link to="/notes">
+          <Link to="/">
             <Button variant="primary" size="sm">
-              Browse notes
+              Go home
             </Button>
           </Link>
         </div>
@@ -139,9 +159,10 @@ export function NoteDetailPage() {
       <Navbar />
       <div
         style={{
-          maxWidth: "900px",
+          maxWidth: 1280,
           margin: "0 auto",
           padding: "var(--space-16) var(--space-8)",
+          minHeight: "90vh",
         }}
       >
         {/* Breadcrumb */}
@@ -164,7 +185,7 @@ export function NoteDetailPage() {
             <>
               <span style={{ color: "var(--color-border-strong)" }}>/</span>
               <Link
-                to={`/folder/${note.folder.slug}`}
+                to={`/${ownerUsername}/folder/${note.folder.slug}`}
                 style={{
                   color: "var(--color-text-muted)",
                   textDecoration: "none",

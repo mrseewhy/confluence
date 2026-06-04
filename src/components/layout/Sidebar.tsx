@@ -256,38 +256,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       }}>
         {bottomItems.map(item => <NavLink key={item.href} item={item} />)}
 
-        {/* View public site */}
-        <Link
-          to="/"
-          title={collapsed ? 'Public site' : undefined}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            padding: collapsed ? 'var(--space-3)' : 'var(--space-3) var(--space-4)',
-            borderRadius: 'var(--radius-lg)',
-            textDecoration: 'none',
-            fontSize: 'var(--font-size-sm)',
-            fontWeight: 'var(--font-weight-regular)',
-            color: 'var(--color-text-muted)',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            transition: 'all var(--duration-fast) var(--ease-default)',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.color = 'var(--color-text-primary)'
-            e.currentTarget.style.background = 'var(--color-bg-muted)'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.color = 'var(--color-text-muted)'
-            e.currentTarget.style.background = 'transparent'
-          }}
-        >
-          <span style={{ flexShrink: 0 }}><Icon d={Icons.globe} /></span>
-          {!collapsed && <span>Public site</span>}
-        </Link>
-
         {/* User info */}
         <div style={{
           display: 'flex',

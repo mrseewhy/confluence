@@ -14,6 +14,7 @@ import { ResetPasswordPage }    from '@/pages/ResetPasswordPage'
 import { AuthRedirectPage }     from '@/pages/AuthRedirectPage'
 import { NoteDetailPage }       from '@/pages/NoteDetailPage'
 import { FolderDetailPage }     from '@/pages/FolderDetailPage'
+import { UserProfilePage }      from '@/pages/UserProfilePage'
 
 // ── User dashboard (/dashboard) ───────────────────────────────
 import { DashboardOverview }    from '@/pages/dashboard/Overview'
@@ -22,6 +23,7 @@ import { DashboardSubfolders }  from '@/pages/dashboard/Subfolders'
 import { DashboardNotes }       from '@/pages/dashboard/Notes'
 import { DashboardSettings }    from '@/pages/dashboard/Settings'
 import { CreateNote }           from '@/pages/dashboard/CreateNote'
+import { EditNote }             from '@/pages/dashboard/EditNote'
 
 // ── Admin dashboard (/admin/dashboard) ────────────────────────
 import { AdminOverview }        from '@/pages/admin/Overview'
@@ -40,8 +42,9 @@ export default function App() {
           <Route path="/"        element={<HomePage />} />
           <Route path="/folders" element={<FoldersPage />} />
           <Route path="/notes"   element={<NotesPage />} />
-          <Route path="/n/:slug" element={<NoteDetailPage />} />
-          <Route path="/folder/:slug" element={<FolderDetailPage />} />
+          <Route path="/:username/n/:slug" element={<NoteDetailPage />} />
+          <Route path="/:username/folder/:slug" element={<FolderDetailPage />} />
+          <Route path="/:username" element={<UserProfilePage />} />
           <Route path="/signup"  element={<SignUpPage />} />
           <Route path="/login"   element={<SignInPage />} />
           <Route path="/recover" element={<PasswordRecoveryPage />} />
@@ -54,6 +57,7 @@ export default function App() {
           <Route path="/dashboard/subfolders" element={<RequireAuth userType="user"><DashboardSubfolders /></RequireAuth>} />
           <Route path="/dashboard/notes"          element={<RequireAuth userType="user"><DashboardNotes /></RequireAuth>} />
           <Route path="/dashboard/notes/new"      element={<RequireAuth userType="user"><CreateNote /></RequireAuth>} />
+          <Route path="/dashboard/notes/:slug/edit" element={<RequireAuth userType="user"><EditNote /></RequireAuth>} />
           <Route path="/dashboard/settings"       element={<RequireAuth userType="user"><DashboardSettings /></RequireAuth>} />
 
           {/* ── Admin dashboard ── */}

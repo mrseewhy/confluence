@@ -5,6 +5,7 @@ import type { Folder, Note, Profile } from '@/types'
 export const mockCurrentUser: Profile = {
   id: 'user-1',
   full_name: 'Alex Johnson',
+  username: 'alex-johnson',
   avatar_url: null,
   user_type: 'admin',
   created_at: '2024-10-01T00:00:00Z',

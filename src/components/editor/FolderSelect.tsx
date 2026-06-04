@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 
@@ -6,6 +6,13 @@ interface FolderSelectProps {
   value: string;
   onChange: (id: string) => void;
   error?: string;
+}
+
+interface FlatFolder {
+  id: string;
+  title: string;
+  parent_id: string | null;
+  depth: number;
 }
 
 export function FolderSelect({ value, onChange, error }: FolderSelectProps) {
@@ -21,8 +28,7 @@ export function FolderSelect({ value, onChange, error }: FolderSelectProps) {
         const { data } = await supabase
           .from("folders")
           .select("id, title, parent_id")
-          .eq("owner_id", profile.id)
-          .is("parent_id", null);
+          .eq("owner_id", profile.id);
 
         setFolders(data || []);
       } catch (err) {
@@ -31,6 +37,27 @@ export function FolderSelect({ value, onChange, error }: FolderSelectProps) {
     };
     void load();
   }, [profile]);
+
+  // Flatten hierarchy: root folders first, then their children indented
+  const flatFolders = useMemo(() => {
+    const roots = folders.filter((f: any) => !f.parent_id);
+    const result: FlatFolder[] = [];
+
+    const addChildren = (parentId: string, depth: number) => {
+      const children = folders.filter((f: any) => f.parent_id === parentId);
+      for (const child of children) {
+        result.push({ id: child.id, title: child.title, parent_id: child.parent_id, depth });
+        addChildren(child.id, depth + 1);
+      }
+    };
+
+    for (const root of roots) {
+      result.push({ id: root.id, title: root.title, parent_id: root.parent_id, depth: 0 });
+      addChildren(root.id, 1);
+    }
+
+    return result;
+  }, [folders]);
 
   return (
     <div
@@ -80,9 +107,9 @@ export function FolderSelect({ value, onChange, error }: FolderSelectProps) {
         <option value="" disabled>
           Select a folder…
         </option>
-        {folders.map((f) => (
+        {flatFolders.map((f) => (
           <option key={f.id} value={f.id}>
-            📁 {f.title}
+            {f.depth === 0 ? "📁" : "  ".repeat(f.depth) + "📂"} {f.title}
           </option>
         ))}
       </select>

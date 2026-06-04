@@ -20,10 +20,22 @@ $$;
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null default '',
+  username text not null,
   avatar_url text,
   user_type public.user_type not null default 'user',
   created_at timestamptz not null default now()
 );
+
+-- Ensure usernames are unique
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'profiles_username_key'
+  ) then
+    alter table public.profiles add constraint profiles_username_key unique (username);
+  end if;
+end
+$$;
 
 alter table public.profiles enable row level security;
 
@@ -40,6 +52,10 @@ create table if not exists public.folders (
   updated_at timestamptz not null default now()
 );
 
+-- Ensure slugs are unique per owner to prevent duplicate folder paths
+alter table public.folders drop constraint if exists folders_slug_owner_key;
+alter table public.folders add constraint folders_slug_owner_key unique (slug, owner_id);
+
 alter table public.folders enable row level security;
 
 -- NOTES
@@ -55,6 +71,10 @@ create table if not exists public.notes (
   updated_at timestamptz not null default now()
 );
 
+-- Ensure slugs are unique to prevent duplicate note paths
+alter table public.notes drop constraint if exists notes_slug_key;
+alter table public.notes add constraint notes_slug_key unique (slug);
+
 alter table public.notes enable row level security;
 
 -- NOTE BLOCKS
@@ -69,6 +89,12 @@ create table if not exists public.note_blocks (
 );
 
 alter table public.note_blocks enable row level security;
+
+drop policy if exists "Users can manage their own note blocks" on public.note_blocks;
+create policy "Users can manage their own note blocks"
+  on public.note_blocks for all to authenticated
+  using (note_id in (select id from public.notes where owner_id = auth.uid()))
+  with check (note_id in (select id from public.notes where owner_id = auth.uid()));
 
 -- COLLABORATORS / INVITATIONS
 create table if not exists public.collaborators (
@@ -99,6 +125,11 @@ create policy "Users can update their own profile"
 drop policy if exists "Users can insert their own profile" on public.profiles;
 create policy "Users can insert their own profile"
   on public.profiles for insert to authenticated with check (auth.uid() = id);
+
+drop policy if exists "Profiles are readable by everyone" on public.profiles;
+create policy "Profiles are readable by everyone"
+  on public.profiles for select to anon
+  using (true);
 
 -- PL/pgSQL Recursive access helper for Folders
 create or replace function public.has_access_to_folder(folder_uuid uuid, user_uuid uuid)
@@ -202,7 +233,25 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- RLS POLICIES FOR FOLDERS
+-- ── Anonymous (public) read policies ──
+drop policy if exists "Public folders are readable by everyone" on public.folders;
+create policy "Public folders are readable by everyone"
+  on public.folders for select to anon
+  using (visibility = 'public'::visibility_type);
+
+drop policy if exists "Public notes are readable by everyone" on public.notes;
+create policy "Public notes are readable by everyone"
+  on public.notes for select to anon
+  using (visibility = 'public'::visibility_type);
+
+drop policy if exists "Public note blocks are readable by everyone" on public.note_blocks;
+create policy "Public note blocks are readable by everyone"
+  on public.note_blocks for select to anon
+  using (
+    note_id in (select id from public.notes where visibility = 'public'::visibility_type)
+  );
+
+-- RLS POLICIES FOR FOLDERS (authenticated)
 drop policy if exists "Folders are visible by policy" on public.folders;
 create policy "Folders are visible by policy"
   on public.folders for select to authenticated
@@ -214,7 +263,7 @@ create policy "Users can manage their own folders"
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid());
 
--- RLS POLICIES FOR NOTES
+-- RLS POLICIES FOR NOTES (authenticated)
 drop policy if exists "Notes are visible by policy" on public.notes;
 create policy "Notes are visible by policy"
   on public.notes for select to authenticated
@@ -235,11 +284,36 @@ set search_path = public
 as $$
 declare
   new_profile_id uuid;
+  base_username text;
+  final_username text;
+  suffix int := 0;
 begin
-  insert into public.profiles (id, full_name, avatar_url, user_type)
+  -- Generate base username from full_name
+  base_username := lower(
+    regexp_replace(
+      coalesce(new.raw_user_meta_data->>'full_name', new.email, 'user'),
+      '[^a-z0-9]+',
+      '-',
+      'g'
+    )
+  );
+  base_username := trim(both '-' from base_username);
+  if base_username = '' then
+    base_username := 'user';
+  end if;
+
+  -- Ensure uniqueness by appending a number if needed
+  final_username := base_username;
+  while exists (select 1 from public.profiles where username = final_username) loop
+    suffix := suffix + 1;
+    final_username := base_username || '-' || suffix;
+  end loop;
+
+  insert into public.profiles (id, full_name, username, avatar_url, user_type)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'full_name', new.email, 'User'),
+    final_username,
     new.raw_user_meta_data->>'avatar_url',
     'user'
   )

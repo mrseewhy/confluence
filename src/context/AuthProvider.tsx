@@ -8,10 +8,20 @@ interface AuthProviderProps {
   children: ReactNode
 }
 
+function generateUsername(name: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return base || 'user';
+}
+
 function profileFromUser(user: User): Profile {
+  const full_name = user.user_metadata.full_name ?? user.email ?? 'User';
   return {
     id: user.id,
-    full_name: user.user_metadata.full_name ?? user.email ?? 'User',
+    full_name,
+    username: user.user_metadata.username ?? generateUsername(full_name),
     avatar_url: user.user_metadata.avatar_url ?? null,
     user_type: 'user',
     created_at: user.created_at,
@@ -22,7 +32,7 @@ async function fetchProfile(user: User): Promise<Profile> {
   const client = requireSupabase()
   const { data, error } = await client
     .from('profiles')
-    .select('id, full_name, avatar_url, user_type, created_at')
+    .select('id, full_name, username, avatar_url, user_type, created_at')
     .eq('id', user.id)
     .single()
 
@@ -32,7 +42,7 @@ async function fetchProfile(user: User): Promise<Profile> {
   const { data: created, error: upsertError } = await client
     .from('profiles')
     .upsert(fallback, { onConflict: 'id' })
-    .select('id, full_name, avatar_url, user_type, created_at')
+    .select('id, full_name, username, avatar_url, user_type, created_at')
     .single()
 
   if (upsertError) throw upsertError

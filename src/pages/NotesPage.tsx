@@ -1,171 +1,118 @@
-// import { useState, useEffect } from "react";
-// import { Link } from "react-router-dom";
-// import { Navbar } from "@/components/layout/Navbar";
-// import { Footer } from "@/components/layout/Footer";
-// import { Badge } from "@/components/ui";
-// import { requireSupabase } from "@/lib/supabase";
-
-// function formatDate(iso: string) {
-//   return new Date(iso).toLocaleDateString("en-US", {
-//     month: "short",
-//     day: "numeric",
-//     year: "numeric",
-//   });
-// }
-
-// export function NotesPage() {
-//   const [loading, setLoading] = useState(true); // eslint-disable-line @typescript-eslint/no-unused-vars
-//   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-//   const [publicNotes, setPublicNotes] = useState<any[]>([]);
-
-//   useEffect(() => {
-//     const load = async () => {
-//       try {
-//         const supabase = requireSupabase();
-//         const { data } = await supabase
-//           .from("notes")
-//           .select(
-//             "id, title, description, slug, updated_at, visibility, folder:folders(id, title, slug)",
-//           )
-//           .eq("visibility", "public")
-//           .order("updated_at", { ascending: false });
-
-//         setPublicNotes(data || []);
-//       } catch (err) {
-//         console.error("Error loading notes:", err);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-//     void load();
-//   }, []);
-
-//   return (
-//     <>
-//       <Navbar />
-//       <div
-//         style={{
-//           maxWidth: "900px",
-//           margin: "0 auto",
-//           padding: "var(--space-16) var(--space-8)",
-//         }}
-//       >
-//         <div style={{ marginBottom: "var(--space-8)" }}>
-//           <h1
-//             style={{
-//               fontSize: "var(--font-size-3xl)",
-//               fontWeight: "var(--font-weight-bold)",
-//               marginBottom: "var(--space-2)",
-//             }}
-//           >
-//             Public Notes
-//           </h1>
-//           <p style={{ color: "var(--color-text-muted)", margin: 0 }}>
-//             Browse publicly shared notes from the community.
-//           </p>
-//         </div>
-
-//         {publicNotes.length > 0 ? (
-//           <div
-//             style={{
-//               display: "grid",
-//               gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-//               gap: "var(--space-4)",
-//             }}
-//           >
-//             {publicNotes.map((note) => (
-//               <Link
-//                 key={note.id}
-//                 to={`/n/${note.slug}`}
-//                 style={{ textDecoration: "none" }}
-//               >
-//                 <div
-//                   style={{
-//                     background: "var(--color-bg-elevated)",
-//                     border: "1px solid var(--color-border)",
-//                     borderRadius: "var(--radius-xl)",
-//                     padding: "var(--space-6)",
-//                     transition: "all var(--duration-normal)",
-//                   }}
-//                   onMouseEnter={(e) => {
-//                     e.currentTarget.style.boxShadow = "var(--shadow-md)";
-//                     e.currentTarget.style.borderColor =
-//                       "var(--color-accent-muted)";
-//                   }}
-//                   onMouseLeave={(e) => {
-//                     e.currentTarget.style.boxShadow = "none";
-//                     e.currentTarget.style.borderColor = "var(--color-border)";
-//                   }}
-//                 >
-//                   <h3
-//                     style={{
-//                       margin: 0,
-//                       fontSize: "var(--font-size-md)",
-//                       fontWeight: "var(--font-weight-semibold)",
-//                     }}
-//                   >
-//                     {note.title}
-//                   </h3>
-//                   {note.description && (
-//                     <p
-//                       style={{
-//                         margin: "var(--space-2) 0 0",
-//                         fontSize: "var(--font-size-sm)",
-//                         color: "var(--color-text-secondary)",
-//                       }}
-//                     >
-//                       {note.description}
-//                     </p>
-//                   )}
-//                   <div
-//                     style={{
-//                       display: "flex",
-//                       gap: "var(--space-2)",
-//                       marginTop: "var(--space-4)",
-//                       flexWrap: "wrap",
-//                     }}
-//                   >
-//                     <Badge variant="muted">{note.folder?.title}</Badge>
-//                     <span
-//                       style={{
-//                         fontSize: "var(--font-size-xs)",
-//                         color: "var(--color-text-muted)",
-//                         alignSelf: "center",
-//                       }}
-//                     >
-//                       {formatDate(note.updated_at)}
-//                     </span>
-//                   </div>
-//                 </div>
-//               </Link>
-//             ))}
-//           </div>
-//         ) : (
-//           <div
-//             style={{
-//               textAlign: "center",
-//               padding: "var(--space-20)",
-//               color: "var(--color-text-muted)",
-//             }}
-//           >
-//             <p style={{ fontSize: "40px", marginBottom: "var(--space-4)" }}>
-//               📝
-//             </p>
-//             <p>No public notes yet. Check back later!</p>
-//           </div>
-//         )}
-//       </div>
-//       <Footer />
-//     </>
-//   );
-// }
-
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { Badge } from "@/components/ui";
+import { Badge, EmptyState } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
+
+// ─── Types ────────────────────────────────────────────────────
+
+interface NoteItem {
+  id: string;
+  title: string;
+  description: string | null;
+  slug: string;
+  updated_at: string;
+  owner_id: string;
+  owner_name: string;
+  owner_username: string;
+  owner_avatar: string | null;
+  folder_path: { title: string; slug: string }[];
+}
+
+// ─── Dummy Content ────────────────────────────────────────────
+
+const DUMMY_NOTES: NoteItem[] = [
+  {
+    id: "dn1", title: "How to Set Up a React Project with Vite",
+    description: "Step-by-step guide to scaffolding a modern React project with Vite, TypeScript, and Tailwind CSS from scratch.",
+    slug: "how-to-set-up-a-react-project-with-vite",
+    updated_at: "2025-06-04T10:00:00Z",
+    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
+    folder_path: [
+      { title: "Full Stack Development", slug: "full-stack-development" },
+      { title: "Frontend", slug: "frontend" },
+    ],
+  },
+  {
+    id: "dn2", title: "React 19 — What Changed",
+    description: "A deep dive into the new features in React 19: use() hook, Actions, the new compiler, and improved concurrent rendering.",
+    slug: "react-19-what-changed",
+    updated_at: "2025-06-03T09:00:00Z",
+    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
+    folder_path: [
+      { title: "Full Stack Development", slug: "full-stack-development" },
+      { title: "Frontend", slug: "frontend" },
+    ],
+  },
+  {
+    id: "dn3", title: "JWT Authentication in Express",
+    description: "How to sign, verify, and refresh JSON Web Tokens for secure API access in Node.js and Express applications.",
+    slug: "jwt-authentication-in-express",
+    updated_at: "2025-06-01T14:30:00Z",
+    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
+    folder_path: [
+      { title: "Full Stack Development", slug: "full-stack-development" },
+      { title: "Backend", slug: "backend" },
+    ],
+  },
+  {
+    id: "dn4", title: "CAP Theorem Explained Simply",
+    description: "Understanding consistency, availability, and partition tolerance in distributed systems with real-world database examples.",
+    slug: "cap-theorem-explained-simply",
+    updated_at: "2025-05-28T09:00:00Z",
+    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
+    folder_path: [
+      { title: "System Design", slug: "system-design" },
+    ],
+  },
+  {
+    id: "dn5", title: "Event-Driven Architecture Patterns",
+    description: "Event sourcing, CQRS, message brokers, and when to choose asynchronous communication between services.",
+    slug: "event-driven-architecture-patterns",
+    updated_at: "2025-05-26T11:00:00Z",
+    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
+    folder_path: [
+      { title: "System Design", slug: "system-design" },
+      { title: "Microservices", slug: "microservices" },
+    ],
+  },
+  {
+    id: "dn6", title: "Docker Compose for Local Development",
+    description: "Multi-service setups made easy with Docker Compose — networking, volumes, environment variables, and health checks.",
+    slug: "docker-compose-for-local-development",
+    updated_at: "2025-05-25T16:00:00Z",
+    owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
+    folder_path: [
+      { title: "DevOps & Deployment", slug: "devops-deployment" },
+      { title: "Docker & Containers", slug: "docker-containers" },
+    ],
+  },
+  {
+    id: "dn7", title: "Database Indexing Strategies",
+    description: "B-tree, hash, and full-text indexes. When to use each and how to analyse query performance.",
+    slug: "database-indexing-strategies",
+    updated_at: "2025-05-23T13:00:00Z",
+    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
+    folder_path: [
+      { title: "System Design", slug: "system-design" },
+      { title: "Database Design", slug: "database-design" },
+    ],
+  },
+  {
+    id: "dn8", title: "Setting Up GitHub Actions CI/CD",
+    description: "Build a production-grade CI/CD pipeline with GitHub Actions — linting, testing, building, and deploying to the cloud.",
+    slug: "setting-up-github-actions-cicd",
+    updated_at: "2025-05-20T08:00:00Z",
+    owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
+    folder_path: [
+      { title: "DevOps & Deployment", slug: "devops-deployment" },
+      { title: "CI/CD", slug: "cicd" },
+    ],
+  },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -175,168 +122,534 @@ function formatDate(iso: string) {
   });
 }
 
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return formatDate(iso);
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+const AVATAR_COLORS = [
+  "#0D7F66", "#B87009", "#4F46E5", "#BE185D",
+  "#059669", "#D97706", "#7C3AED", "#DB2777",
+];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function Avatar({ name, size = 28 }: { name: string; size?: number }) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: getAvatarColor(name),
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#fff",
+        fontSize: size * 0.4,
+        fontWeight: 600,
+        fontFamily: "var(--font-sans)",
+        flexShrink: 0,
+        lineHeight: 1,
+      }}
+      title={name}
+    >
+      {getInitials(name)}
+    </div>
+  );
+}
+
+function buildFolderPath(
+  folder: { id: string; title: string; slug: string; parent_id: string | null } | null,
+  parentMap: Record<string, { id: string; title: string; slug: string; parent_id: string | null }>,
+): { title: string; slug: string }[] {
+  if (!folder) return [];
+  const path: { title: string; slug: string }[] = [
+    { title: folder.title, slug: folder.slug },
+  ];
+  let currentId = folder.id;
+  let maxDepth = 0;
+  while (parentMap[currentId]?.parent_id && maxDepth < 10) {
+    const parent = parentMap[parentMap[currentId].parent_id];
+    if (!parent) break;
+    path.unshift({ title: parent.title, slug: parent.slug });
+    currentId = parent.id;
+    maxDepth++;
+  }
+  return path;
+}
+
+// ─── Query helper ─────────────────────────────────────────────
+
+const OWNER_QUERY = "id, full_name, avatar_url, username";
+
+// ─── NotesPage Component ──────────────────────────────────────
+
 export function NotesPage() {
+  const navigate = useNavigate();
+  const [notes, setNotes] = useState<NoteItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [publicNotes, setPublicNotes] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const [useDummy, setUseDummy] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
     const load = async () => {
       try {
         const supabase = requireSupabase();
-        const { data } = await supabase
+
+        // Fetch all public folders for building hierarchy
+        const { data: allFolders } = await supabase
+          .from("folders")
+          .select("id, title, slug, parent_id")
+          .eq("visibility", "public");
+
+        // Fetch public notes with folder and owner info
+        const { data, error } = await supabase
           .from("notes")
           .select(
-            "id, title, description, slug, updated_at, visibility, folder:folders(id, title, slug)",
+            `id, title, description, slug, updated_at, owner_id, folder_id,
+             folder:folders!folder_id(id, title, slug, parent_id),
+             owner:profiles!owner_id(${OWNER_QUERY})`,
           )
           .eq("visibility", "public")
-          .order("updated_at", { ascending: false });
+          .order("updated_at", { ascending: false })
+          .limit(50);
 
-        setPublicNotes(data ?? []);
-      } catch (err) {
-        console.error("Error loading notes:", err);
+        if (!mounted) return;
+
+        if (error || !data?.length) {
+          setUseDummy(true);
+          setNotes(DUMMY_NOTES);
+          return;
+        }
+
+        // Build parent map
+        const parentMap: Record<string, { id: string; title: string; slug: string; parent_id: string | null }> = {};
+        (allFolders ?? []).forEach((f: Record<string, unknown>) => {
+          parentMap[f.id as string] = {
+            id: f.id as string,
+            title: f.title as string,
+            slug: f.slug as string,
+            parent_id: (f.parent_id as string | null) ?? null,
+          };
+        });
+
+        const mapped: NoteItem[] = (data as Record<string, unknown>[]).map(
+          (n) => {
+            const owner = (n.owner as { full_name?: string; avatar_url?: string | null; username?: string | null } | null);
+            const folder = (n.folder as { id: string; title: string; slug: string; parent_id: string | null } | null);
+            return {
+              id: n.id as string,
+              title: n.title as string,
+              description: (n.description as string | null) ?? null,
+              slug: n.slug as string,
+              updated_at: n.updated_at as string,
+              owner_id: n.owner_id as string,
+              owner_name: owner?.full_name || "Unknown",
+              owner_username: owner?.username || "unknown",
+              owner_avatar: owner?.avatar_url ?? null,
+              folder_path: buildFolderPath(folder, parentMap),
+            };
+          },
+        );
+
+        setNotes(mapped);
+        if (!mapped.length) {
+          setUseDummy(true);
+          setNotes(DUMMY_NOTES);
+        }
+      } catch {
+        if (!mounted) return;
+        setUseDummy(true);
+        setNotes(DUMMY_NOTES);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
+
     void load();
+    return () => { mounted = false; };
   }, []);
+
+  // ─── Filter by search ────────────────────────────────────
+
+  const filtered = search.trim()
+    ? notes.filter(
+        (n) =>
+          n.title.toLowerCase().includes(search.toLowerCase()) ||
+          n.description?.toLowerCase().includes(search.toLowerCase()) ||
+          n.owner_name.toLowerCase().includes(search.toLowerCase()) ||
+          n.folder_path.some((f) =>
+            f.title.toLowerCase().includes(search.toLowerCase()),
+          ),
+      )
+    : notes;
+
+  // ─── Loader ──────────────────────────────────────────────
 
   if (loading) {
     return (
       <>
         <Navbar />
-        <div
-          style={{
-            maxWidth: "900px",
-            margin: "0 auto",
-            padding: "var(--space-16) var(--space-8)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
-          Loading notes…
+        <div style={styles.loader}>
+          <div style={styles.loaderSpinner} />
         </div>
         <Footer />
       </>
     );
   }
 
+  // ─── Render ──────────────────────────────────────────────
+
   return (
     <>
       <Navbar />
-      <div
-        style={{
-          maxWidth: "900px",
-          margin: "0 auto",
-          padding: "var(--space-16) var(--space-8)",
-        }}
-      >
-        <div style={{ marginBottom: "var(--space-8)" }}>
-          <h1
-            style={{
-              fontSize: "var(--font-size-3xl)",
-              fontWeight: "var(--font-weight-bold)",
-              marginBottom: "var(--space-2)",
-            }}
-          >
-            Public Notes
-          </h1>
-          <p style={{ color: "var(--color-text-muted)", margin: 0 }}>
-            Browse publicly shared notes from the community.
-          </p>
+
+      <div style={styles.page}>
+        {/* Header */}
+        <div style={styles.header}>
+          <div>
+            <h1 style={styles.title}>Public Notes</h1>
+            <p style={styles.subtitle}>
+              Browse publicly shared notes from the community.
+            </p>
+          </div>
         </div>
 
-        {publicNotes.length > 0 ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-              gap: "var(--space-4)",
-            }}
-          >
-            {publicNotes.map((note) => (
+        {/* Search */}
+        <div style={styles.searchWrapper}>
+          <span style={styles.searchIcon}>🔍</span>
+          <input
+            type="text"
+            placeholder="Search notes by title, author, or folder..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={styles.searchInput}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              style={styles.searchClear}
+              aria-label="Clear search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* Results count */}
+        {search && (
+          <p style={styles.resultCount}>
+            {filtered.length} note{filtered.length !== 1 ? "s" : ""} found
+          </p>
+        )}
+
+        {/* Notes list */}
+        {filtered.length > 0 ? (
+          <div style={styles.list}>
+            {filtered.map((note) => (
               <Link
                 key={note.id}
-                to={`/n/${note.slug}`}
+                to={`/${note.owner_username}/n/${note.slug}`}
                 style={{ textDecoration: "none" }}
               >
-                <div
-                  style={{
-                    background: "var(--color-bg-elevated)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: "var(--radius-xl)",
-                    padding: "var(--space-6)",
-                    transition: "all var(--duration-normal)",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = "var(--shadow-md)";
-                    e.currentTarget.style.borderColor =
-                      "var(--color-accent-muted)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "none";
-                    e.currentTarget.style.borderColor = "var(--color-border)";
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: "var(--font-size-md)",
-                      fontWeight: "var(--font-weight-semibold)",
-                    }}
-                  >
-                    {note.title}
-                  </h3>
-                  {note.description && (
-                    <p
-                      style={{
-                        margin: "var(--space-2) 0 0",
-                        fontSize: "var(--font-size-sm)",
-                        color: "var(--color-text-secondary)",
-                      }}
-                    >
-                      {note.description}
-                    </p>
+                <div style={styles.card} className="note-card-hover">
+                  {/* Folder breadcrumb */}
+                  {note.folder_path.length > 0 && (
+                    <div style={styles.breadcrumb}>
+                      <span style={styles.breadcrumbIcon}>📂</span>
+                      {note.folder_path.map((seg, i) => (
+                        <span
+                          key={seg.slug}
+                          style={{ display: "inline-flex", alignItems: "center" }}
+                        >
+                          {i > 0 && <span style={styles.breadcrumbSep}>›</span>}
+                          {/* Don't make breadcrumb links stop propagation; use Link component */}
+                          {i < note.folder_path.length - 1 ? (
+                            <span
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/${note.owner_username}/folder/${seg.slug}`);
+                              }}
+                              style={styles.breadcrumbLink}
+                            >
+                              {seg.title}
+                            </span>
+                          ) : (
+                            <span style={styles.breadcrumbCurrent}>
+                              {seg.title}
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
                   )}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "var(--space-2)",
-                      marginTop: "var(--space-4)",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <Badge variant="muted">{note.folder?.title}</Badge>
-                    <span
-                      style={{
-                        fontSize: "var(--font-size-xs)",
-                        color: "var(--color-text-muted)",
-                        alignSelf: "center",
-                      }}
-                    >
-                      {formatDate(note.updated_at)}
-                    </span>
+
+                  {/* Title & description */}
+                  <h3 style={styles.cardTitle}>{note.title}</h3>
+                  {note.description && (
+                    <p style={styles.cardDesc}>{note.description}</p>
+                  )}
+
+                  {/* Footer */}
+                  <div style={styles.cardFooter}>
+                    <div style={styles.authorRow}>
+                      <Avatar name={note.owner_name} size={24} />
+                      <span style={styles.authorName}>{note.owner_name}</span>
+                    </div>
+                    <div style={styles.footerRight}>
+                      <Badge variant="muted">
+                        {timeAgo(note.updated_at)}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               </Link>
             ))}
           </div>
         ) : (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "var(--space-20)",
-              color: "var(--color-text-muted)",
-            }}
-          >
-            <p style={{ fontSize: "40px", marginBottom: "var(--space-4)" }}>
-              📝
-            </p>
-            <p>No public notes yet. Check back later!</p>
-          </div>
+          <EmptyState
+            icon="📝"
+            title={search ? "No notes match your search" : "No public notes yet"}
+            description={
+              search
+                ? 'Try a different search term or clear the filter.'
+                : 'Check back later when users publish notes.'
+            }
+          />
         )}
       </div>
+
       <Footer />
+
+      <style>{`
+        .note-card-hover {
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .note-card-hover:hover {
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-md) !important;
+          border-color: var(--color-accent-muted) !important;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        input::placeholder { color: var(--color-text-muted); opacity: 0.7; }
+      `}</style>
     </>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────
+
+const styles: Record<string, React.CSSProperties> = {
+  loader: {
+    minHeight: "60vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loaderSpinner: {
+    width: 28,
+    height: 28,
+    border: "3px solid var(--color-border)",
+    borderTopColor: "var(--color-accent)",
+    borderRadius: "50%",
+    animation: "spin 0.7s linear infinite",
+  },
+
+  page: {
+    maxWidth: 1280,
+    margin: "0 auto",
+    padding: "var(--space-16) var(--space-8)",
+    minHeight: "90vh",
+  },
+
+  header: {
+    marginBottom: "var(--space-8)",
+  },
+  title: {
+    fontSize: "var(--font-size-3xl)",
+    fontWeight: 700,
+    color: "var(--color-text-primary)",
+    margin: 0,
+  },
+  subtitle: {
+    fontSize: "var(--font-size-base)",
+    color: "var(--color-text-muted)",
+    margin: "var(--space-2) 0 0",
+  },
+
+  // Search
+  searchWrapper: {
+    position: "relative",
+    marginBottom: "var(--space-6)",
+  },
+  searchIcon: {
+    position: "absolute",
+    left: 14,
+    top: "50%",
+    transform: "translateY(-50%)",
+    fontSize: 15,
+    pointerEvents: "none",
+  },
+  searchInput: {
+    width: "100%",
+    fontFamily: "var(--font-sans)",
+    fontSize: "var(--font-size-base)",
+    color: "var(--color-text-primary)",
+    background: "var(--color-bg-elevated)",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-xl)",
+    padding: "12px 40px 12px 44px",
+    outline: "none",
+    transition: "border-color 0.15s, box-shadow 0.15s",
+  },
+  searchClear: {
+    position: "absolute",
+    right: 12,
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "var(--color-bg-muted)",
+    border: "none",
+    borderRadius: "50%",
+    width: 22,
+    height: 22,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    fontSize: 11,
+    color: "var(--color-text-muted)",
+    fontFamily: "var(--font-sans)",
+  },
+  resultCount: {
+    fontSize: "var(--font-size-sm)",
+    color: "var(--color-text-muted)",
+    marginBottom: "var(--space-4)",
+  },
+
+  // List
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "var(--space-3)",
+  },
+
+  // Card
+  card: {
+    background: "var(--color-bg-elevated)",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-xl)",
+    padding: "var(--space-5) var(--space-6)",
+    boxShadow: "var(--shadow-xs)",
+  },
+
+  // Breadcrumb
+  breadcrumb: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 2,
+    marginBottom: "var(--space-3)",
+    fontSize: 12,
+  },
+  breadcrumbIcon: {
+    marginRight: 4,
+    fontSize: 13,
+  },
+  breadcrumbSep: {
+    color: "var(--color-text-muted)",
+    margin: "0 4px",
+    fontSize: 12,
+  },
+  breadcrumbLink: {
+    color: "var(--color-text-muted)",
+    textDecoration: "none",
+    fontWeight: 500,
+    fontSize: 12,
+    transition: "color 0.15s",
+    cursor: "pointer",
+  },
+  breadcrumbCurrent: {
+    color: "var(--color-accent)",
+    fontWeight: 500,
+    fontSize: 12,
+  },
+
+  // Card content
+  cardTitle: {
+    fontSize: "var(--font-size-md)",
+    fontWeight: 600,
+    color: "var(--color-text-primary)",
+    margin: "0 0 var(--space-2)",
+    lineHeight: 1.3,
+  },
+  cardDesc: {
+    fontSize: "var(--font-size-sm)",
+    color: "var(--color-text-secondary)",
+    margin: 0,
+    lineHeight: 1.55,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
+
+  // Footer
+  cardFooter: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: "var(--space-4)",
+    paddingTop: "var(--space-3)",
+    borderTop: "1px solid var(--color-border-subtle)",
+    gap: "var(--space-2)",
+  },
+  authorRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-2)",
+    minWidth: 0,
+    flex: 1,
+  },
+  authorName: {
+    fontSize: "var(--font-size-xs)",
+    fontWeight: 500,
+    color: "var(--color-text-secondary)",
+    fontFamily: "var(--font-sans)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  footerRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-2)",
+    flexShrink: 0,
+  },
+};

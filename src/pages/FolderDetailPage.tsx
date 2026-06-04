@@ -14,27 +14,46 @@ function formatDate(iso: string) {
 }
 
 export function FolderDetailPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { username, slug } = useParams<{ username: string; slug: string }>();
   const [loading, setLoading] = useState(true);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [folder, setFolder] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [ownerUsername, setOwnerUsername] = useState<string>("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [notes, setNotes] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [subfolders, setSubfolders] = useState<any[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [parentFolder, setParentFolder] = useState<any>(null);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!slug || !username) return;
     const load = async () => {
       try {
         const supabase = requireSupabase();
 
-        // Find folder by slug
+        // Find owner by username
+        const { data: owner } = await supabase
+          .from("profiles")
+          .select("id, username")
+          .eq("username", username)
+          .single();
+
+        if (!owner) {
+          setLoading(false);
+          return;
+        }
+
+        setOwnerUsername(owner.username);
+
+        // Find folder by slug AND owner_id
         const { data: folderData } = await supabase
           .from("folders")
           .select("*")
           .eq("visibility", "public")
           .eq("slug", slug)
+          .eq("owner_id", owner.id)
           .single();
 
         if (!folderData) {
@@ -44,11 +63,21 @@ export function FolderDetailPage() {
 
         setFolder(folderData);
 
+        // Get subfolders
+        const { data: subfolderData } = await supabase
+          .from("folders")
+          .select("id, title, description, slug")
+          .eq("parent_id", folderData.id)
+          .eq("visibility", "public")
+          .order("title", { ascending: true });
+
+        setSubfolders(subfolderData || []);
+
         // Get parent if exists
         if (folderData.parent_id) {
           const { data: parentData } = await supabase
             .from("folders")
-            .select("id, title, slug")
+            .select("id, title, slug, owner_id")
             .eq("id", folderData.parent_id)
             .single();
           setParentFolder(parentData);
@@ -69,7 +98,7 @@ export function FolderDetailPage() {
       }
     };
     void load();
-  }, [slug]);
+  }, [slug, username]);
 
   if (loading) {
     return (
@@ -77,9 +106,10 @@ export function FolderDetailPage() {
         <Navbar />
         <div
           style={{
-            maxWidth: "900px",
+            maxWidth: 1280,
             margin: "0 auto",
             padding: "var(--space-16) var(--space-8)",
+            minHeight: "90vh",
             textAlign: "center",
             color: "var(--color-text-muted)",
           }}
@@ -97,9 +127,10 @@ export function FolderDetailPage() {
         <Navbar />
         <div
           style={{
-            maxWidth: "900px",
+            maxWidth: 1280,
             margin: "0 auto",
             padding: "var(--space-16) var(--space-8)",
+            minHeight: "90vh",
             textAlign: "center",
           }}
         >
@@ -107,9 +138,9 @@ export function FolderDetailPage() {
           <p style={{ color: "var(--color-text-muted)" }}>
             This folder may be private or does not exist.
           </p>
-          <Link to="/folders">
+          <Link to="/">
             <Button variant="primary" size="sm">
-              Browse folders
+              Go home
             </Button>
           </Link>
         </div>
@@ -123,9 +154,10 @@ export function FolderDetailPage() {
       <Navbar />
       <div
         style={{
-          maxWidth: "900px",
+          maxWidth: 1280,
           margin: "0 auto",
           padding: "var(--space-16) var(--space-8)",
+          minHeight: "90vh",
         }}
       >
         {/* Breadcrumb */}
@@ -144,11 +176,11 @@ export function FolderDetailPage() {
           >
             Folders
           </Link>
-          <span style={{ color: "var(--color-border-strong)" }}>/</span>
           {parentFolder && (
             <>
+              <span style={{ color: "var(--color-border-strong)" }}>/</span>
               <Link
-                to={`/folder/${parentFolder.slug}`}
+                to={`/${ownerUsername}/folder/${parentFolder.slug}`}
                 style={{
                   color: "var(--color-text-muted)",
                   textDecoration: "none",
@@ -156,9 +188,9 @@ export function FolderDetailPage() {
               >
                 {parentFolder.title}
               </Link>
-              <span style={{ color: "var(--color-border-strong)" }}>/</span>
             </>
           )}
+          <span style={{ color: "var(--color-border-strong)" }}>/</span>
           <span
             style={{
               fontWeight: "var(--font-weight-semibold)",
@@ -188,6 +220,81 @@ export function FolderDetailPage() {
           </Badge>
         </div>
 
+        {/* Subfolders */}
+        {subfolders.length > 0 && (
+          <div style={{ marginBottom: "var(--space-8)" }}>
+            <h3
+              style={{
+                fontSize: "var(--font-size-md)",
+                fontWeight: 600,
+                color: "var(--color-text-primary)",
+                margin: "0 0 var(--space-4)",
+              }}
+            >
+              Subfolders
+            </h3>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: "var(--space-3)",
+              }}
+            >
+              {subfolders.map((sub) => (
+                <Link
+                  key={sub.id}
+                  to={`/${ownerUsername}/folder/${sub.slug}`}
+                  style={{ textDecoration: "none" }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "var(--space-3)",
+                      padding: "var(--space-4) var(--space-5)",
+                      background: "var(--color-bg-base)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "var(--radius-lg)",
+                      transition: "all 0.15s ease",
+                    }}
+                    className="subfolder-card-hover"
+                  >
+                    <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>📂</span>
+                    <div style={{ minWidth: 0 }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "var(--font-size-sm)",
+                          fontWeight: 600,
+                          color: "var(--color-text-primary)",
+                        }}
+                      >
+                        {sub.title}
+                      </p>
+                      {sub.description && (
+                        <p
+                          style={{
+                            margin: "2px 0 0",
+                            fontSize: "var(--font-size-xs)",
+                            color: "var(--color-text-muted)",
+                            lineHeight: 1.4,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {sub.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
         {notes.length > 0 ? (
           <div
             style={{
@@ -199,7 +306,7 @@ export function FolderDetailPage() {
             {notes.map((note) => (
               <Link
                 key={note.id}
-                to={`/n/${note.slug}`}
+                to={`/${ownerUsername}/n/${note.slug}`}
                 style={{ textDecoration: "none" }}
               >
                 <div
@@ -271,6 +378,18 @@ export function FolderDetailPage() {
         )}
       </div>
       <Footer />
+
+      <style>{`
+        .subfolder-card-hover {
+          transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .subfolder-card-hover:hover {
+          border-color: var(--color-accent-muted) !important;
+          background: var(--color-bg-elevated) !important;
+          transform: translateY(-1px);
+          box-shadow: var(--shadow-sm);
+        }
+      `}</style>
     </>
   );
 }
