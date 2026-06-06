@@ -3,8 +3,9 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button, EmptyState } from "@/components/ui";
-import { useAuth } from "@/context/auth";
+import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import type { Folder } from "@/types";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -19,8 +20,9 @@ export function AdminFolders() {
   const user = profile;
 
   const [loading, setLoading] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [allFolders, setAllFolders] = useState<any[]>([]);
+  const [allFolders, setAllFolders] = useState<
+    Array<Folder & { owner: { full_name: string } | null }>
+  >([]);
   const [search, setSearch] = useState("");
   const [vis, setVis] = useState<"all" | "public" | "private">("all");
 
@@ -56,13 +58,7 @@ export function AdminFolders() {
     return (
       <DashboardLayout
         user={
-          user || {
-            id: "",
-            full_name: "Loading...",
-            avatar_url: null,
-            user_type: "admin",
-            created_at: "",
-          }
+          user || fallbackProfile({ user_type: "admin" })
         }
         variant="admin"
       >

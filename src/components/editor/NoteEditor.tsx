@@ -55,9 +55,11 @@ const BLOCK_TYPE_EMOJIS: Record<BlockType, string> = {
 function SlugField({
   slug,
   onChange,
+  username,
 }: {
   slug: string;
   onChange: (v: string) => void;
+  username: string;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -78,7 +80,7 @@ function SlugField({
           flexShrink: 0,
         }}
       >
-        /n/
+        /{username}/n/
       </span>
       {editing ? (
         <input
@@ -350,6 +352,8 @@ interface NoteEditorProps {
   headerActions: React.ReactNode;
   /** Bottom action buttons rendered below the add-blocks bar */
   bottomActions?: React.ReactNode;
+  /** Current user's username for constructing public URLs */
+  username: string;
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -362,6 +366,7 @@ export function NoteEditor({
   breadcrumbLabel,
   headerActions,
   bottomActions,
+  username,
 }: NoteEditorProps) {
   const [copied, setCopied] = useState(false);
 
@@ -449,7 +454,11 @@ export function NoteEditor({
             }}
           />
           <div style={{ marginTop: "var(--space-2)" }}>
-            <SlugField slug={state.slug} onChange={actions.setSlug} />
+            <SlugField
+              slug={state.slug}
+              onChange={actions.setSlug}
+              username={username}
+            />
           </div>
           {state.visibility === "public" && (
             <div
@@ -496,7 +505,7 @@ export function NoteEditor({
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                   }}
-                >{`${window.location.origin}/n/${state.slug || "untitled"}`}</span>
+                >{`${window.location.origin}/${username}/n/${state.slug || "untitled"}`}</span>
               </div>
               <Button
                 type="button"
@@ -510,7 +519,7 @@ export function NoteEditor({
                 }}
                 onClick={() => {
                   navigator.clipboard.writeText(
-                    `${window.location.origin}/n/${state.slug}`,
+                    `${window.location.origin}/${username}/n/${state.slug}`,
                   );
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);

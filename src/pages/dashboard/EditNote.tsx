@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui";
 import { NoteEditor, SaveIndicator } from "@/components/editor/NoteEditor";
 import { useNoteEditor } from "@/hooks/useNoteEditor";
-import { useAuth } from "@/context/auth";
+import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 
 export function EditNote() {
@@ -75,20 +75,14 @@ export function EditNote() {
     if (!user) return;
     setFolderError("");
     try {
-      await editor.save(user.id, false);
+      await editor.save(user.id);
       navigate("/dashboard/notes");
     } catch (err) {
       console.error("[EditNote] save failed", err);
     }
   }
 
-  const sharedUser = user ?? {
-    id: "",
-    full_name: "User",
-    avatar_url: null,
-    user_type: "user" as const,
-    created_at: "",
-  };
+  const sharedUser = user ?? fallbackProfile({ full_name: "User" });
 
   // ── Loading state ──
   if (loading) {
@@ -165,6 +159,7 @@ export function EditNote() {
           editor.setFolderId(id);
           setFolderError("");
         }}
+        username={user.username}
         breadcrumbLabel="Edit note"
         headerActions={
           <>

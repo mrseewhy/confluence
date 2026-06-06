@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { useAuth } from '@/context/auth'
 import type { Profile } from '@/types'
 
 function Icon({ d, size = 18 }: { d: string; size?: number }) {
@@ -27,6 +28,8 @@ interface DashboardTopbarProps {
 
 export function DashboardTopbar({ user }: DashboardTopbarProps) {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { signOut } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
 
   const pageLabel = routeLabels[location.pathname] ?? 'Dashboard'
@@ -180,7 +183,7 @@ export function DashboardTopbar({ user }: DashboardTopbarProps) {
                 {/* Menu items */}
                 {[
                   { label: 'Settings', href: '/dashboard/settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z' },
-                  { label: 'View public profile', href: '/', icon: 'M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z' },
+                  { label: 'View public profile', href: `/${user.username}`, icon: 'M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z' },
                 ].map(item => (
                   <Link
                     key={item.href}
@@ -231,7 +234,15 @@ export function DashboardTopbar({ user }: DashboardTopbarProps) {
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--color-danger-subtle)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    onClick={() => setMenuOpen(false)}
+                    onClick={async () => {
+                      setMenuOpen(false)
+                      try {
+                        await signOut()
+                        navigate('/')
+                      } catch {
+                        window.location.href = '/'
+                      }
+                    }}
                   >
                     <Icon d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9" size={15} />
                     Sign out

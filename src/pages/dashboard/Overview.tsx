@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button } from "@/components/ui";
-import { useAuth } from "@/context/auth";
+import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 
 const PAGE_SIZE = 10;
@@ -181,9 +181,15 @@ export function DashboardOverview() {
   });
 
   // All data for pagination
-  const [allNotes, setAllNotes] = useState<any[]>([]);
-  const [allSubfolders, setAllSubfolders] = useState<any[]>([]);
-  const [allFolders, setAllFolders] = useState<any[]>([]);
+  const [allNotes, setAllNotes] = useState<
+    { id: string; title: string; visibility: string; updated_at: string; folder_id: string; folder: any }[]
+  >([]);
+  const [allSubfolders, setAllSubfolders] = useState<
+    { id: string; parent_id: string; title: string; description: string | null; slug: string; visibility: string; updated_at: string; noteCount: number }[]
+  >([]);
+  const [allFolders, setAllFolders] = useState<
+    { id: string; parent_id: string | null; title: string; description: string | null; slug: string; visibility: string; updated_at: string; subfoldersCount: number; noteCount: number }[]
+  >([]);
 
   // Pagination state
   const [notesPage, setNotesPage] = useState(1);
@@ -237,7 +243,10 @@ export function DashboardOverview() {
         });
 
         // Sort by updated_at descending
-        const sortByDate = (a: any, b: any) => b.updated_at.localeCompare(a.updated_at);
+        const sortByDate = (
+          a: { updated_at: string },
+          b: { updated_at: string },
+        ) => b.updated_at.localeCompare(a.updated_at);
 
         setAllNotes([...allNotes].sort(sortByDate));
         setAllSubfolders([...computedSubfolders].sort(sortByDate));
@@ -253,7 +262,7 @@ export function DashboardOverview() {
   }, [user]);
 
   // Paginate
-  const paginate = (items: any[], page: number) => {
+  const paginate = <T,>(items: T[], page: number) => {
     const start = (page - 1) * PAGE_SIZE;
     return items.slice(start, start + PAGE_SIZE);
   };
@@ -264,14 +273,7 @@ export function DashboardOverview() {
     return (
       <DashboardLayout
         user={
-          user || {
-            id: "",
-            full_name: "Loading...",
-            username: "",
-            avatar_url: null,
-            user_type: "user",
-            created_at: "",
-          }
+          user || fallbackProfile()
         }
         variant="user"
       >
@@ -431,7 +433,7 @@ export function DashboardOverview() {
             }}
           >
             {allNotes.length > 0 ? (
-              paginate(allNotes, notesPage).map((note: any) => (
+              paginate(allNotes, notesPage).map((note) => (
                 <Link
                   key={note.id}
                   to={`/dashboard/notes`}
@@ -539,7 +541,7 @@ export function DashboardOverview() {
             }}
           >
             {allSubfolders.length > 0 ? (
-              paginate(allSubfolders, subfoldersPage).map((sub: any) => (
+              paginate(allSubfolders, subfoldersPage).map((sub) => (
                 <Link
                   key={sub.id}
                   to={`/dashboard/subfolders`}
@@ -649,7 +651,7 @@ export function DashboardOverview() {
             }}
           >
             {allFolders.length > 0 ? (
-              paginate(allFolders, foldersPage).map((folder: any) => (
+              paginate(allFolders, foldersPage).map((folder) => (
                 <Link
                   key={folder.id}
                   to={`/dashboard/folders`}
@@ -728,7 +730,9 @@ export function DashboardOverview() {
       </div>
 
       <style>{`
-        .dash-grid-3 { @media (max-width: 1024px) { grid-template-columns: 1fr; } }
+        @media (max-width: 1024px) {
+          .dash-grid-3 { grid-template-columns: 1fr; }
+        }
         .stat-card-hover:hover {
           transform: translateY(-2px);
           box-shadow: var(--shadow-md) !important;

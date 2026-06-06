@@ -4,6 +4,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Badge, Button } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
+import type { Folder, Note } from "@/types";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -16,16 +17,17 @@ function formatDate(iso: string) {
 export function FolderDetailPage() {
   const { username, slug } = useParams<{ username: string; slug: string }>();
   const [loading, setLoading] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [folder, setFolder] = useState<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [folder, setFolder] = useState<Folder | null>(null);
   const [ownerUsername, setOwnerUsername] = useState<string>("");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [notes, setNotes] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [subfolders, setSubfolders] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [parentFolder, setParentFolder] = useState<any>(null);
+  const [notes, setNotes] = useState<
+    Pick<Note, "id" | "title" | "description" | "slug" | "updated_at" | "visibility">[]
+  >([]);
+  const [subfolders, setSubfolders] = useState<
+    Pick<Folder, "id" | "title" | "description" | "slug">[]
+  >([]);
+  const [parentFolder, setParentFolder] = useState<
+    Pick<Folder, "id" | "title" | "slug" | "owner_id"> | null
+  >(null);
 
   useEffect(() => {
     if (!slug || !username) return;

@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button, EmptyState } from "@/components/ui";
-import { useAuth } from "@/context/auth";
+import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
 import type { Note } from "@/types";
@@ -63,7 +63,7 @@ export function DashboardNotes() {
   const handleCopyLink = (note: Note, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const link = `${window.location.origin}/n/${note.slug}`;
+    const link = `${window.location.origin}/${user?.username || "u"}/n/${note.slug}`;
     navigator.clipboard.writeText(link);
     setCopiedId(note.id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -87,13 +87,7 @@ export function DashboardNotes() {
     return (
       <DashboardLayout
         user={
-          user || {
-            id: "",
-            full_name: "Loading...",
-            avatar_url: null,
-            user_type: "user",
-            created_at: "",
-          }
+          user || fallbackProfile()
         }
         variant="user"
       >
@@ -319,7 +313,7 @@ export function DashboardNotes() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {`/n/${note.slug}`}
+                        {`/${user?.username || "u"}/n/${note.slug}`}
                       </span>
                       <button
                         onClick={(e) => handleCopyLink(note, e)}

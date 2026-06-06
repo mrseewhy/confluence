@@ -205,8 +205,11 @@ function buildFolderPath(
   ];
   let currentId = folderId;
   let maxDepth = 0;
-  while (parentMap[currentId]?.parent_id && maxDepth < 10) {
-    const parent = parentMap[parentMap[currentId].parent_id];
+  while (maxDepth < 10) {
+    const entry = parentMap[currentId];
+    const parentId = entry?.parent_id;
+    if (!parentId) break;
+    const parent = parentMap[parentId];
     if (!parent) break;
     path.unshift({ title: parent.title, slug: parent.slug });
     currentId = parent.id;
@@ -272,9 +275,10 @@ const HOW_IT_WORKS = [
 // ─── HomePage Component ───────────────────────────────────────
 
 export function HomePage() {
-  const [folders, setFolders] = useState<FolderItem[]>([]);
-  const [notes, setNotes] = useState<NoteItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [folders, setFolders] = useState<FolderItem[]>(DUMMY_FOLDERS);
+  const [notes, setNotes] = useState<NoteItem[]>(DUMMY_NOTES);
+  const [foldersLoading, setFoldersLoading] = useState(true);
+  const [notesLoading, setNotesLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -283,136 +287,138 @@ export function HomePage() {
       try {
         const supabase = requireSupabase();
 
-        const { data: folderData, error: folderErr } = await supabase
-          .from("folders")
-          .select(
-            `id, title, description, slug, owner_id, parent_id,
-             owner:profiles!owner_id(${OWNER_QUERY})`,
-          )
-          .is("parent_id", null)
-          .eq("visibility", "public")
-          .order("updated_at", { ascending: false })
-          .limit(6);
-
-        const { data: allFolders } = await supabase
-          .from("folders")
-          .select("id, title, slug, parent_id, owner_id")
-          .eq("visibility", "public");
-
-        const { data: noteData, error: noteErr } = await supabase
-          .from("notes")
-          .select(
-            `id, title, description, slug, updated_at, owner_id, folder_id,
-             folder:folders!folder_id(id, title, slug, parent_id),
-             owner:profiles!owner_id(${OWNER_QUERY})`,
-          )
-          .eq("visibility", "public")
-          .order("updated_at", { ascending: false })
-          .limit(6);
+        const [folderResult, allFoldersResult, noteResult] = await Promise.all([
+          supabase
+            .from("folders")
+            .select(
+              `id, title, description, slug, owner_id, parent_id,
+               owner:profiles!owner_id(${OWNER_QUERY})`,
+            )
+            .is("parent_id", null)
+            .eq("visibility", "public")
+            .order("updated_at", { ascending: false })
+            .limit(6),
+          supabase
+            .from("folders")
+            .select("id, title, slug, parent_id, owner_id")
+            .eq("visibility", "public"),
+          supabase
+            .from("notes")
+            .select(
+              `id, title, description, slug, updated_at, owner_id, folder_id,
+               folder:folders!folder_id(id, title, slug, parent_id),
+               owner:profiles!owner_id(${OWNER_QUERY})`,
+            )
+            .eq("visibility", "public")
+            .order("updated_at", { ascending: false })
+            .limit(6),
+        ]);
 
         if (!mounted) return;
 
-        if (folderErr || noteErr || !folderData?.length) {
-          setFolders(DUMMY_FOLDERS);
-          setNotes(DUMMY_NOTES);
-          return;
-        }
-
-        const parentMap: Record<string, { id: string; title: string; slug: string; parent_id: string | null }> = {};
-        (allFolders ?? []).forEach((f: Record<string, unknown>) => {
-          parentMap[f.id as string] = {
-            id: f.id as string,
-            title: f.title as string,
-            slug: f.slug as string,
-            parent_id: (f.parent_id as string | null) ?? null,
-          };
-        });
-        (folderData ?? []).forEach((f: Record<string, unknown>) => {
-          parentMap[f.id as string] = {
-            id: f.id as string,
-            title: f.title as string,
-            slug: f.slug as string,
-            parent_id: null,
-          };
-        });
-
-        const mappedFolders: FolderItem[] = (folderData ?? []).map(
-          (f: Record<string, unknown>) => {
-            const owner = mapOwner(f.owner as { full_name?: string; avatar_url?: string | null; username?: string | null } | null, "Unknown");
-            return {
+        // ── Resolve folders ──
+        if (!folderResult.error && folderResult.data?.length) {
+          const parentMap: Record<string, { id: string; title: string; slug: string; parent_id: string | null }> = {};
+          (allFoldersResult.data ?? []).forEach((f: Record<string, unknown>) => {
+            parentMap[f.id as string] = {
               id: f.id as string,
               title: f.title as string,
-              description: (f.description as string | null) ?? null,
               slug: f.slug as string,
-              note_count: 0,
-              owner_id: f.owner_id as string,
-              owner_name: owner.name,
-              owner_username: (f.owner as { username?: string } | null)?.username || "unknown",
-              owner_avatar: owner.avatar,
+              parent_id: (f.parent_id as string | null) ?? null,
             };
-          },
-        );
-
-        const mappedNotes: NoteItem[] = (noteData ?? []).map(
-          (n: Record<string, unknown>) => {
-            const owner = mapOwner(n.owner as { full_name?: string; avatar_url?: string | null; username?: string | null } | null, "Unknown");
-            const folder = (n.folder as { id: string; title: string; slug: string; parent_id: string | null } | null) ?? {
-              id: "", title: "Uncategorised", slug: "", parent_id: null,
+          });
+          (folderResult.data ?? []).forEach((f: Record<string, unknown>) => {
+            parentMap[f.id as string] = {
+              id: f.id as string,
+              title: f.title as string,
+              slug: f.slug as string,
+              parent_id: null,
             };
-            const folderPath = buildFolderPath(
-              folder.id, folder.title, folder.slug, parentMap,
-            );
-            return {
-              id: n.id as string,
-              title: n.title as string,
-              description: (n.description as string | null) ?? null,
-              slug: n.slug as string,
-              updated_at: n.updated_at as string,
-              owner_id: n.owner_id as string,
-              owner_name: owner.name,
-              owner_username: owner.username || "unknown",
-              owner_avatar: owner.avatar,
-              folder_id: folder.id,
-              folder_title: folder.title,
-              folder_slug: folder.slug,
-              folder_path: folderPath,
+          });
+
+          const mappedFolders: FolderItem[] = (folderResult.data ?? []).map(
+            (f: Record<string, unknown>) => {
+              const owner = mapOwner(f.owner as { full_name?: string; avatar_url?: string | null; username?: string | null } | null, "Unknown");
+              return {
+                id: f.id as string,
+                title: f.title as string,
+                description: (f.description as string | null) ?? null,
+                slug: f.slug as string,
+                note_count: 0,
+                owner_id: f.owner_id as string,
+                owner_name: owner.name,
+                owner_username: (f.owner as { username?: string } | null)?.username || "unknown",
+                owner_avatar: owner.avatar,
+              };
+            },
+          );
+
+          if (mounted) {
+            setFolders(mappedFolders);
+            setFoldersLoading(false);
+          }
+        } else if (mounted) {
+          setFoldersLoading(false);
+        }
+
+        // ── Resolve notes ──
+        if (!noteResult.error && noteResult.data?.length) {
+          const allFolderData = allFoldersResult.data ?? [];
+          const parentMap: Record<string, { id: string; title: string; slug: string; parent_id: string | null }> = {};
+          allFolderData.forEach((f: Record<string, unknown>) => {
+            parentMap[f.id as string] = {
+              id: f.id as string,
+              title: f.title as string,
+              slug: f.slug as string,
+              parent_id: (f.parent_id as string | null) ?? null,
             };
-          },
-        );
+          });
 
-        setFolders(mappedFolders);
-        setNotes(mappedNotes);
+          const mappedNotes: NoteItem[] = (noteResult.data ?? []).map(
+            (n: Record<string, unknown>) => {
+              const owner = mapOwner(n.owner as { full_name?: string; avatar_url?: string | null; username?: string | null } | null, "Unknown");
+              const folder = (n.folder as { id: string; title: string; slug: string; parent_id: string | null } | null) ?? {
+                id: "", title: "Uncategorised", slug: "", parent_id: null,
+              };
+              const folderPath = buildFolderPath(
+                folder.id, folder.title, folder.slug, parentMap,
+              );
+              return {
+                id: n.id as string,
+                title: n.title as string,
+                description: (n.description as string | null) ?? null,
+                slug: n.slug as string,
+                updated_at: n.updated_at as string,
+                owner_id: n.owner_id as string,
+                owner_name: owner.name,
+                owner_username: owner.username || "unknown",
+                owner_avatar: owner.avatar,
+                folder_id: folder.id,
+                folder_title: folder.title,
+                folder_slug: folder.slug,
+                folder_path: folderPath,
+              };
+            },
+          );
 
-        if (!mappedFolders.length && !mappedNotes.length) {
-          setFolders(DUMMY_FOLDERS);
-          setNotes(DUMMY_NOTES);
+          if (mounted) {
+            setNotes(mappedNotes);
+            setNotesLoading(false);
+          }
+        } else if (mounted) {
+          setNotesLoading(false);
         }
       } catch {
-        if (!mounted) return;
-        setFolders(DUMMY_FOLDERS);
-        setNotes(DUMMY_NOTES);
-      } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setFoldersLoading(false);
+          setNotesLoading(false);
+        }
       }
     };
 
     void load();
     return () => { mounted = false; };
   }, []);
-
-  // ─── Loader ──────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <>
-        <Navbar />
-        <div style={styles.loader}>
-          <div style={styles.loaderSpinner} />
-        </div>
-        <Footer />
-      </>
-    );
-  }
 
   // ─── Render ──────────────────────────────────────────────
 
@@ -514,32 +520,39 @@ export function HomePage() {
           </div>
 
           <div style={styles.cardGrid}>
-            {folders.slice(0, 3).map((folder) => (
-              <Link
-                key={folder.id}
-                to={`/${folder.owner_username}/folder/${folder.slug}`}
-                style={{ textDecoration: "none" }}
-              >
-                <div style={styles.card} className="card-hover">
-                  <span style={styles.folderIcon}>📁</span>
-                  <div style={styles.cardBody}>
-                    <h3 style={styles.cardTitle}>{folder.title}</h3>
-                    {folder.description && (
-                      <p style={styles.cardDesc}>{folder.description}</p>
-                    )}
-                    <div style={styles.cardMeta}>
-                      <Badge variant="accent">📄 {folder.note_count} notes</Badge>
+            {foldersLoading && folders === DUMMY_FOLDERS ? (
+              <div style={styles.sectionLoader}>
+                <div style={styles.loaderSpinner} />
+                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Loading folders...</span>
+              </div>
+            ) : (
+              folders.slice(0, 3).map((folder) => (
+                <Link
+                  key={folder.id}
+                  to={`/${folder.owner_username}/folder/${folder.slug}`}
+                  style={{ textDecoration: "none" }}
+                >
+                  <div style={styles.card} className="card-hover">
+                    <span style={styles.folderIcon}>📁</span>
+                    <div style={styles.cardBody}>
+                      <h3 style={styles.cardTitle}>{folder.title}</h3>
+                      {folder.description && (
+                        <p style={styles.cardDesc}>{folder.description}</p>
+                      )}
+                      <div style={styles.cardMeta}>
+                        <Badge variant="accent">📄 {folder.note_count} notes</Badge>
+                      </div>
+                    </div>
+                    <div style={styles.cardFooter}>
+                      <div style={styles.authorRow}>
+                        <Avatar name={folder.owner_name} size={24} />
+                        <span style={styles.authorName}>{folder.owner_name}</span>
+                      </div>
                     </div>
                   </div>
-                  <div style={styles.cardFooter}>
-                    <div style={styles.authorRow}>
-                      <Avatar name={folder.owner_name} size={24} />
-                      <span style={styles.authorName}>{folder.owner_name}</span>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -563,55 +576,62 @@ export function HomePage() {
           </div>
 
           <div style={styles.notesList}>
-            {notes.slice(0, 6).map((note) => (
-              <Link
-                key={note.id}
-                to={`/${note.owner_username}/n/${note.slug}`}
-                style={{ textDecoration: "none" }}
-              >
-                <div style={styles.noteCard} className="card-hover">
-                  {/* Folder breadcrumb */}
-                  {note.folder_path.length > 0 && (
-                    <div style={styles.breadcrumb}>
-                      <span style={{ marginRight: 4, fontSize: 12 }}>📂</span>
-                      {note.folder_path.map((seg, i) => (
-                        <span key={seg.slug} style={{ display: "inline-flex", alignItems: "center" }}>
-                          {i > 0 && (
-                            <span style={{ color: "var(--color-text-muted)", margin: "0 4px", fontSize: 11 }}>
-                              ›
+            {notesLoading && notes === DUMMY_NOTES ? (
+              <div style={styles.sectionLoader}>
+                <div style={styles.loaderSpinner} />
+                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Loading notes...</span>
+              </div>
+            ) : (
+              notes.slice(0, 6).map((note) => (
+                <Link
+                  key={note.id}
+                  to={`/${note.owner_username}/n/${note.slug}`}
+                  style={{ textDecoration: "none" }}
+                >
+                  <div style={styles.noteCard} className="card-hover">
+                    {/* Folder breadcrumb */}
+                    {note.folder_path.length > 0 && (
+                      <div style={styles.breadcrumb}>
+                        <span style={{ marginRight: 4, fontSize: 12 }}>📂</span>
+                        {note.folder_path.map((seg, i) => (
+                          <span key={seg.slug} style={{ display: "inline-flex", alignItems: "center" }}>
+                            {i > 0 && (
+                              <span style={{ color: "var(--color-text-muted)", margin: "0 4px", fontSize: 11 }}>
+                                ›
+                              </span>
+                            )}
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: i === note.folder_path.length - 1
+                                  ? "var(--color-accent)"
+                                  : "var(--color-text-muted)",
+                                fontWeight: i === note.folder_path.length - 1 ? 500 : 400,
+                              }}
+                            >
+                              {seg.title}
                             </span>
-                          )}
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: i === note.folder_path.length - 1
-                                ? "var(--color-accent)"
-                                : "var(--color-text-muted)",
-                              fontWeight: i === note.folder_path.length - 1 ? 500 : 400,
-                            }}
-                          >
-                            {seg.title}
                           </span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
 
-                  <h3 style={styles.cardTitle}>{note.title}</h3>
-                  {note.description && (
-                    <p style={styles.cardDesc}>{note.description}</p>
-                  )}
+                    <h3 style={styles.cardTitle}>{note.title}</h3>
+                    {note.description && (
+                      <p style={styles.cardDesc}>{note.description}</p>
+                    )}
 
-                  <div style={styles.cardFooter}>
-                    <div style={styles.authorRow}>
-                      <Avatar name={note.owner_name} size={22} />
-                      <span style={styles.authorName}>{note.owner_name}</span>
+                    <div style={styles.cardFooter}>
+                      <div style={styles.authorRow}>
+                        <Avatar name={note.owner_name} size={22} />
+                        <span style={styles.authorName}>{note.owner_name}</span>
+                      </div>
+                      <span style={styles.dateText}>{timeAgo(note.updated_at)}</span>
                     </div>
-                    <span style={styles.dateText}>{timeAgo(note.updated_at)}</span>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -880,6 +900,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--color-text-secondary)",
     margin: 0,
     lineHeight: 1.6,
+  },
+
+  // ── Section loader ──────────────────────────────────────
+  sectionLoader: {
+    gridColumn: '1 / -1',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 'var(--space-3)',
+    padding: 'var(--space-16) 0',
+    minHeight: 200,
   },
 
   // ── Folders ──────────────────────────────────────────────

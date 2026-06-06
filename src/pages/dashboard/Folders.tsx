@@ -3,7 +3,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button, EmptyState, Input } from "@/components/ui";
-import { useAuth } from "@/context/auth";
+import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
 import type { Folder, Visibility } from "@/types";
@@ -22,7 +22,7 @@ export function DashboardFolders() {
 
   const [loading, setLoading] = useState(true);
   const [foldersList, setFoldersList] = useState<Folder[]>([]);
-  const [notesList, setNotesList] = useState<any[]>([]);
+  const [notesList, setNotesList] = useState<{ id: string; folder_id: string }[]>([]);
   const [search, setSearch] = useState("");
   const [vis, setVis] = useState<"all" | "public" | "private">("all");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -140,13 +140,7 @@ export function DashboardFolders() {
     return (
       <DashboardLayout
         user={
-          user || {
-            id: "",
-            full_name: "Loading...",
-            avatar_url: null,
-            user_type: "user",
-            created_at: "",
-          }
+          user || fallbackProfile()
         }
         variant="user"
       >

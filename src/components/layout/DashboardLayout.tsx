@@ -690,11 +690,10 @@ export function DashboardLayout({
                             icon: IC.shield,
                           }]
                         : []),
-                      {
-                        label: "Settings",
-                        href: `${rootHref === "/dashboard" ? "/dashboard" : "/admin/dashboard"}/settings`,
-                        icon: IC.settings,
-                      },
+                      // Settings — only for user variant (no admin settings route exists)
+                      ...(variant === "user"
+                        ? [{ label: "Settings", href: "/dashboard/settings", icon: IC.settings }]
+                        : []),
                       { label: "Public site", href: "/", icon: IC.globe },
                     ].map((item) => (
                       <Link

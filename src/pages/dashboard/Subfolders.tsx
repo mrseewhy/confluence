@@ -3,7 +3,7 @@
 // import { Icon } from "@/components/layout/DashboardIcon";
 // import { IC } from "@/components/layout/dashboardIconPaths";
 // import { Button, EmptyState, Input, Badge } from "@/components/ui";
-// import { useAuth } from "@/context/auth";
+// import { useAuth, fallbackProfile } from "@/context/auth";
 // import { requireSupabase } from "@/lib/supabase";
 // import { ShareModal } from "@/components/ShareModal";
 // import type { Folder, Visibility } from "@/types";
@@ -656,7 +656,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { Button, EmptyState, Input, Badge } from "@/components/ui";
-import { useAuth } from "@/context/auth";
+import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
 import type { Folder, Visibility } from "@/types";
@@ -867,13 +867,7 @@ export function DashboardSubfolders() {
     return (
       <DashboardLayout
         user={
-          user ?? {
-            id: "",
-            full_name: "Loading...",
-            avatar_url: null,
-            user_type: "user",
-            created_at: "",
-          }
+          user ?? fallbackProfile()
         }
         variant="user"
       >
@@ -1175,8 +1169,8 @@ export function DashboardSubfolders() {
 
               {/* Actions */}
               <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                {/* Share is shown for PUBLIC folders so others can access the link */}
-                {sf.visibility === "public" && (
+                {/* Share is shown for PRIVATE folders (to invite collaborators) */}
+                {sf.visibility === "private" && (
                   <Button
                     variant="accent-ghost"
                     size="xs"

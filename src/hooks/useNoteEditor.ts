@@ -156,25 +156,30 @@ export function useNoteEditor() {
 
   // ── Load existing note into editor ───────────────────────────
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loadFromExisting = useCallback((note: any, blocks: any[]) => {
-    setSlugManuallyEdited(true)
-    setState({
-      noteId:      note.id,
-      title:       note.title,
-      description: note.description ?? '',
-      slug:        note.slug,
-      folder_id:   note.folder_id,
-      visibility:  note.visibility,
-      blocks:      blocks.map((b: any, i: number) => ({
-        id:          `existing-${b.id}`,
-        type:        b.type as BlockType,
-        content:     b.content,
-        metadata:    b.metadata ?? {},
-        order_index: i,
-      })),
-    })
-  }, [])
+  const loadFromExisting = useCallback(
+    (
+      note: { id: string; title: string; description: string | null; slug: string; folder_id: string; visibility: string },
+      blocks: { id: string; type: string; content: string; metadata: Record<string, unknown> | null }[],
+    ) => {
+      setSlugManuallyEdited(true)
+      setState({
+        noteId:      note.id,
+        title:       note.title,
+        description: note.description ?? '',
+        slug:        note.slug,
+        folder_id:   note.folder_id,
+        visibility:  note.visibility as Visibility,
+        blocks:      blocks.map((b, i) => ({
+          id:          `existing-${b.id}`,
+          type:        b.type as BlockType,
+          content:     b.content,
+          metadata:    (b.metadata ?? {}) as BlockMetadata,
+          order_index: i,
+        })),
+      })
+    },
+    [],
+  )
 
   // ── Reset editor to blank state ─────────────────────────────
 
@@ -193,7 +198,7 @@ export function useNoteEditor() {
 
   // ── Save (insert or update note + blocks into Supabase) ─────
 
-  const save = useCallback(async (userId: string, asDraft = false) => {
+  const save = useCallback(async (userId: string) => {
     if (!userId) {
       setSaveStatus('error')
       return
@@ -202,9 +207,10 @@ export function useNoteEditor() {
     setSaveStatus('saving')
     setSaveError(null)
 
+    const slug = state.slug || slugify(state.title)
+
     try {
       const supabase = requireSupabase()
-      const slug = state.slug || slugify(state.title)
 
       if (state.noteId) {
         // ── UPDATE existing note ──

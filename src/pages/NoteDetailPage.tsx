@@ -4,6 +4,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Badge, Button } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
+import type { Note, NoteBlock } from "@/types";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -16,11 +17,8 @@ function formatDate(iso: string) {
 export function NoteDetailPage() {
   const { username, slug } = useParams<{ username: string; slug: string }>();
   const [loading, setLoading] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [note, setNote] = useState<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [blocks, setBlocks] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [note, setNote] = useState<Note | null>(null);
+  const [blocks, setBlocks] = useState<NoteBlock[]>([]);
   const [ownerUsername, setOwnerUsername] = useState<string>("");
 
   useEffect(() => {
@@ -372,6 +370,51 @@ export function NoteDetailPage() {
                         allowFullScreen
                       />
                     </div>
+                  ) : block.type === "heading" ? (
+                    (() => {
+                      const level = (block.metadata?.level as string) || "h2";
+                      const style = {
+                        margin: 0,
+                        lineHeight: "var(--line-height-tight)",
+                        letterSpacing: "var(--letter-spacing-tight)",
+                        color: "var(--color-text-primary)",
+                      };
+                      if (level === "h1")
+                        return (
+                          <h1
+                            style={{
+                              ...style,
+                              fontSize: "var(--font-size-3xl)",
+                              fontWeight: "var(--font-weight-bold)",
+                            }}
+                          >
+                            {block.content}
+                          </h1>
+                        );
+                      if (level === "h3")
+                        return (
+                          <h3
+                            style={{
+                              ...style,
+                              fontSize: "var(--font-size-xl)",
+                              fontWeight: "var(--font-weight-semibold)",
+                            }}
+                          >
+                            {block.content}
+                          </h3>
+                        );
+                      return (
+                        <h2
+                          style={{
+                            ...style,
+                            fontSize: "var(--font-size-2xl)",
+                            fontWeight: "var(--font-weight-bold)",
+                          }}
+                        >
+                          {block.content}
+                        </h2>
+                      );
+                    })()
                   ) : (
                     <div
                       style={{

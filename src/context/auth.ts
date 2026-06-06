@@ -21,6 +21,19 @@ export function getDashboardPath(userType?: UserType | null) {
   return userType === 'admin' ? '/admin/dashboard' : '/dashboard'
 }
 
+/** Create a fallback Profile for loading/error states */
+export function fallbackProfile(overrides?: Partial<Profile>): Profile {
+  return {
+    id: '',
+    full_name: 'Loading...',
+    username: '',
+    avatar_url: null,
+    user_type: 'user',
+    created_at: '',
+    ...overrides,
+  }
+}
+
 export function useAuth(): AuthContextValue {
   const context = use(AuthContext)
 

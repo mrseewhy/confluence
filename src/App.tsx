@@ -1,41 +1,62 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AuthProvider } from '@/context/AuthProvider'
 import { RequireAuth } from '@/components/RequireAuth'
 
-// ── Public pages ──────────────────────────────────────────────
-import { HomePage }             from '@/pages/HomePage'
-import { FoldersPage}          from '@/pages/FoldersPage'
-import { NotesPage}            from '@/pages/NotesPage'
-import { SignUpPage }           from '@/pages/SignUpPage'
-import { SignInPage }           from '@/pages/SignInPage'
-import { PasswordRecoveryPage } from '@/pages/PasswordRecoveryPage'
-import { ResetPasswordPage }    from '@/pages/ResetPasswordPage'
-import { AuthRedirectPage }     from '@/pages/AuthRedirectPage'
-import { NoteDetailPage }       from '@/pages/NoteDetailPage'
-import { FolderDetailPage }     from '@/pages/FolderDetailPage'
-import { UserProfilePage }      from '@/pages/UserProfilePage'
+// ── Critical routes (eager — always in the main chunk) ───────
+import { HomePage } from '@/pages/HomePage'
+import { SignInPage } from '@/pages/SignInPage'
+import { SignUpPage } from '@/pages/SignUpPage'
 
-// ── User dashboard (/dashboard) ───────────────────────────────
-import { DashboardOverview }    from '@/pages/dashboard/Overview'
-import { DashboardFolders }     from '@/pages/dashboard/Folders'
-import { DashboardSubfolders }  from '@/pages/dashboard/Subfolders'
-import { DashboardNotes }       from '@/pages/dashboard/Notes'
-import { DashboardSettings }    from '@/pages/dashboard/Settings'
-import { CreateNote }           from '@/pages/dashboard/CreateNote'
-import { EditNote }             from '@/pages/dashboard/EditNote'
+// ── Lazy-loaded pages ─────────────────────────────────────────
+const FoldersPage          = lazy(() => import('@/pages/FoldersPage').then(m => ({ default: m.FoldersPage })))
+const NotesPage            = lazy(() => import('@/pages/NotesPage').then(m => ({ default: m.NotesPage })))
+const PasswordRecoveryPage = lazy(() => import('@/pages/PasswordRecoveryPage').then(m => ({ default: m.PasswordRecoveryPage })))
+const ResetPasswordPage    = lazy(() => import('@/pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })))
+const AuthRedirectPage     = lazy(() => import('@/pages/AuthRedirectPage').then(m => ({ default: m.AuthRedirectPage })))
+const NoteDetailPage       = lazy(() => import('@/pages/NoteDetailPage').then(m => ({ default: m.NoteDetailPage })))
+const FolderDetailPage     = lazy(() => import('@/pages/FolderDetailPage').then(m => ({ default: m.FolderDetailPage })))
+const UserProfilePage      = lazy(() => import('@/pages/UserProfilePage').then(m => ({ default: m.UserProfilePage })))
+const DashboardOverview    = lazy(() => import('@/pages/dashboard/Overview').then(m => ({ default: m.DashboardOverview })))
+const DashboardFolders     = lazy(() => import('@/pages/dashboard/Folders').then(m => ({ default: m.DashboardFolders })))
+const DashboardSubfolders  = lazy(() => import('@/pages/dashboard/Subfolders').then(m => ({ default: m.DashboardSubfolders })))
+const DashboardNotes       = lazy(() => import('@/pages/dashboard/Notes').then(m => ({ default: m.DashboardNotes })))
+const DashboardSettings    = lazy(() => import('@/pages/dashboard/Settings').then(m => ({ default: m.DashboardSettings })))
+const CreateNote           = lazy(() => import('@/pages/dashboard/CreateNote').then(m => ({ default: m.CreateNote })))
+const EditNote             = lazy(() => import('@/pages/dashboard/EditNote').then(m => ({ default: m.EditNote })))
+const AdminOverview        = lazy(() => import('@/pages/admin/Overview').then(m => ({ default: m.AdminOverview })))
+const AdminUsers           = lazy(() => import('@/pages/admin/Users').then(m => ({ default: m.AdminUsers })))
+const AdminFolders         = lazy(() => import('@/pages/admin/Folders').then(m => ({ default: m.AdminFolders })))
+const AdminNotes           = lazy(() => import('@/pages/admin/Notes').then(m => ({ default: m.AdminNotes })))
 
-// ── Admin dashboard (/admin/dashboard) ────────────────────────
-import { AdminOverview }        from '@/pages/admin/Overview'
-import { AdminUsers }           from '@/pages/admin/Users'
-import { AdminFolders }         from '@/pages/admin/Folders'
-import { AdminNotes }           from '@/pages/admin/Notes'
+function PageSkeleton() {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--color-bg)',
+    }}>
+      <div style={{
+        width: 28,
+        height: 28,
+        border: '3px solid var(--color-border)',
+        borderTopColor: 'var(--color-accent)',
+        borderRadius: '50%',
+        animation: 'spin 0.7s linear infinite',
+      }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
+}
 
 export default function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
-        <AuthProvider>
+      <BrowserRouter>          <AuthProvider>
+          <Suspense fallback={<PageSkeleton />}>
           <Routes>
 
           {/* ── Public ── */}
@@ -67,6 +88,7 @@ export default function App() {
           <Route path="/admin/dashboard/notes"   element={<RequireAuth userType="admin"><AdminNotes /></RequireAuth>} />
 
           </Routes>
+          </Suspense>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>

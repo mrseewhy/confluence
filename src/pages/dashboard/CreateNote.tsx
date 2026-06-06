@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui";
 import { NoteEditor, SaveIndicator } from "@/components/editor/NoteEditor";
 import { useNoteEditor } from "@/hooks/useNoteEditor";
-import { useAuth } from "@/context/auth";
+import { useAuth, fallbackProfile } from "@/context/auth";
 
 export function CreateNote() {
   const { profile } = useAuth();
@@ -15,7 +15,7 @@ export function CreateNote() {
 
   const [folderError, setFolderError] = useState("");
 
-  async function handleSave(asDraft: boolean) {
+  async function handleSave() {
     if (!editor.state.folder_id) {
       setFolderError("Please select a folder.");
       return;
@@ -23,7 +23,7 @@ export function CreateNote() {
     if (!user) return;
     setFolderError("");
     try {
-      await editor.save(user.id, asDraft);
+      await editor.save(user.id);
       navigate("/dashboard/notes");
     } catch (err) {
       console.error("[CreateNote] save failed", err);
@@ -33,13 +33,7 @@ export function CreateNote() {
   if (!user) {
     return (
       <DashboardLayout
-        user={{
-          id: "",
-          full_name: "Loading...",
-          avatar_url: null,
-          user_type: "user",
-          created_at: "",
-        }}
+        user={fallbackProfile()}
         variant="user"
         defaultCollapsed
       >
@@ -66,25 +60,18 @@ export function CreateNote() {
           editor.setFolderId(id);
           setFolderError("");
         }}
+        username={user.username}
         breadcrumbLabel="New note"
         headerActions={
           <>
             <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
             <Button
-              variant="secondary"
-              size="sm"
-              disabled={!editor.isValid || editor.saveStatus === "saving"}
-              onClick={() => handleSave(true)}
-            >
-              Save draft
-            </Button>
-            <Button
               variant="primary"
               size="sm"
               disabled={!editor.isValid || editor.saveStatus === "saving"}
-              onClick={() => handleSave(false)}
+              onClick={handleSave}
             >
-              Publish
+              Create note
             </Button>
           </>
         }
@@ -92,20 +79,12 @@ export function CreateNote() {
           <>
             <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
             <Button
-              variant="secondary"
-              size="sm"
-              disabled={!editor.isValid || editor.saveStatus === "saving"}
-              onClick={() => handleSave(true)}
-            >
-              Save draft
-            </Button>
-            <Button
               variant="primary"
               size="sm"
               disabled={!editor.isValid || editor.saveStatus === "saving"}
-              onClick={() => handleSave(false)}
+              onClick={handleSave}
             >
-              Publish
+              Create note
             </Button>
           </>
         }

@@ -4,8 +4,9 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button } from "@/components/ui";
-import { useAuth } from "@/context/auth";
+import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import type { Profile } from "@/types";
 
 function StatCard({
   label,
@@ -108,10 +109,19 @@ export function AdminOverview() {
     notes: 0,
     publicNotes: 0,
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [recentUsers, setRecentUsers] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [recentNotes, setRecentNotes] = useState<any[]>([]);
+  const [recentUsers, setRecentUsers] = useState<
+    Pick<Profile, "id" | "full_name" | "avatar_url" | "user_type" | "created_at">[]
+  >([]);
+  const [recentNotes, setRecentNotes] = useState<
+    Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      visibility: string;
+      updated_at: string;
+      folder: any;
+    }>
+  >([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -173,13 +183,7 @@ export function AdminOverview() {
     return (
       <DashboardLayout
         user={
-          user || {
-            id: "",
-            full_name: "Loading...",
-            avatar_url: null,
-            user_type: "admin",
-            created_at: "",
-          }
+          user || fallbackProfile({ user_type: "admin" })
         }
         variant="admin"
       >

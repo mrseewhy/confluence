@@ -1,31 +1,57 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button, Input } from "@/components/ui";
-import { useAuth } from "@/context/auth";
+import { useAuth, fallbackProfile } from "@/context/auth";
+import { requireSupabase } from "@/lib/supabase";
 
 export function DashboardSettings() {
   const { profile } = useAuth();
   const user = profile;
 
   const [name, setName] = useState(user?.full_name || "");
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
-  const handleSave = (e: React.FormEvent) => {
+  const { refreshProfile } = useAuth();
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    if (!name.trim() || !user || name.trim() === user.full_name) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+      return;
+    }
+
+    setSaving(true);
+    setSaveError("");
+
+    try {
+      const supabase = requireSupabase();
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: name.trim() })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      await refreshProfile();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      console.error("Error updating profile:", err);
+      setSaveError(
+        err instanceof Error ? err.message : "Failed to save changes."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!user) {
     return (
       <DashboardLayout
-        user={{
-          id: "",
-          full_name: "Loading...",
-          avatar_url: null,
-          user_type: "user",
-          created_at: "",
-        }}
+        user={fallbackProfile()}
         variant="user"
       >
         <div
@@ -166,6 +192,20 @@ export function DashboardSettings() {
               onChange={(e) => setName(e.target.value)}
             />
 
+            {saveError && (
+              <div
+                style={{
+                  fontSize: "var(--font-size-sm)",
+                  color: "var(--color-danger)",
+                  background: "var(--color-danger-subtle)",
+                  border: "1px solid var(--color-danger)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "var(--space-3) var(--space-4)",
+                }}
+              >
+                {saveError}
+              </div>
+            )}
             <div
               style={{
                 display: "flex",
@@ -173,8 +213,13 @@ export function DashboardSettings() {
                 justifyContent: "space-between",
               }}
             >
-              <Button type="submit" variant="primary" size="sm">
-                Save changes
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save changes"}
               </Button>
               {saved && (
                 <span

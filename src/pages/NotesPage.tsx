@@ -190,8 +190,11 @@ function buildFolderPath(
   ];
   let currentId = folder.id;
   let maxDepth = 0;
-  while (parentMap[currentId]?.parent_id && maxDepth < 10) {
-    const parent = parentMap[parentMap[currentId].parent_id];
+  while (maxDepth < 10) {
+    const entry = parentMap[currentId];
+    const parentId = entry?.parent_id;
+    if (!parentId) break;
+    const parent = parentMap[parentId];
     if (!parent) break;
     path.unshift({ title: parent.title, slug: parent.slug });
     currentId = parent.id;
@@ -211,8 +214,6 @@ export function NotesPage() {
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [useDummy, setUseDummy] = useState(false);
-
   useEffect(() => {
     let mounted = true;
 
@@ -241,7 +242,6 @@ export function NotesPage() {
         if (!mounted) return;
 
         if (error || !data?.length) {
-          setUseDummy(true);
           setNotes(DUMMY_NOTES);
           return;
         }
@@ -278,12 +278,10 @@ export function NotesPage() {
 
         setNotes(mapped);
         if (!mapped.length) {
-          setUseDummy(true);
           setNotes(DUMMY_NOTES);
         }
       } catch {
         if (!mounted) return;
-        setUseDummy(true);
         setNotes(DUMMY_NOTES);
       } finally {
         if (mounted) setLoading(false);

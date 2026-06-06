@@ -17,8 +17,7 @@ interface FlatFolder {
 
 export function FolderSelect({ value, onChange, error }: FolderSelectProps) {
   const { profile } = useAuth();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [folders, setFolders] = useState<any[]>([]);
+  const [folders, setFolders] = useState<{ id: string; title: string; parent_id: string | null }[]>([]);
 
   useEffect(() => {
     if (!profile) return;
@@ -40,11 +39,11 @@ export function FolderSelect({ value, onChange, error }: FolderSelectProps) {
 
   // Flatten hierarchy: root folders first, then their children indented
   const flatFolders = useMemo(() => {
-    const roots = folders.filter((f: any) => !f.parent_id);
+    const roots = folders.filter((f) => !f.parent_id);
     const result: FlatFolder[] = [];
 
     const addChildren = (parentId: string, depth: number) => {
-      const children = folders.filter((f: any) => f.parent_id === parentId);
+      const children = folders.filter((f) => f.parent_id === parentId);
       for (const child of children) {
         result.push({ id: child.id, title: child.title, parent_id: child.parent_id, depth });
         addChildren(child.id, depth + 1);
