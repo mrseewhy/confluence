@@ -40,7 +40,8 @@ export function DashboardFolders() {
       const { data: folders, error: foldersErr } = await supabase
         .from("folders")
         .select("*")
-        .eq("owner_id", user.id);
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: false });
 
       const { data: notes, error: notesErr } = await supabase
         .from("notes")
@@ -331,7 +332,11 @@ export function DashboardFolders() {
                   <Icon d={IC.folder} size={16} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <p
+                  <a
+                    href={`/${user?.username || "u"}/folder/${folder.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     style={{
                       margin: 0,
                       fontSize: "var(--font-size-sm)",
@@ -340,10 +345,32 @@ export function DashboardFolders() {
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
+                      textDecoration: "none",
+                      display: "block",
                     }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-accent)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
                   >
                     {folder.title}
-                  </p>
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        marginLeft: "4px",
+                        opacity: 0.3,
+                        verticalAlign: "middle",
+                        display: "inline",
+                      }}
+                    >
+                      <path d="M7 17l9.2-9.2M17 17V7H7" />
+                    </svg>
+                  </a>
                   {folder.description && (
                     <p
                       style={{

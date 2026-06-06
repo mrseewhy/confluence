@@ -261,16 +261,56 @@ function VisibilityToggle({
 export function SaveIndicator({
   status,
   message,
+  autoSave,
 }: {
   status: SaveStatus;
   message?: string | null;
+  autoSave?: boolean;
 }) {
   if (status === "idle") return null;
-  const config = {
+
+  if (autoSave) {
+    if (status === "saved") {
+      return (
+        <span
+          style={{
+            fontSize: "var(--font-size-xs)",
+            fontWeight: "var(--font-weight-medium)",
+            color: "var(--color-text-muted)",
+            fontFamily: "var(--font-sans)",
+            opacity: 0.7,
+          }}
+        >
+          ✓ Auto-saved
+        </span>
+      );
+    }
+    if (status === "saving") {
+      return (
+        <span
+          style={{
+            fontSize: "var(--font-size-xs)",
+            fontWeight: "var(--font-weight-medium)",
+            color: "var(--color-text-muted)",
+            fontFamily: "var(--font-sans)",
+            opacity: 0.6,
+          }}
+        >
+          Auto-saving…
+        </span>
+      );
+    }
+  }
+
+  const configMap: Record<string, { text: string; color: string }> = {
     saving: { text: "Saving\u2026", color: "var(--color-text-muted)" },
     saved: { text: "\u2713 Saved", color: "var(--color-success)" },
     error: { text: "\u2717 Error", color: "var(--color-danger)" },
-  }[status];
+  };
+  const config = configMap[status as string];
+
+  if (!config) return null;
+
   return (
     <div
       style={{
@@ -337,6 +377,7 @@ export interface NoteEditorActions {
   updateBlockMeta: (id: string, meta: Partial<BlockMetadata>) => void;
   removeBlock: (id: string) => void;
   moveBlock: (id: string, direction: "up" | "down") => void;
+  reorderBlock: (fromIndex: number, toIndex: number) => void;
 }
 
 interface NoteEditorProps {
@@ -369,6 +410,45 @@ export function NoteEditor({
   username,
 }: NoteEditorProps) {
   const [copied, setCopied] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // ── Drag-and-drop handlers ──
+  const handleDragStart = (idx: number) => (e: React.DragEvent) => {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = "move";
+    // Make the drag image slightly transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "0.5";
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    setDragIndex(null);
+    setDragOverIndex(null);
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "1";
+    }
+  };
+
+  const handleDragOver = (idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(prev => prev !== idx ? idx : prev);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (toIndex: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragIndex !== null && dragIndex !== toIndex) {
+      actions.reorderBlock(dragIndex, toIndex);
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
 
   return (
     <>
@@ -657,18 +737,30 @@ export function NoteEditor({
           const isFirst = idx === 0;
           const isLast = idx === state.blocks.length - 1;
           const isCode = block.type === "code";
+          const isDragging = dragIndex === idx;
+          const isDragOver = dragOverIndex === idx;
           return (
             <div
               key={block.id}
+              draggable
+              onDragStart={handleDragStart(idx)}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver(idx)}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop(idx)}
               style={{
-                border: "1px solid var(--color-border)",
+                border: `1px solid ${isDragOver ? "var(--color-accent)" : "var(--color-border)"}`,
                 borderRadius: "var(--radius-xl)",
                 overflow: "hidden",
                 background: isCode
                   ? "var(--color-code-bg)"
                   : "var(--color-bg-elevated)",
-                boxShadow: "var(--shadow-xs)",
-                transition: "box-shadow var(--duration-fast)",
+                boxShadow: isDragOver
+                  ? "0 0 0 2px var(--color-accent-subtle)"
+                  : "var(--shadow-xs)",
+                opacity: isDragging ? 0.4 : 1,
+                transition: "opacity var(--duration-fast), box-shadow var(--duration-fast), border-color var(--duration-fast)",
+                cursor: "grab",
               }}
             >
               <div

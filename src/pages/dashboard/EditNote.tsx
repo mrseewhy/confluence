@@ -17,6 +17,7 @@ export function EditNote() {
 
   const editor = useNoteEditor();
   const justManuallySaved = useRef(false);
+  const [autoSaving, setAutoSaving] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -78,10 +79,13 @@ export function EditNote() {
         justManuallySaved.current = false;
         return;
       }
+      setAutoSaving(true);
       try {
         await editor.save(user.id);
       } catch {
         // Auto-save failures are silent
+      } finally {
+        setAutoSaving(false);
       }
     }, AUTO_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
@@ -192,21 +196,21 @@ export function EditNote() {
           breadcrumbLabel="Edit note"
           headerActions={
             <>
-              <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!editor.isValid || editor.saveStatus === "saving"}
-                onClick={handleSave}
-              >
-                {editor.saveStatus === "saving" ? "Saving\u2026" : "Save changes"}
-              </Button>
-            </>
-          }
-          bottomActions={
-            <>
-              <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
-              <Button
+            <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!editor.isValid || editor.saveStatus === "saving"}
+              onClick={handleSave}
+            >
+              {editor.saveStatus === "saving" ? "Saving\u2026" : "Save changes"}
+            </Button>
+          </>
+        }
+        bottomActions={
+          <>
+            <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
+            <Button
                 variant="primary"
                 size="sm"
                 disabled={!editor.isValid || editor.saveStatus === "saving"}

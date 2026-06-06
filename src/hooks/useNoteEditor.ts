@@ -154,6 +154,17 @@ export function useNoteEditor() {
     })
   }, [])
 
+  const reorderBlock = useCallback((fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return
+    setState(prev => {
+      const blocks = [...prev.blocks]
+      const [moved] = blocks.splice(fromIndex, 1)
+      blocks.splice(toIndex, 0, moved)
+      const reindexed = blocks.map((b, i) => ({ ...b, order_index: i }))
+      return { ...prev, blocks: reindexed }
+    })
+  }, [])
+
   // ── Load existing note into editor ───────────────────────────
 
   const loadFromExisting = useCallback(
@@ -336,6 +347,7 @@ export function useNoteEditor() {
     updateBlockMeta,
     removeBlock,
     moveBlock,
+    reorderBlock,
     // actions
     save,
     loadFromExisting,

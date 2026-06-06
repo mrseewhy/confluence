@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react'
 import type { BlockMetadata } from '@/types'
+import { useAuth } from '@/context/auth'
+import { uploadImage } from '@/lib/upload'
 
 interface ImageBlockProps {
   content:  string
@@ -11,23 +13,46 @@ interface ImageBlockProps {
 type ImageMode = 'upload' | 'url'
 
 export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockProps) {
+  const { profile } = useAuth()
   const [mode, setMode] = useState<ImageMode>('upload')
   const [dragging, setDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const isUrl = content.startsWith('http://') || content.startsWith('https://')
 
-  function handleFile(file: File) {
-    // No real upload yet — just store the filename as content
-    onChange(file.name)
-    onMeta({ filename: file.name })
+  async function handleFile(file: File) {
+    if (!profile) {
+      setUploadError('You must be signed in to upload images.')
+      return
+    }
+
+    setUploadError(null)
+    setUploading(true)
+
+    const result = await uploadImage(file, profile.id)
+
+    setUploading(false)
+
+    if (result.ok) {
+      onChange(result.url)
+      onMeta({ filename: file.name })
+    } else {
+      setUploadError(result.error)
+    }
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragging(false)
     const file = e.dataTransfer.files[0]
-    if (file && file.type.startsWith('image/')) handleFile(file)
+    if (file && file.type.startsWith('image/')) void handleFile(file)
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) void handleFile(file)
   }
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
@@ -65,26 +90,38 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
           onDragOver={e => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => { if (!uploading) fileRef.current?.click() }}
           style={{
             border:       `2px dashed ${dragging ? 'var(--color-accent)' : 'var(--color-border)'}`,
             borderRadius: 'var(--radius-lg)',
             padding:      'var(--space-10) var(--space-6)',
             textAlign:    'center',
-            cursor:       'pointer',
+            cursor:       uploading ? 'default' : 'pointer',
             background:   dragging ? 'var(--color-accent-subtle)' : 'var(--color-bg-subtle)',
             transition:   'all var(--duration-fast)',
             display:      'flex',
             flexDirection:'column',
             alignItems:   'center',
             gap:          'var(--space-2)',
+            opacity:      uploading ? 0.6 : 1,
           }}
         >
-          <span style={{ fontSize: '28px', opacity: 0.5 }}>🖼️</span>
-          {content && !isUrl ? (
+          <span style={{ fontSize: '28px', opacity: 0.5 }}>
+            {uploading ? '⏳' : '🖼️'}
+          </span>
+          {uploading ? (
             <>
               <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-accent)' }}>
-                {content}
+                Uploading…
+              </p>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
+                Please wait while your image is uploaded
+              </p>
+            </>
+          ) : content && !isUrl ? (
+            <>
+              <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-accent)' }}>
+                {metadata.filename || content}
               </p>
               <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
                 Click or drop to replace
@@ -96,7 +133,7 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
                 Drop an image here, or click to browse
               </p>
               <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-                PNG, JPG, GIF, WebP supported
+                PNG, JPG, GIF, WebP, SVG supported (max 5 MB)
               </p>
             </>
           )}
@@ -105,12 +142,35 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
             type="file"
             accept="image/*"
             style={{ display: 'none' }}
-            onChange={e => {
-              const file = e.target.files?.[0]
-              if (file) handleFile(file)
-            }}
+            onChange={handleFileSelect}
           />
         </div>
+      )}
+
+      {/* Upload error */}
+      {uploadError && (
+        <p style={{
+          margin: 0,
+          fontSize: 'var(--font-size-xs)',
+          color: 'var(--color-danger)',
+        }}>
+          ✗ {uploadError}
+        </p>
+      )}
+
+      {/* Image preview (when URL is set, upload mode only — URL mode has its own preview) */}
+      {mode === 'upload' && isUrl && content && (
+        <img
+          src={content}
+          alt={metadata.alt ?? 'Image preview'}
+          style={{
+            maxWidth:     '100%',
+            maxHeight:    '280px',
+            objectFit:    'contain',
+            borderRadius: 'var(--radius-lg)',
+            border:       '1px solid var(--color-border)',
+          }}
+        />
       )}
 
       {/* URL mode */}
@@ -145,7 +205,7 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
               e.currentTarget.style.boxShadow   = 'none'
             }}
           />
-          {/* Image preview */}
+          {/* Image preview for URL mode (only shown in this mode) */}
           {isUrl && content && (
             <img
               src={content}
@@ -201,16 +261,6 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
           onBlur={e  => { e.currentTarget.style.borderColor = 'var(--color-border)'  }}
         />
       </div>
-
-      {/* Upload hint */}
-      <p style={{
-        margin:     0,
-        fontSize:   'var(--font-size-xs)',
-        color:      'var(--color-text-muted)',
-        fontStyle:  'italic',
-      }}>
-        Images will be uploaded to storage once Supabase is connected.
-      </p>
     </div>
   )
 }

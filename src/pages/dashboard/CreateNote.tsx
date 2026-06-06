@@ -15,6 +15,7 @@ export function CreateNote() {
 
   const editor = useNoteEditor();
   const justManuallySaved = useRef(false);
+  const [autoSaving, setAutoSaving] = useState(false);
 
   const [folderError, setFolderError] = useState("");
 
@@ -26,10 +27,13 @@ export function CreateNote() {
         justManuallySaved.current = false;
         return;
       }
+      setAutoSaving(true);
       try {
         await editor.save(user.id);
       } catch {
         // Auto-save failures are silent — manual save will surface errors
+      } finally {
+        setAutoSaving(false);
       }
     }, AUTO_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
@@ -84,21 +88,21 @@ export function CreateNote() {
           breadcrumbLabel="New note"
           headerActions={
             <>
-              <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!editor.isValid || editor.saveStatus === "saving"}
-                onClick={handleSave}
-              >
-                Create note
-              </Button>
-            </>
-          }
-          bottomActions={
-            <>
-              <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
-              <Button
+            <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!editor.isValid || editor.saveStatus === "saving"}
+              onClick={handleSave}
+            >
+              Create note
+            </Button>
+          </>
+        }
+        bottomActions={
+          <>
+            <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
+            <Button
                 variant="primary"
                 size="sm"
                 disabled={!editor.isValid || editor.saveStatus === "saving"}

@@ -275,6 +275,55 @@ create policy "Users can manage their own notes"
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid());
 
+-- ═════════════════════════════════════════════════════════════
+-- STORAGE: Image upload bucket
+-- ═════════════════════════════════════════════════════════════
+
+-- Create the note-images bucket (idempotent)
+INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit, allowed_mime_types)
+VALUES ('note-images', 'note-images', true, false, 5242880, '{"image/png","image/jpeg","image/gif","image/webp","image/svg+xml"}')
+ON CONFLICT (id) DO NOTHING;
+
+-- RLS: Allow authenticated users to upload images
+DROP POLICY IF EXISTS "Users can upload their own images" ON storage.objects;
+CREATE POLICY "Users can upload their own images"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'note-images' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- RLS: Allow authenticated users to update their own images
+DROP POLICY IF EXISTS "Users can update their own images" ON storage.objects;
+CREATE POLICY "Users can update their own images"
+  ON storage.objects FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'note-images' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- RLS: Allow authenticated users to delete their own images
+DROP POLICY IF EXISTS "Users can delete their own images" ON storage.objects;
+CREATE POLICY "Users can delete their own images"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'note-images' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- RLS: Allow public (anon) to read images
+DROP POLICY IF EXISTS "Public images are readable by everyone" ON storage.objects;
+CREATE POLICY "Public images are readable by everyone"
+  ON storage.objects FOR SELECT TO anon
+  USING (bucket_id = 'note-images');
+
+-- RLS: Allow authenticated users to read images
+DROP POLICY IF EXISTS "Authenticated users can read images" ON storage.objects;
+CREATE POLICY "Authenticated users can read images"
+  ON storage.objects FOR SELECT TO authenticated
+  USING (bucket_id = 'note-images');
+
+-- ═════════════════════════════════════════════════════════════
 -- TRIGGER FUNCTION FOR NEW USER SIGNUPS
 create or replace function public.handle_new_user()
 returns trigger

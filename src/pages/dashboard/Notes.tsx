@@ -18,6 +18,7 @@ export function DashboardNotes() {
 
   const [loading, setLoading] = useState(true);
   const [notesList, setNotesList] = useState<Note[]>([]);
+  const [parentFolders, setParentFolders] = useState<Map<string, { title: string; slug: string }>>(new Map());
   const [search, setSearch] = useState("");
   const [vis, setVis] = useState<"all" | "public" | "private">("all");
   const [shareItem, setShareItem] = useState<Note | null>(null);
@@ -27,13 +28,39 @@ export function DashboardNotes() {
     if (!user) return;
     try {
       const supabase = requireSupabase();
-      const { data, error } = await supabase
-        .from("notes")
-        .select("*, folder:folders(id, title, slug)")
+
+      // Fetch all folders for this user (to build parent hierarchy)
+      const { data: allFolders } = await supabase
+        .from("folders")
+        .select("id, title, slug, parent_id")
         .eq("owner_id", user.id);
 
+      const folderMap = new Map<string, { id: string; title: string; slug: string; parent_id: string | null }>();
+      for (const f of allFolders || []) {
+        folderMap.set(f.id, f as { id: string; title: string; slug: string; parent_id: string | null });
+      }
+
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*, folder:folders!folder_id(id, title, slug, parent_id)")
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: false });
+
       if (error) throw error;
+
+      // Build parent folder lookup by checking which folders have parents
+      const pfMap = new Map<string, { title: string; slug: string }>();
+      for (const f of (allFolders || []) as Array<{ id: string; title: string; slug: string; parent_id: string | null }>) {
+        if (f.parent_id) {
+          const parent = folderMap.get(f.parent_id);
+          if (parent) {
+            pfMap.set(f.id, { title: parent.title, slug: parent.slug });
+          }
+        }
+      }
+
       setNotesList(data || []);
+      setParentFolders(pfMap);
     } catch (err) {
       console.error("Error loading notes:", err);
     } finally {
@@ -274,7 +301,11 @@ export function DashboardNotes() {
                   <Icon d={IC.notes} size={15} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <p
+                  <a
+                    href={`/${user?.username || "u"}/n/${note.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     style={{
                       margin: 0,
                       fontSize: "var(--font-size-sm)",
@@ -283,10 +314,32 @@ export function DashboardNotes() {
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
+                      textDecoration: "none",
+                      display: "block",
                     }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-accent)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
                   >
                     {note.title}
-                  </p>
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        marginLeft: "4px",
+                        opacity: 0.3,
+                        verticalAlign: "middle",
+                        display: "inline",
+                      }}
+                    >
+                      <path d="M7 17l9.2-9.2M17 17V7H7" />
+                    </svg>
+                  </a>
 
                   {/* Public URL Display in note row */}
                   {note.visibility === "public" ? (
@@ -348,9 +401,57 @@ export function DashboardNotes() {
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-1)",
                 }}
               >
-                {note.folder?.title ?? "—"}
+                {(() => {
+                  if (!note.folder) return "—";
+                  const username = user?.username || "u";
+                  const pf = parentFolders.get(note.folder_id);
+                  return (
+                    <>
+                      {pf && (
+                        <>
+                          <a
+                            href={`/${username}/folder/${pf.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              color: "var(--color-text-secondary)",
+                              textDecoration: "none",
+                              fontSize: "inherit",
+                              fontFamily: "inherit",
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                            onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                          >
+                            {pf.title}
+                          </a>
+                          <span style={{ opacity: 0.4 }}>›</span>
+                        </>
+                      )}
+                      <a
+                        href={`/${username}/folder/${note.folder.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          color: "var(--color-accent)",
+                          textDecoration: "none",
+                          fontSize: "inherit",
+                          fontFamily: "inherit",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                        onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                      >
+                        {note.folder.title}
+                      </a>
+                    </>
+                  );
+                })()}
               </span>
               <Badge
                 variant={note.visibility === "public" ? "accent" : "muted"}

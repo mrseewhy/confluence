@@ -70,7 +70,7 @@ export function DashboardSubfolders() {
         { data: folders, error: foldersErr },
         { data: notes, error: notesErr },
       ] = await Promise.all([
-        supabase.from("folders").select("*").eq("owner_id", user.id),
+        supabase.from("folders").select("*").eq("owner_id", user.id).order("created_at", { ascending: false }),
         supabase.from("notes").select("id, folder_id").eq("owner_id", user.id),
       ]);
 
@@ -426,7 +426,11 @@ export function DashboardSubfolders() {
                   <Icon d={IC.subfolder} size={16} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <p
+                  <a
+                    href={`/${user?.username || "u"}/folder/${sf.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     style={{
                       margin: 0,
                       fontSize: "var(--font-size-sm)",
@@ -435,10 +439,32 @@ export function DashboardSubfolders() {
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
+                      textDecoration: "none",
+                      display: "block",
                     }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-accent)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
                   >
                     {sf.title}
-                  </p>
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        marginLeft: "4px",
+                        opacity: 0.3,
+                        verticalAlign: "middle",
+                        display: "inline",
+                      }}
+                    >
+                      <path d="M7 17l9.2-9.2M17 17V7H7" />
+                    </svg>
+                  </a>
                   {sf.description && (
                     <p
                       style={{
@@ -456,7 +482,7 @@ export function DashboardSubfolders() {
                 </div>
               </div>
 
-              {/* Parent folder */}
+              {/* Parent folder (clickable) */}
               <div
                 style={{
                   display: "flex",
@@ -465,17 +491,38 @@ export function DashboardSubfolders() {
                 }}
               >
                 <Icon d={IC.folder} size={13} />
-                <span
-                  style={{
-                    fontSize: "var(--font-size-xs)",
-                    color: "var(--color-text-secondary)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {sf.parentTitle}
-                </span>
+                {sf.parentSlug ? (
+                  <a
+                    href={`/${user?.username || "u"}/folder/${sf.parentSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      fontSize: "var(--font-size-xs)",
+                      color: "var(--color-accent)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      textDecoration: "none",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                    onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                  >
+                    {sf.parentTitle}
+                  </a>
+                ) : (
+                  <span
+                    style={{
+                      fontSize: "var(--font-size-xs)",
+                      color: "var(--color-text-secondary)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {sf.parentTitle}
+                  </span>
+                )}
               </div>
 
               {/* Note count */}
