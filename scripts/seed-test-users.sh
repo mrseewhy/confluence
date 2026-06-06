@@ -1,49 +1,77 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
-# Seed test users and content into local Supabase
-# Run this after: supabase start
+# Seed test users into local Supabase
+# Run this after: supabase start && supabase db reset
+#
+# Updates passwords for existing seed.sql users (created with
+# empty encrypted_password) so they can log in.
+# Promotes Alex to admin.
 # ─────────────────────────────────────────────────────────────
 set -euo pipefail
 
-API_URL="${SUPABASE_API_URL:-http://127.0.0.1:54321}"
-ANON_KEY="${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"
-
-echo "Seeding test users and content..."
+echo "═══════════════════════════════════════════════"
+echo "  Setting passwords for test users..."
+echo "═══════════════════════════════════════════════"
 echo ""
 
-seed_user() {
-  local email="$1" pass="$2" name="$3"
-  echo "Creating: $name ($email)"
-
-  RESP=$(curl -s -X POST "$API_URL/auth/v1/signup" \
-    -H "Content-Type: application/json" \
-    -H "apikey: $ANON_KEY" \
-    -d "{\"email\":\"$email\",\"password\":\"$pass\",\"data\":{\"full_name\":\"$name\",\"user_type\":\"user\"}}")
-
-  local uid
-  uid=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('user',{}).get('id',''))" 2>/dev/null || echo "")
-
-  if [ -n "$uid" ]; then
-    echo "  ✓ Created (ID: $uid)"
-  else
-    echo "  ✗ Failed: $RESP"
-  fi
-  echo "$uid"
+# ── Helper: run a single SQL statement via supabase db query ──
+run_sql() {
+  local label="$1" sql="$2"
+  printf "  %s..." "$label"
+  local out
+  out=$(supabase db query "$sql" 2>&1) || {
+    echo " FAILED"
+    echo "    $out"
+    exit 1
+  }
+  echo " OK"
 }
 
-# ── Create users ──
-PRIYA_ID=$(seed_user "priya@confluence.test" "Priya123!" "Priya Patel")
-EMMA_ID=$(seed_user "emma@confluence.test" "Emma123!" "Emma Williams")
-MARCUS_ID=$(seed_user "marcus.r@confluence.test" "Marcus123!" "Marcus Rivera")
+# ── Ensure pgcrypto extension exists ──
+echo ""
+echo "  ── Installing pgcrypto extension ──"
+run_sql "Installing pgcrypto" "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;"
+
+# ── Set password for a user ──
+set_user_password() {
+  local email="$1" pass="$2" name="$3"
+  echo ""
+  echo "  ── $name ($email) ──"
+  run_sql "Setting password" "UPDATE auth.users SET encrypted_password = extensions.crypt('$pass', extensions.gen_salt('bf')) WHERE email = '$email';"
+}
+
+# ── Promote user to admin ──
+promote_to_admin() {
+  local email="$1"
+  run_sql "Promoting to admin" "UPDATE public.profiles p SET user_type = 'admin' FROM auth.users u WHERE p.id = u.id AND u.email = '$email';"
+}
+
+# ── Set passwords for all 5 users ──
+set_user_password "alex@confluence.test" "Alex123!" "Alex Johnson"
+promote_to_admin "alex@confluence.test"
+
+set_user_password "sarah@confluence.test" "Sarah123!" "Sarah Chen"
+set_user_password "marcus@confluence.test" "Marcus123!" "Marcus Rivera"
+set_user_password "priya@confluence.test" "Priya123!" "Priya Patel"
+set_user_password "emma@confluence.test" "Emma123!" "Emma Williams"
 
 echo ""
-echo "=== Users created ==="
-echo "Log in at http://127.0.0.1:3000/login"
+echo "═══════════════════════════════════════════════"
+echo "  All user passwords set!"
+echo "═══════════════════════════════════════════════"
 echo ""
-echo "  Regular:  demo@confluence.test / Demo123!"
-echo "  Admin:    admin@confluence.test / Admin123!"
-echo "  Teacher:  priya@confluence.test / Priya123!"
-echo "  Designer: emma@confluence.test / Emma123!"
-echo "  DevOps:   marcus.r@confluence.test / Marcus123!"
+echo "  ┌─────────────────────┬──────────────────────────────┬──────────────┐"
+echo "  │ Email               │ Password                     │ Type         │"
+echo "  ├─────────────────────┼──────────────────────────────┼──────────────┤"
+echo "  │ alex@confluence.test    │ Alex123!                    │ ★ Admin      │"
+echo "  │ sarah@confluence.test   │ Sarah123!                   │ User         │"
+echo "  │ marcus@confluence.test  │ Marcus123!                  │ User         │"
+echo "  │ priya@confluence.test   │ Priya123!                   │ User         │"
+echo "  │ emma@confluence.test    │ Emma123!                    │ User         │"
+echo "  └─────────────────────┴──────────────────────────────┴──────────────┘"
+echo ""
+echo "  Login at: http://localhost:5173/login"
+echo "  Dashboard: http://localhost:5173/dashboard"
+echo "  Admin panel: http://localhost:5173/admin/dashboard"
 echo ""
 echo "Done!"

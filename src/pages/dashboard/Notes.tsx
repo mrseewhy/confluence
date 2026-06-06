@@ -7,15 +7,10 @@ import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
+import { formatDate } from "@/lib/helpers";
 import type { Note } from "@/types";
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+// (formatDate imported from @/lib/helpers)
 
 export function DashboardNotes() {
   const { profile } = useAuth();

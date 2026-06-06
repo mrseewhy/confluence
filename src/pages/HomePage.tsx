@@ -4,6 +4,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button, Badge } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
+import { Avatar, timeAgo, buildFolderPath, OWNER_QUERY, mapOwner } from "@/lib/helpers";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -39,196 +40,115 @@ interface NoteItem {
 
 const DUMMY_FOLDERS: FolderItem[] = [
   {
-    id: "d1", title: "Full Stack Development",
-    description: "Everything you need to build modern web applications end to end — from frontend frameworks to backend APIs and databases.",
-    slug: "full-stack-development", note_count: 3,
+    id: "d1", title: "general",
+    description: "Default folder for all notes and subfolders.",
+    slug: "general", note_count: 2,
     owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
   },
   {
-    id: "d2", title: "System Design",
-    description: "Architecture patterns, scalability, distributed systems, and trade-off analysis for senior engineers.",
-    slug: "system-design", note_count: 3,
+    id: "d2", title: "System Architecture",
+    description: "Architecture patterns, system design principles, and infrastructure decisions for building scalable applications.",
+    slug: "system-architecture", note_count: 2,
+    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
+  },
+  {
+    id: "d3", title: "general",
+    description: "Default folder for all notes and subfolders.",
+    slug: "general", note_count: 2,
     owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
   },
   {
-    id: "d3", title: "DevOps & Deployment",
-    description: "CI/CD pipelines, Docker, Kubernetes, monitoring, and cloud infrastructure automation.",
-    slug: "devops-deployment", note_count: 2,
+    id: "d4", title: "Data Science",
+    description: "Machine learning, statistical analysis, data visualisation, and analytical workflows.",
+    slug: "data-science", note_count: 2,
+    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
+  },
+  {
+    id: "d5", title: "general",
+    description: "Default folder for all notes and subfolders.",
+    slug: "general", note_count: 2,
+    owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
+  },
+  {
+    id: "d6", title: "Product Management",
+    description: "Product strategy, roadmaps, user research, and go-to-market planning.",
+    slug: "product-management", note_count: 2,
     owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
   },
 ];
 
 const DUMMY_NOTES: NoteItem[] = [
   {
-    id: "dn1", title: "How to Set Up a React Project with Vite",
-    description: "Step-by-step guide to scaffolding a modern React project with Vite, TypeScript, and Tailwind CSS from scratch.", slug: "how-to-set-up-a-react-project-with-vite",
-    updated_at: "2025-06-04T10:00:00Z",
-    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-    folder_id: "d1", folder_title: "Full Stack Development", folder_slug: "full-stack-development",
+    id: "dn1", title: "Brand Identity Guidelines",
+    description: "Comprehensive brand guidelines covering logo usage, colour palette, typography, tone of voice, and application examples.", slug: "brand-identity-guidelines",
+    updated_at: "2025-06-01T10:00:00Z",
+    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
+    folder_id: "dbrand", folder_title: "Branding", folder_slug: "branding",
     folder_path: [
-      { title: "Full Stack Development", slug: "full-stack-development" },
-      { title: "Frontend", slug: "frontend" },
+      { title: "Design Portfolio", slug: "design-portfolio" },
+      { title: "Branding", slug: "branding" },
     ],
   },
   {
-    id: "dn2", title: "React 19 — What Changed",
-    description: "A deep dive into the new features in React 19: use() hook, Actions, the new compiler, and improved concurrent rendering.", slug: "react-19-what-changed",
-    updated_at: "2025-06-03T09:00:00Z",
-    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-    folder_id: "d1", folder_title: "Full Stack Development", folder_slug: "full-stack-development",
+    id: "dn2", title: "Redesigning a SaaS Dashboard",
+    description: "A complete UX case study covering user research, information architecture, prototyping, and usability testing.", slug: "redesigning-saas-dashboard",
+    updated_at: "2025-05-31T10:00:00Z",
+    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
+    folder_id: "dux", folder_title: "UX Case Studies", folder_slug: "ux-case-studies",
     folder_path: [
-      { title: "Full Stack Development", slug: "full-stack-development" },
-      { title: "Frontend", slug: "frontend" },
+      { title: "Design Portfolio", slug: "design-portfolio" },
+      { title: "UX Case Studies", slug: "ux-case-studies" },
     ],
   },
   {
-    id: "dn3", title: "JWT Authentication in Express",
-    description: "How to sign, verify, and refresh JSON Web Tokens for secure API access in Node.js and Express applications.", slug: "jwt-authentication-in-express",
-    updated_at: "2025-06-01T14:30:00Z",
-    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-    folder_id: "d1", folder_title: "Full Stack Development", folder_slug: "full-stack-development",
+    id: "dn3", title: "UI Sketch Ideas",
+    description: "Wireframes and rough UI concepts for a reimagined project management dashboard interface.", slug: "ui-sketch-ideas",
+    updated_at: "2025-05-30T10:00:00Z",
+    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
+    folder_id: "dsketches", folder_title: "Sketches", folder_slug: "sketches",
     folder_path: [
-      { title: "Full Stack Development", slug: "full-stack-development" },
-      { title: "Backend", slug: "backend" },
+      { title: "general", slug: "general" },
+      { title: "Sketches", slug: "sketches" },
     ],
   },
   {
-    id: "dn4", title: "CAP Theorem Explained Simply",
-    description: "Understanding consistency, availability, and partition tolerance in distributed systems with real-world database examples.", slug: "cap-theorem-explained-simply",
-    updated_at: "2025-05-28T09:00:00Z",
-    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-    folder_id: "d2", folder_title: "System Design", folder_slug: "system-design",
+    id: "dn4", title: "Design Inspiration Links",
+    description: "A running collection of beautifully designed websites, Dribbble shots, and design system references.", slug: "design-inspiration-links",
+    updated_at: "2025-05-29T10:00:00Z",
+    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
+    folder_id: "dinsp", folder_title: "Inspiration", folder_slug: "inspiration",
     folder_path: [
-      { title: "System Design", slug: "system-design" },
+      { title: "general", slug: "general" },
+      { title: "Inspiration", slug: "inspiration" },
     ],
   },
   {
-    id: "dn5", title: "Event-Driven Architecture Patterns",
-    description: "Event sourcing, CQRS, message brokers, and when to choose asynchronous communication between services.", slug: "event-driven-architecture-patterns",
-    updated_at: "2025-05-26T11:00:00Z",
-    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-    folder_id: "d2", folder_title: "System Design", folder_slug: "system-design",
+    id: "dn5", title: "Flash Fiction: The Last Light",
+    description: "A short story about the final sunset on a distant planet, told through the eyes of the last botanist.", slug: "flash-fiction-last-light",
+    updated_at: "2025-05-28T10:00:00Z",
+    owner_id: "u4", owner_name: "Priya Patel", owner_username: "priya-patel", owner_avatar: null,
+    folder_id: "dstories", folder_title: "Short Stories", folder_slug: "short-stories",
     folder_path: [
-      { title: "System Design", slug: "system-design" },
-      { title: "Microservices", slug: "microservices" },
+      { title: "Creative Writing", slug: "creative-writing" },
+      { title: "Short Stories", slug: "short-stories" },
     ],
   },
   {
-    id: "dn6", title: "Docker Compose for Local Development",
-    description: "Multi-service setups made easy with Docker Compose — networking, volumes, environment variables, and health checks.", slug: "docker-compose-for-local-development",
-    updated_at: "2025-05-25T16:00:00Z",
-    owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
-    folder_id: "d3", folder_title: "DevOps & Deployment", folder_slug: "devops-deployment",
+    id: "dn6", title: "A Collection of Poems",
+    description: "Original poetry exploring themes of nature, technology, and the spaces between them.", slug: "collection-of-poems",
+    updated_at: "2025-05-27T10:00:00Z",
+    owner_id: "u4", owner_name: "Priya Patel", owner_username: "priya-patel", owner_avatar: null,
+    folder_id: "dpoetry", folder_title: "Poetry", folder_slug: "poetry",
     folder_path: [
-      { title: "DevOps & Deployment", slug: "devops-deployment" },
-      { title: "Docker & Containers", slug: "docker-containers" },
+      { title: "Creative Writing", slug: "creative-writing" },
+      { title: "Poetry", slug: "poetry" },
     ],
   },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return formatDate(iso);
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-const AVATAR_COLORS = [
-  "#0D7F66", "#B87009", "#4F46E5", "#BE185D",
-  "#059669", "#D97706", "#7C3AED", "#DB2777",
-];
-
-function getAvatarColor(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = id.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function Avatar({ name, color, size = 32 }: { name: string; color?: string; size?: number }) {
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: color ?? getAvatarColor(name),
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "#fff",
-        fontSize: size * 0.4,
-        fontWeight: 600,
-        fontFamily: "var(--font-sans)",
-        flexShrink: 0,
-        lineHeight: 1,
-      }}
-      title={name}
-    >
-      {getInitials(name)}
-    </div>
-  );
-}
-
-function buildFolderPath(
-  folderId: string,
-  folderTitle: string,
-  folderSlug: string,
-  parentMap: Record<string, { id: string; title: string; slug: string; parent_id: string | null }>,
-): { title: string; slug: string }[] {
-  const path: { title: string; slug: string }[] = [
-    { title: folderTitle, slug: folderSlug },
-  ];
-  let currentId = folderId;
-  let maxDepth = 0;
-  while (maxDepth < 10) {
-    const entry = parentMap[currentId];
-    const parentId = entry?.parent_id;
-    if (!parentId) break;
-    const parent = parentMap[parentId];
-    if (!parent) break;
-    path.unshift({ title: parent.title, slug: parent.slug });
-    currentId = parent.id;
-    maxDepth++;
-  }
-  return path;
-}
-
-// ─── Owner query helper ───────────────────────────────────────
-
-const OWNER_QUERY = "id, full_name, avatar_url, username";
-
-function mapOwner(owner: { full_name?: string; avatar_url?: string | null; username?: string | null } | null, fallbackName: string) {
-  return {
-    name: owner?.full_name || fallbackName,
-    avatar: owner?.avatar_url ?? null,
-    username: owner?.username || null,
-  };
-}
+// (formatDate, timeAgo, Avatar, buildFolderPath, OWNER_QUERY, mapOwner imported from @/lib/helpers)
 
 // ─── Static Content ───────────────────────────────────────────
 

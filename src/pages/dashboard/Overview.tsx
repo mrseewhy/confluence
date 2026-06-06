@@ -6,16 +6,11 @@ import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import { formatDate } from "@/lib/helpers";
 
 const PAGE_SIZE = 10;
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+// (formatDate imported from @/lib/helpers)
 
 // ─── Pagination Component ─────────────────────────────────────
 

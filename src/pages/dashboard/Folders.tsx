@@ -6,15 +6,11 @@ import { Badge, Button, EmptyState, Input } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
+import { formatDate, buildSlug } from "@/lib/helpers";
+import { Modal } from "@/components/Modal";
 import type { Folder, Visibility } from "@/types";
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+// (formatDate imported from @/lib/helpers)
 
 export function DashboardFolders() {
   const { profile } = useAuth();
@@ -81,10 +77,7 @@ export function DashboardFolders() {
     e.preventDefault();
     if (!newTitle.trim() || !user) return;
 
-    const slug = newTitle
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
+    const slug = buildSlug(newTitle);
 
     try {
       const supabase = requireSupabase();
@@ -428,114 +421,20 @@ export function DashboardFolders() {
       )}
 
       {/* Delete confirm modal */}
-      {confirmDelete && (
-        <>
-          <div
-            onClick={() => setConfirmDelete(null)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.5)",
-              zIndex: 200,
-            }}
-          />
-          <div
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%,-50%)",
-              zIndex: 201,
-              background: "var(--color-bg-elevated)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-xl)",
-              padding: "var(--space-8)",
-              width: "360px",
-              boxShadow: "var(--shadow-xl)",
-            }}
-          >
-            <h4 style={{ marginBottom: "var(--space-3)" }}>Delete folder?</h4>
-            <p
-              style={{
-                fontSize: "var(--font-size-sm)",
-                color: "var(--color-text-secondary)",
-                marginBottom: "var(--space-6)",
-              }}
-            >
-              This will permanently delete the folder, all its subfolders, and
-              all its notes. This cannot be undone.
-            </p>
-            <div
-              style={{
-                display: "flex",
-                gap: "var(--space-3)",
-                justifyContent: "flex-end",
-              }}
-            >
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setConfirmDelete(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => handleDeleteFolder(confirmDelete)}
-              >
-                Delete
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
+      <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} width={360}>
+        <h4 style={{ marginBottom: "var(--space-3)" }}>Delete folder?</h4>
+        <p style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-secondary)", marginBottom: "var(--space-6)" }}>
+          This will permanently delete the folder, all its subfolders, and all its notes. This cannot be undone.
+        </p>
+        <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "flex-end" }}>
+          <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+          <Button variant="danger" size="sm" onClick={() => confirmDelete && handleDeleteFolder(confirmDelete)}>Delete</Button>
+        </div>
+      </Modal>
 
       {/* Create Folder Modal */}
-      {isCreateOpen && (
-        <>
-          <div
-            onClick={() => setIsCreateOpen(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.5)",
-              zIndex: 200,
-              backdropFilter: "blur(2px)",
-            }}
-          />
-          <div
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%,-50%)",
-              zIndex: 201,
-              background: "var(--color-bg-elevated)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-xl)",
-              padding: "var(--space-8)",
-              width: "400px",
-              boxShadow: "var(--shadow-xl)",
-            }}
-          >
-            <h3
-              style={{
-                marginBottom: "var(--space-4)",
-                fontSize: "var(--font-size-lg)",
-                fontWeight: "var(--font-weight-bold)",
-              }}
-            >
-              New Folder
-            </h3>
-            <form
-              onSubmit={handleCreateFolder}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-4)",
-              }}
-            >
+      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="New Folder">
+        <form onSubmit={handleCreateFolder} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
               <Input
                 label="Folder Title *"
                 placeholder="My new folder"
@@ -643,10 +542,8 @@ export function DashboardFolders() {
                   Create Folder
                 </Button>
               </div>
-            </form>
-          </div>
-        </>
-      )}
+        </form>
+      </Modal>
 
       {/* Share Modal */}
       {shareItem && (

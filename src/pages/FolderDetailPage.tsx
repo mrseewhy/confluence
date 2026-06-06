@@ -4,15 +4,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Badge, Button } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
+import { formatDate } from "@/lib/helpers";
 import type { Folder, Note } from "@/types";
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export function FolderDetailPage() {
   const { username, slug } = useParams<{ username: string; slug: string }>();

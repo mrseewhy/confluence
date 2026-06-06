@@ -5,14 +5,9 @@ import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import { formatDate } from "@/lib/helpers";
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+// (formatDate imported from @/lib/helpers)
 
 interface UserRow {
   id: string;

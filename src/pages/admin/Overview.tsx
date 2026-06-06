@@ -6,6 +6,7 @@ import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import { formatDate } from "@/lib/helpers";
 import type { Profile } from "@/types";
 
 function StatCard({
@@ -89,12 +90,15 @@ function StatCard({
   );
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+// (formatDate imported from @/lib/helpers)
+
+interface NoteItem {
+  id: string;
+  title: string;
+  description: string | null;
+  visibility: string;
+  updated_at: string;
+  folder: any; // Supabase join type — shape: { id, title, slug } | null
 }
 
 export function AdminOverview() {
@@ -113,14 +117,7 @@ export function AdminOverview() {
     Pick<Profile, "id" | "full_name" | "avatar_url" | "user_type" | "created_at">[]
   >([]);
   const [recentNotes, setRecentNotes] = useState<
-    Array<{
-      id: string;
-      title: string;
-      description: string | null;
-      visibility: string;
-      updated_at: string;
-      folder: any;
-    }>
+    Array<NoteItem>
   >([]);
 
   useEffect(() => {

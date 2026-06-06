@@ -4,6 +4,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Badge, EmptyState } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
+import { Avatar, OWNER_QUERY } from "@/lib/helpers";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -27,62 +28,82 @@ interface FolderWithSubfolders extends FolderItem {
 
 const DUMMY_FOLDERS: FolderWithSubfolders[] = [
   {
-    id: "d1", title: "Full Stack Development",
-    description: "Everything you need to build modern web applications end to end — from frontend frameworks to backend APIs and databases.",
-    slug: "full-stack-development", note_count: 3,
+    id: "d1", title: "general",
+    description: "Default folder for all notes and subfolders.",
+    slug: "general", note_count: 2,
     owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
     subfolders: [
       {
-        id: "d1a", title: "Frontend",
-        description: "React, TypeScript, Tailwind CSS, and modern UI patterns.",
-        slug: "frontend", note_count: 2,
+        id: "d1a", title: "Getting Started",
+        description: "Quick-start guides, onboarding materials, and setup documentation.",
+        slug: "getting-started", note_count: 1,
         owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
       },
       {
-        id: "d1b", title: "Backend",
-        description: "Node.js, Express, databases, and API design.",
-        slug: "backend", note_count: 1,
+        id: "d1b", title: "Templates",
+        description: "Reusable note templates for different documentation purposes.",
+        slug: "templates", note_count: 1,
         owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
       },
     ],
   },
   {
-    id: "d2", title: "System Design",
-    description: "Architecture patterns, scalability, distributed systems, and trade-off analysis for senior engineers.",
-    slug: "system-design", note_count: 3,
+    id: "d2", title: "System Architecture",
+    description: "Architecture patterns, system design principles, and infrastructure decisions for building scalable applications.",
+    slug: "system-architecture", note_count: 2,
+    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
+    subfolders: [
+      {
+        id: "d2a", title: "Design Patterns",
+        description: "Common architectural patterns, their trade-offs, and real-world use cases.",
+        slug: "design-patterns", note_count: 1,
+        owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
+      },
+      {
+        id: "d2b", title: "Scaling",
+        description: "Horizontal and vertical scaling strategies, load balancing, and caching.",
+        slug: "scaling", note_count: 1,
+        owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
+      },
+    ],
+  },
+  {
+    id: "d3", title: "general",
+    description: "Default folder for all notes and subfolders.",
+    slug: "general", note_count: 2,
     owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
     subfolders: [
       {
-        id: "d2a", title: "Database Design",
-        description: "Schema design, indexing strategies, normalisation, and query optimisation.",
-        slug: "database-design", note_count: 1,
+        id: "d3a", title: "Workflows",
+        description: "Daily routines, productivity systems, and process documentation.",
+        slug: "workflows", note_count: 1,
         owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
       },
       {
-        id: "d2b", title: "Microservices",
-        description: "Event-driven architecture, service discovery, and inter-service communication.",
-        slug: "microservices", note_count: 1,
+        id: "d3b", title: "Resources",
+        description: "Curated lists of learning materials, tools, and references.",
+        slug: "resources", note_count: 1,
         owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
       },
     ],
   },
   {
-    id: "d3", title: "DevOps & Deployment",
-    description: "CI/CD pipelines, Docker, Kubernetes, monitoring, and cloud infrastructure automation.",
-    slug: "devops-deployment", note_count: 2,
-    owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
+    id: "d4", title: "Data Science",
+    description: "Machine learning, statistical analysis, data visualisation, and analytical workflows.",
+    slug: "data-science", note_count: 2,
+    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
     subfolders: [
       {
-        id: "d3a", title: "Docker & Containers",
-        description: "Containerisation, Docker Compose, multi-stage builds, and best practices.",
-        slug: "docker-containers", note_count: 1,
-        owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
+        id: "d4a", title: "Machine Learning",
+        description: "Model selection, training pipelines, evaluation metrics, and deployment.",
+        slug: "machine-learning", note_count: 1,
+        owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
       },
       {
-        id: "d3b", title: "CI/CD",
-        description: "GitHub Actions, automated testing, deployment pipelines, and release strategies.",
-        slug: "cicd", note_count: 1,
-        owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
+        id: "d4b", title: "Visualization",
+        description: "Chart types, dashboard design, and data storytelling techniques.",
+        slug: "visualization", note_count: 1,
+        owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
       },
     ],
   },
@@ -90,56 +111,7 @@ const DUMMY_FOLDERS: FolderWithSubfolders[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-const AVATAR_COLORS = [
-  "#0D7F66", "#B87009", "#4F46E5", "#BE185D",
-  "#059669", "#D97706", "#7C3AED", "#DB2777",
-];
-
-function getAvatarColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function Avatar({ name, size = 28 }: { name: string; size?: number }) {
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: getAvatarColor(name),
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "#fff",
-        fontSize: size * 0.4,
-        fontWeight: 600,
-        fontFamily: "var(--font-sans)",
-        flexShrink: 0,
-        lineHeight: 1,
-      }}
-      title={name}
-    >
-      {getInitials(name)}
-    </div>
-  );
-}
-
-// ─── Query helper ─────────────────────────────────────────────
-
-const OWNER_QUERY = "id, full_name, avatar_url, username";
+// (Avatar, OWNER_QUERY imported from @/lib/helpers)
 
 const FOLDER_EMOJIS = ["💻", "🏗️", "🚀", "🎨", "⚙️", "🗄️"];
 

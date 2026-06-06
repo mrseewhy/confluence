@@ -5,15 +5,10 @@ import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import { formatDate } from "@/lib/helpers";
 import type { Folder } from "@/types";
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+// (formatDate imported from @/lib/helpers)
 
 export function AdminFolders() {
   const { profile } = useAuth();

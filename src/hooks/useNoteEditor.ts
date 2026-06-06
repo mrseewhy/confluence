@@ -271,6 +271,9 @@ export function useNoteEditor() {
         if (noteError) throw noteError
         if (!noteData) throw new Error('Note was not created.')
 
+        // Set noteId in state so subsequent saves (including auto-save) UPDATE instead of INSERT
+        setState(prev => ({ ...prev, noteId: noteData.id }))
+
         // 2. Insert blocks (if any)
         if (state.blocks.length > 0) {
           const blocksToInsert = state.blocks.map((block, i) => ({

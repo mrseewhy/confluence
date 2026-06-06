@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AuthProvider } from '@/context/AuthProvider'
 import { RequireAuth } from '@/components/RequireAuth'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ToastProvider } from '@/components/Toast'
 
 // ── Critical routes (eager — always in the main chunk) ───────
 import { HomePage } from '@/pages/HomePage'
@@ -56,6 +58,8 @@ export default function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>          <AuthProvider>
+          <ToastProvider>
+          <ErrorBoundary>
           <Suspense fallback={<PageSkeleton />}>
           <Routes>
 
@@ -89,6 +93,8 @@ export default function App() {
 
           </Routes>
           </Suspense>
+          </ErrorBoundary>
+          </ToastProvider>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>

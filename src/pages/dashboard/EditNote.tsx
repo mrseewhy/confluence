@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui";
@@ -7,6 +7,8 @@ import { useNoteEditor } from "@/hooks/useNoteEditor";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 
+const AUTO_SAVE_DELAY_MS = 5000;
+
 export function EditNote() {
   const { slug } = useParams<{ slug: string }>();
   const { profile } = useAuth();
@@ -14,6 +16,7 @@ export function EditNote() {
   const navigate = useNavigate();
 
   const editor = useNoteEditor();
+  const justManuallySaved = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -67,6 +70,32 @@ export function EditNote() {
     void loadNote();
   }, [slug, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-save with debounce (only after initial load) ──
+  useEffect(() => {
+    if (!user || !editor.isValid || loading) return;
+    const timer = setTimeout(async () => {
+      if (justManuallySaved.current) {
+        justManuallySaved.current = false;
+        return;
+      }
+      try {
+        await editor.save(user.id);
+      } catch {
+        // Auto-save failures are silent
+      }
+    }, AUTO_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [
+    user?.id,
+    loading,
+    editor.state.title,
+    editor.state.description,
+    editor.state.slug,
+    editor.state.folder_id,
+    editor.state.visibility,
+    editor.state.blocks,
+  ]);
+
   async function handleSave() {
     if (!editor.state.folder_id) {
       setFolderError("Please select a folder.");
@@ -74,6 +103,7 @@ export function EditNote() {
     }
     if (!user) return;
     setFolderError("");
+    justManuallySaved.current = true;
     try {
       await editor.save(user.id);
       navigate("/dashboard/notes");
@@ -147,47 +177,47 @@ export function EditNote() {
     );
   }
 
-  if (!user) return null;
-
   return (
-    <DashboardLayout user={user} variant="user" defaultCollapsed>
-      <NoteEditor
-        state={editor.state}
-        actions={editor}
-        folderError={folderError}
-        onFolderChange={(id) => {
-          editor.setFolderId(id);
-          setFolderError("");
-        }}
-        username={user.username}
-        breadcrumbLabel="Edit note"
-        headerActions={
-          <>
-            <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!editor.isValid || editor.saveStatus === "saving"}
-              onClick={handleSave}
-            >
-              {editor.saveStatus === "saving" ? "Saving\u2026" : "Save changes"}
-            </Button>
-          </>
-        }
-        bottomActions={
-          <>
-            <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!editor.isValid || editor.saveStatus === "saving"}
-              onClick={handleSave}
-            >
-              {editor.saveStatus === "saving" ? "Saving\u2026" : "Save changes"}
-            </Button>
-          </>
-        }
-      />
+    <DashboardLayout user={user || sharedUser} variant="user" defaultCollapsed>
+      {!user ? null : (
+        <NoteEditor
+          state={editor.state}
+          actions={editor}
+          folderError={folderError}
+          onFolderChange={(id) => {
+            editor.setFolderId(id);
+            setFolderError("");
+          }}
+          username={user.username}
+          breadcrumbLabel="Edit note"
+          headerActions={
+            <>
+              <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!editor.isValid || editor.saveStatus === "saving"}
+                onClick={handleSave}
+              >
+                {editor.saveStatus === "saving" ? "Saving\u2026" : "Save changes"}
+              </Button>
+            </>
+          }
+          bottomActions={
+            <>
+              <SaveIndicator status={editor.saveStatus} message={editor.saveError} />
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!editor.isValid || editor.saveStatus === "saving"}
+                onClick={handleSave}
+              >
+                {editor.saveStatus === "saving" ? "Saving\u2026" : "Save changes"}
+              </Button>
+            </>
+          }
+        />
+      )}
     </DashboardLayout>
   );
 }

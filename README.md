@@ -19,8 +19,8 @@ cp .env.example .env.local
 Add your Supabase project values:
 
 ```sh
-VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+VITE_SUPABASE_URL=http://127.0.0.1:54321
+VITE_SUPABASE_ANON_KEY=sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
 ```
 
 Run the app:
@@ -29,24 +29,51 @@ Run the app:
 npm run dev
 ```
 
-## Supabase Auth
+## Local Supabase
 
-The login, signup, Google OAuth, and password recovery screens use Supabase Auth via `src/lib/supabase.ts`.
+Start Supabase locally (requires Docker):
 
-In the Supabase dashboard, configure these Auth URLs for local development:
-
-```text
-http://localhost:5173/dashboard
-http://localhost:5173/login
+```sh
+supabase start
+supabase db reset    # applies schema + seeds public content
 ```
 
-The app still uses mock folder/note data. Database-backed folders, notes, profiles, and row-level security policies are the next integration step.
+Then create user accounts with passwords:
+
+```sh
+./scripts/seed-test-users.sh
+```
+
+## Test Credentials
+
+After running `seed-test-users.sh`, you can log in with these accounts:
+
+| Email | Password | Type |
+|-------|----------|------|
+| `alex@confluence.test` | `Alex123!` | ★ Admin |
+| `sarah@confluence.test` | `Sarah123!` | User |
+| `marcus@confluence.test` | `Marcus123!` | User |
+| `priya@confluence.test` | `Priya123!` | User |
+| `emma@confluence.test` | `Emma123!` | User |
+
+### Public content (no login required)
+
+- **Homepage** — `/` — shows featured folders and latest notes
+- **Browse folders** — `/folders` — browse all public folders with subfolder hierarchies
+- **Browse notes** — `/notes` — search and browse all public notes
+- Each folder/note has a permanent URL: `/{username}/folder/{slug}` or `/{username}/n/{slug}`
+
+### After login
+
+- **Dashboard** — `/dashboard` — manage your own folders, subfolders, and notes
+- **Admin panel** — `/admin/dashboard` — (admin only) manage all users, folders, notes
 
 ## Scripts
 
 ```sh
-npm run dev
-npm run build
-npm run lint
-npm run preview
+npm run dev          # Start dev server
+npm run build        # Production build
+npm run lint         # Lint check
+npm run preview      # Preview production build
+./scripts/seed-test-users.sh  # Create test user accounts
 ```
