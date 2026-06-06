@@ -3,12 +3,14 @@ import { Link, useParams } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Badge, Button } from "@/components/ui";
+import { useAuth } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
 import type { Note, NoteBlock } from "@/types";
 
 export function NoteDetailPage() {
   const { username, slug } = useParams<{ username: string; slug: string }>();
+  const { user: authUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState<Note | null>(null);
   const [blocks, setBlocks] = useState<NoteBlock[]>([]);
@@ -34,13 +36,15 @@ export function NoteDetailPage() {
 
         setOwnerUsername(owner.username);
 
-        // Find note by slug AND owner_id
-        const { data: noteData } = await supabase
+        // Find note by slug AND owner_id — no visibility filter here
+        // For anon users, RLS will restrict; for owner, we bypass
+        const query = supabase
           .from("notes")
           .select("*, owner_id, folder:folders(id, title, slug)")
           .eq("slug", slug)
-          .eq("owner_id", owner.id)
-          .single();
+          .eq("owner_id", owner.id);
+
+        const { data: noteData } = await query.single();
 
         if (!noteData) {
           setLoading(false);
@@ -64,7 +68,7 @@ export function NoteDetailPage() {
       }
     };
     void load();
-  }, [slug, username]);
+  }, [slug, username, authUser]);
 
   if (loading) {
     return (
@@ -116,8 +120,10 @@ export function NoteDetailPage() {
   }
 
   const isPublic = note.visibility === "public";
+  const isOwner = authUser?.id === note.owner_id;
 
-  if (!isPublic) {
+  // Only block non-owner viewers from seeing private notes
+  if (!isPublic && !isOwner) {
     return (
       <>
         <Navbar />
@@ -199,15 +205,20 @@ export function NoteDetailPage() {
 
         {/* Header */}
         <div style={{ marginBottom: "var(--space-6)" }}>
-          <h1
-            style={{
-              fontSize: "var(--font-size-3xl)",
-              fontWeight: "var(--font-weight-bold)",
-              marginBottom: "var(--space-3)",
-            }}
-          >
-            {note.title}
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-3)" }}>
+            <h1
+              style={{
+                fontSize: "var(--font-size-3xl)",
+                fontWeight: "var(--font-weight-bold)",
+                margin: 0,
+              }}
+            >
+              {note.title}
+            </h1>
+            {!isPublic && (
+              <Badge variant="muted" style={{ alignSelf: "center" }}>Private</Badge>
+            )}
+          </div>
           {note.description && (
             <p
               style={{
@@ -227,7 +238,7 @@ export function NoteDetailPage() {
             }}
           >
             {note.folder && <Badge variant="muted">{note.folder.title}</Badge>}
-            <Badge variant="accent">Public</Badge>
+            <Badge variant="accent">{isPublic ? "Public" : "Private"}</Badge>
             <span
               style={{
                 fontSize: "var(--font-size-xs)",

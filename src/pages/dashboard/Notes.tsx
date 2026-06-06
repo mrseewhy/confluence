@@ -520,6 +520,7 @@ export function DashboardNotes() {
           itemTitle={shareItem.title}
           itemType="note"
           itemSlug={shareItem.slug}
+          ownerUsername={user?.username || "u"}
         />
       )}
     </DashboardLayout>

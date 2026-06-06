@@ -782,6 +782,36 @@ export function NoteEditor({
                     gap: "var(--space-2)",
                   }}
                 >
+                  {/* Drag handle (6-dot grid) */}
+                  <span
+                    title="Drag to reorder"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "20px",
+                      height: "24px",
+                      cursor: "grab",
+                      color: isCode
+                        ? "rgba(255,255,255,0.2)"
+                        : "var(--color-text-muted)",
+                      opacity: 0.5,
+                      transition: "opacity var(--duration-fast)",
+                      flexShrink: 0,
+                      userSelect: "none",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.5")}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                      <circle cx="3" cy="2" r="1.2" />
+                      <circle cx="11" cy="2" r="1.2" />
+                      <circle cx="3" cy="7" r="1.2" />
+                      <circle cx="11" cy="7" r="1.2" />
+                      <circle cx="3" cy="12" r="1.2" />
+                      <circle cx="11" cy="12" r="1.2" />
+                    </svg>
+                  </span>
                   <span style={{ fontSize: "14px" }}>
                     {BLOCK_TYPE_EMOJIS[block.type]}
                   </span>

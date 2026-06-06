@@ -9,6 +9,8 @@ interface ShareModalProps {
   itemTitle: string
   itemType: 'folder' | 'note'
   itemSlug: string
+  /** Owner's username — needed to construct the share URL */
+  ownerUsername: string
 }
 
 export function ShareModal({
@@ -18,6 +20,7 @@ export function ShareModal({
   itemTitle,
   itemType,
   itemSlug,
+  ownerUsername,
 }: ShareModalProps) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'viewer' | 'editor'>('viewer')
@@ -35,7 +38,8 @@ export function ShareModal({
 
   if (!isOpen) return null
 
-  const itemShareUrl = `${window.location.origin}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
+  // Correct share URL: /{username}/{type}/{slug}
+  const itemShareUrl = `${window.location.origin}/${ownerUsername}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault()

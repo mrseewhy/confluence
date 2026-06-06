@@ -3,15 +3,18 @@ import { Link, useParams } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Badge, Button } from "@/components/ui";
+import { useAuth } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
 import type { Folder, Note } from "@/types";
 
 export function FolderDetailPage() {
   const { username, slug } = useParams<{ username: string; slug: string }>();
+  const { user: authUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [folder, setFolder] = useState<Folder | null>(null);
   const [ownerUsername, setOwnerUsername] = useState<string>("");
+  const [isOwner, setIsOwner] = useState(false);
   const [notes, setNotes] = useState<
     Pick<Note, "id" | "title" | "description" | "slug" | "updated_at" | "visibility">[]
   >([]);
@@ -41,15 +44,23 @@ export function FolderDetailPage() {
         }
 
         setOwnerUsername(owner.username);
+        setIsOwner(authUser?.id === owner.id);
 
-        // Find folder by slug AND owner_id
-        const { data: folderData } = await supabase
+        // Find folder by slug AND owner_id — no visibility filter
+        // The server-side RLS policy (has_access_to_folder) will restrict
+        // private folders from anon users. For the owner, we bypass the filter.
+        const query = supabase
           .from("folders")
           .select("*")
-          .eq("visibility", "public")
           .eq("slug", slug)
-          .eq("owner_id", owner.id)
-          .single();
+          .eq("owner_id", owner.id);
+
+        // Anon users can only see public folders; owner can see their own
+        if (!authUser || authUser.id !== owner.id) {
+          query.eq("visibility", "public");
+        }
+
+        const { data: folderData } = await query.single();
 
         if (!folderData) {
           setLoading(false);
@@ -58,13 +69,17 @@ export function FolderDetailPage() {
 
         setFolder(folderData);
 
-        // Get subfolders
-        const { data: subfolderData } = await supabase
+        // Get subfolders — owner sees all, others only public
+        const subQuery = supabase
           .from("folders")
           .select("id, title, description, slug")
-          .eq("parent_id", folderData.id)
-          .eq("visibility", "public")
-          .order("title", { ascending: true });
+          .eq("parent_id", folderData.id);
+
+        if (!authUser || authUser.id !== owner.id) {
+          subQuery.eq("visibility", "public");
+        }
+
+        const { data: subfolderData } = await subQuery.order("title", { ascending: true });
 
         setSubfolders(subfolderData || []);
 
@@ -78,12 +93,17 @@ export function FolderDetailPage() {
           setParentFolder(parentData);
         }
 
-        // Get notes in this folder
-        const { data: notesData } = await supabase
+        // Get notes in this folder — owner sees all, others only public
+        const notesQuery = supabase
           .from("notes")
           .select("id, title, description, slug, updated_at, visibility")
-          .eq("folder_id", folderData.id)
-          .eq("visibility", "public");
+          .eq("folder_id", folderData.id);
+
+        if (!authUser || authUser.id !== owner.id) {
+          notesQuery.eq("visibility", "public");
+        }
+
+        const { data: notesData } = await notesQuery;
 
         setNotes(notesData || []);
       } catch (err) {
@@ -93,7 +113,7 @@ export function FolderDetailPage() {
       }
     };
     void load();
-  }, [slug, username]);
+  }, [slug, username, authUser]);
 
   if (loading) {
     return (
@@ -143,6 +163,8 @@ export function FolderDetailPage() {
       </>
     );
   }
+
+  const isPrivate = folder.visibility === "private";
 
   return (
     <>
@@ -197,14 +219,20 @@ export function FolderDetailPage() {
         </div>
 
         <div style={{ marginBottom: "var(--space-8)" }}>
-          <h1
-            style={{
-              fontSize: "var(--font-size-3xl)",
-              fontWeight: "var(--font-weight-bold)",
-            }}
-          >
-            {folder.title}
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-2)" }}>
+            <h1
+              style={{
+                fontSize: "var(--font-size-3xl)",
+                fontWeight: "var(--font-weight-bold)",
+                margin: 0,
+              }}
+            >
+              {folder.title}
+            </h1>
+            {isPrivate && (
+              <Badge variant="muted" style={{ alignSelf: "center" }}>Private</Badge>
+            )}
+          </div>
           {folder.description && (
             <p style={{ color: "var(--color-text-secondary)" }}>
               {folder.description}
@@ -368,7 +396,7 @@ export function FolderDetailPage() {
               color: "var(--color-text-muted)",
             }}
           >
-            <p>No public notes in this folder yet.</p>
+            <p>{isOwner ? "No notes in this folder yet." : "No public notes in this folder yet."}</p>
           </div>
         )}
       </div>

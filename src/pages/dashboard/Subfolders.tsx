@@ -771,6 +771,7 @@ export function DashboardSubfolders() {
           itemTitle={shareItem.title}
           itemType="folder"
           itemSlug={shareItem.slug}
+          ownerUsername={user?.username || "u"}
         />
       )}
     </DashboardLayout>
