@@ -1,61 +1,12 @@
 import { useState } from 'react'
 import type { BlockMetadata } from '@/types'
+import { detectVideoProvider, getVideoEmbedUrl } from '@/lib/helpers'
 
 interface VideoBlockProps {
   content:  string
   metadata: BlockMetadata
   onChange: (content: string) => void
   onMeta:   (meta: Partial<BlockMetadata>) => void
-}
-
-type VideoProvider = 'youtube' | 'loom' | 'vimeo' | null
-
-function detectProvider(url: string): VideoProvider {
-  if (!url) return null
-  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube'
-  if (url.includes('loom.com'))  return 'loom'
-  if (url.includes('vimeo.com')) return 'vimeo'
-  return null
-}
-
-function getEmbedUrl(url: string, provider: VideoProvider): string | null {
-  try {
-    if (provider === 'youtube') {
-      // Support both youtube.com/watch?v=ID and youtu.be/ID
-      let videoId: string | null = null
-      try {
-        if (url.includes('youtu.be/')) {
-          videoId = url.split('youtu.be/')[1]?.split('?')[0] ?? null
-        } else {
-          const u = new URL(url)
-          videoId = u.searchParams.get('v')
-          // Also check for /embed/ already in URL
-          if (!videoId && url.includes('/embed/')) {
-            videoId = url.split('/embed/')[1]?.split('?')[0] ?? null
-          }
-        }
-      } catch {
-        // Invalid URL
-      }
-      // Use youtube-nocookie.com to avoid tracking + X-Frame-Options issues
-      return videoId ? `https://www.youtube-nocookie.com/embed/${videoId}` : null
-    }
-
-    if (provider === 'loom') {
-      const parts = url.split('loom.com/share/')
-      const id = parts[1]?.split('?')[0]
-      return id ? `https://www.loom.com/embed/${id}` : null
-    }
-
-    if (provider === 'vimeo') {
-      const parts = url.split('vimeo.com/')
-      const id = parts[1]?.split('/')[0]?.split('?')[0]
-      return id ? `https://player.vimeo.com/video/${id}` : null
-    }
-  } catch {
-    // Invalid URL — ignore
-  }
-  return null
 }
 
 const PROVIDER_LABELS: Record<Exclude<VideoProvider, null>, string> = {
@@ -71,8 +22,8 @@ const PROVIDER_COLORS: Record<Exclude<VideoProvider, null>, string> = {
 }
 
 export function VideoBlock({ content, metadata, onChange, onMeta }: VideoBlockProps) {
-  const provider = detectProvider(content)
-  const embedUrl = provider ? getEmbedUrl(content, provider) : null
+  const provider = detectVideoProvider(content)
+  const embedUrl = provider ? getVideoEmbedUrl(content, provider) : null
   const [embedFailed, setEmbedFailed] = useState(false)
 
   return (

@@ -122,6 +122,55 @@ export function buildFolderPath(
   return path
 }
 
+// ── Video embed helpers ────────────────────────────────────────
+
+type VideoProvider = 'youtube' | 'loom' | 'vimeo' | null
+
+export function detectVideoProvider(url: string): VideoProvider {
+  if (!url) return null
+  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube'
+  if (url.includes('loom.com'))  return 'loom'
+  if (url.includes('vimeo.com')) return 'vimeo'
+  return null
+}
+
+export function getVideoEmbedUrl(url: string, provider: VideoProvider): string | null {
+  try {
+    if (provider === 'youtube') {
+      let videoId: string | null = null
+      try {
+        if (url.includes('youtu.be/')) {
+          videoId = url.split('youtu.be/')[1]?.split('?')[0] ?? null
+        } else {
+          const u = new URL(url)
+          videoId = u.searchParams.get('v')
+          if (!videoId && url.includes('/embed/')) {
+            videoId = url.split('/embed/')[1]?.split('?')[0] ?? null
+          }
+        }
+      } catch {
+        // Invalid URL
+      }
+      return videoId ? `https://www.youtube-nocookie.com/embed/${videoId}` : null
+    }
+
+    if (provider === 'loom') {
+      const parts = url.split('loom.com/share/')
+      const id = parts[1]?.split('?')[0]
+      return id ? `https://www.loom.com/embed/${id}` : null
+    }
+
+    if (provider === 'vimeo') {
+      const parts = url.split('vimeo.com/')
+      const id = parts[1]?.split('/')[0]?.split('?')[0]
+      return id ? `https://player.vimeo.com/video/${id}` : null
+    }
+  } catch {
+    // Invalid URL — ignore
+  }
+  return null
+}
+
 // ── Owner query fragment ──────────────────────────────────────
 
 export const OWNER_QUERY = 'id, full_name, avatar_url, username'

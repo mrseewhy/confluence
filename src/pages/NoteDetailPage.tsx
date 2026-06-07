@@ -5,7 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
-import { formatDate } from "@/lib/helpers";
+import { formatDate, detectVideoProvider, getVideoEmbedUrl } from "@/lib/helpers";
 import type { Note, NoteBlock } from "@/types";
 
 export function NoteDetailPage() {
@@ -353,27 +353,75 @@ export function NoteDetailPage() {
                       )}
                     </div>
                   ) : block.type === "video" ? (
-                    <div
-                      style={{
-                        position: "relative",
-                        paddingBottom: "56.25%",
-                        height: 0,
-                      }}
-                    >
-                      <iframe
-                        src={block.content}
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "100%",
-                          height: "100%",
-                          borderRadius: "var(--radius-md)",
-                          border: "none",
-                        }}
-                        allowFullScreen
-                      />
-                    </div>
+                    (() => {
+                      const provider = detectVideoProvider(block.content);
+                      const embedUrl = provider ? getVideoEmbedUrl(block.content, provider) : null;
+                      return embedUrl ? (
+                        <div
+                          style={{
+                            position: "relative",
+                            paddingBottom: "56.25%",
+                            height: 0,
+                          }}
+                        >
+                          <iframe
+                            src={embedUrl}
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: "100%",
+                              height: "100%",
+                              borderRadius: "var(--radius-md)",
+                              border: "none",
+                            }}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            allowFullScreen
+                          />
+                          {block.metadata?.caption && (
+                            <p
+                              style={{
+                                fontSize: "var(--font-size-xs)",
+                                color: "var(--color-text-muted)",
+                                marginTop: "var(--space-2)",
+                                textAlign: "center",
+                              }}
+                            >
+                              {block.metadata.caption}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            padding: "var(--space-6)",
+                            textAlign: "center",
+                            color: "var(--color-text-muted)",
+                            fontSize: "var(--font-size-sm)",
+                          }}
+                        >
+                          <p style={{ margin: 0 }}>
+                            Unsupported video URL. Please open it directly.
+                          </p>
+                          {block.content.startsWith("http") && (
+                            <a
+                              href={block.content}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                fontSize: "var(--font-size-xs)",
+                                color: "var(--color-accent)",
+                                marginTop: "var(--space-2)",
+                                display: "inline-block",
+                              }}
+                            >
+                              Open video →
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })()
                   ) : block.type === "heading" ? (
                     (() => {
                       const level = (block.metadata?.level as string) || "h2";

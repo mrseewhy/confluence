@@ -24,91 +24,6 @@ interface FolderWithSubfolders extends FolderItem {
   subfolders: FolderItem[];
 }
 
-// ─── Dummy Content ────────────────────────────────────────────
-
-const DUMMY_FOLDERS: FolderWithSubfolders[] = [
-  {
-    id: "d1", title: "general",
-    description: "Default folder for all notes and subfolders.",
-    slug: "general", note_count: 2,
-    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-    subfolders: [
-      {
-        id: "d1a", title: "Getting Started",
-        description: "Quick-start guides, onboarding materials, and setup documentation.",
-        slug: "getting-started", note_count: 1,
-        owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-      },
-      {
-        id: "d1b", title: "Templates",
-        description: "Reusable note templates for different documentation purposes.",
-        slug: "templates", note_count: 1,
-        owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-      },
-    ],
-  },
-  {
-    id: "d2", title: "System Architecture",
-    description: "Architecture patterns, system design principles, and infrastructure decisions for building scalable applications.",
-    slug: "system-architecture", note_count: 2,
-    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-    subfolders: [
-      {
-        id: "d2a", title: "Design Patterns",
-        description: "Common architectural patterns, their trade-offs, and real-world use cases.",
-        slug: "design-patterns", note_count: 1,
-        owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-      },
-      {
-        id: "d2b", title: "Scaling",
-        description: "Horizontal and vertical scaling strategies, load balancing, and caching.",
-        slug: "scaling", note_count: 1,
-        owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-      },
-    ],
-  },
-  {
-    id: "d3", title: "general",
-    description: "Default folder for all notes and subfolders.",
-    slug: "general", note_count: 2,
-    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-    subfolders: [
-      {
-        id: "d3a", title: "Workflows",
-        description: "Daily routines, productivity systems, and process documentation.",
-        slug: "workflows", note_count: 1,
-        owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-      },
-      {
-        id: "d3b", title: "Resources",
-        description: "Curated lists of learning materials, tools, and references.",
-        slug: "resources", note_count: 1,
-        owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-      },
-    ],
-  },
-  {
-    id: "d4", title: "Data Science",
-    description: "Machine learning, statistical analysis, data visualisation, and analytical workflows.",
-    slug: "data-science", note_count: 2,
-    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-    subfolders: [
-      {
-        id: "d4a", title: "Machine Learning",
-        description: "Model selection, training pipelines, evaluation metrics, and deployment.",
-        slug: "machine-learning", note_count: 1,
-        owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-      },
-      {
-        id: "d4b", title: "Visualization",
-        description: "Chart types, dashboard design, and data storytelling techniques.",
-        slug: "visualization", note_count: 1,
-        owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-      },
-    ],
-  },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────
 
 // (Avatar, OWNER_QUERY imported from @/lib/helpers)
@@ -125,7 +40,6 @@ export function FoldersPage() {
   const [folders, setFolders] = useState<FolderWithSubfolders[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [useDummy, setUseDummy] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -147,8 +61,7 @@ export function FoldersPage() {
         if (!mounted) return;
 
         if (error || !data?.length) {
-          setUseDummy(true);
-          setFolders(DUMMY_FOLDERS);
+          setFolders([]);
           return;
         }
 
@@ -181,14 +94,9 @@ export function FoldersPage() {
         }));
 
         setFolders(mapped);
-        if (!mapped.length) {
-          setUseDummy(true);
-          setFolders(DUMMY_FOLDERS);
-        }
       } catch {
         if (!mounted) return;
-        setUseDummy(true);
-        setFolders(DUMMY_FOLDERS);
+        setFolders([]);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -306,7 +214,7 @@ export function FoldersPage() {
                         <Avatar name={folder.owner_name} size={24} />
                         <span style={styles.authorName}>{folder.owner_name}</span>
                       </div>
-                      <Badge variant={useDummy ? "accent" : "muted"}>
+                      <Badge variant="muted">
                         📄 {folder.note_count} notes
                       </Badge>
                     </div>

@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button, Input } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import { Modal } from "@/components/Modal";
+import { uploadImage } from "@/lib/upload";
 
 export function DashboardSettings() {
   const { profile } = useAuth();
@@ -13,7 +15,143 @@ export function DashboardSettings() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  const { refreshProfile } = useAuth();
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  // Avatar state
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+
+  // Delete account state
+  // Delete account state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const { refreshProfile, signOut } = useAuth();
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess(false);
+
+    if (newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      const supabase = requireSupabase();
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (error) throw error;
+      setPasswordSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPasswordError(
+        err instanceof Error ? err.message : "Failed to update password."
+      );
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!user) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Please select an image file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError("Image must be under 2 MB.");
+      return;
+    }
+
+    setAvatarUploading(true);
+    setAvatarError("");
+
+    try {
+      const result = await uploadImage(file, user.id);
+      if (!result.ok) {
+        setAvatarError(result.error);
+        return;
+      }
+
+      const supabase = requireSupabase();
+      const { error } = await supabase
+        .from("profiles")
+        .update({ avatar_url: result.url })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      await refreshProfile();
+    } catch (err) {
+      setAvatarError(
+        err instanceof Error ? err.message : "Failed to upload avatar."
+      );
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeletingAccount(true);
+    setDeleteError("");
+
+    try {
+      const supabase = requireSupabase();
+
+      // Get the user's current session token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        throw new Error("No session available. Please sign in again.");
+      }
+
+      // Determine the edge function URL
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const functionUrl = `${supabaseUrl}/functions/v1/delete-account`;
+
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Failed to delete account.");
+      }
+
+      // Sign out after successful deletion
+      await signOut();
+      window.location.href = "/";
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to delete account."
+      );
+      setDeletingAccount(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,8 +307,25 @@ export function DashboardSettings() {
                 {name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <Button variant="secondary" size="sm" type="button">
-                  Change avatar
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleAvatarUpload(file);
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  disabled={avatarUploading}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {avatarUploading ? "Uploading…" : "Change avatar"}
                 </Button>
                 <p
                   style={{
@@ -182,6 +337,17 @@ export function DashboardSettings() {
                 >
                   JPG, PNG or GIF. Max 2MB.
                 </p>
+                {avatarError && (
+                  <p
+                    style={{
+                      margin: "var(--space-1) 0 0",
+                      fontSize: "var(--font-size-xs)",
+                      color: "var(--color-danger)",
+                    }}
+                  >
+                    {avatarError}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -274,7 +440,8 @@ export function DashboardSettings() {
               Update your password regularly for security.
             </p>
           </div>
-          <div
+          <form
+            onSubmit={handlePasswordSubmit}
             style={{
               padding: "var(--space-6)",
               display: "flex",
@@ -282,27 +449,92 @@ export function DashboardSettings() {
               gap: "var(--space-4)",
             }}
           >
+            {passwordError && (
+              <div
+                style={{
+                  fontSize: "var(--font-size-sm)",
+                  color: "var(--color-danger)",
+                  background: "var(--color-danger-subtle)",
+                  border: "1px solid var(--color-danger)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "var(--space-3) var(--space-4)",
+                }}
+              >
+                {passwordError}
+              </div>
+            )}
+            {passwordSuccess && (
+              <div
+                style={{
+                  fontSize: "var(--font-size-sm)",
+                  color: "var(--color-success)",
+                  background: "var(--color-success-subtle)",
+                  border: "1px solid var(--color-success)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "var(--space-3) var(--space-4)",
+                }}
+              >
+                Password updated successfully!
+              </div>
+            )}
             <Input
               label="Current password"
               type="password"
               placeholder={"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
+              value={currentPassword}
+              onChange={(e) => {
+                setPasswordError("");
+                setCurrentPassword(e.target.value);
+              }}
+              autoComplete="current-password"
+              required
             />
             <Input
               label="New password"
               type="password"
               placeholder={"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
+              value={newPassword}
+              onChange={(e) => {
+                setPasswordError("");
+                setNewPassword(e.target.value);
+              }}
+              autoComplete="new-password"
+              required
             />
             <Input
               label="Confirm password"
               type="password"
               placeholder={"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
+              value={confirmPassword}
+              onChange={(e) => {
+                setPasswordError("");
+                setConfirmPassword(e.target.value);
+              }}
+              autoComplete="new-password"
+              required
             />
-            <div>
-              <Button variant="primary" size="sm">
-                Update password
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-3)",
+              }}
+            >
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={
+                  passwordLoading ||
+                  !currentPassword ||
+                  !newPassword ||
+                  !confirmPassword
+                }
+              >
+                {passwordLoading ? "Updating…" : "Update password"}
               </Button>
             </div>
-          </div>
+          </form>
         </section>
 
         {/* Danger zone */}
@@ -362,12 +594,88 @@ export function DashboardSettings() {
                 Permanently delete your account and all data. Cannot be undone.
               </p>
             </div>
-            <Button variant="danger" size="sm">
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
               Delete account
             </Button>
           </div>
         </section>
       </div>
+
+      {/* Delete account confirmation modal */}
+      <Modal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        width={400}
+      >
+        <h3
+          style={{
+            fontSize: "var(--font-size-lg)",
+            fontWeight: "var(--font-weight-bold)",
+            marginBottom: "var(--space-3)",
+            color: "var(--color-danger)",
+          }}
+        >
+          Delete your account?
+        </h3>
+        <p
+          style={{
+            fontSize: "var(--font-size-sm)",
+            color: "var(--color-text-secondary)",
+            marginBottom: "var(--space-2)",
+            lineHeight: "var(--line-height-normal)",
+          }}
+        >
+          This will permanently delete all your notes, folders, and profile
+          data. This action cannot be undone.
+        </p>
+        {deleteError && (
+          <div
+            style={{
+              fontSize: "var(--font-size-sm)",
+              color: "var(--color-danger)",
+              background: "var(--color-danger-subtle)",
+              border: "1px solid var(--color-danger)",
+              borderRadius: "var(--radius-md)",
+              padding: "var(--space-3) var(--space-4)",
+              marginBottom: "var(--space-4)",
+            }}
+          >
+            {deleteError}
+          </div>
+        )}
+        <div
+          style={{
+            display: "flex",
+            gap: "var(--space-3)",
+            justifyContent: "flex-end",
+            marginTop: "var(--space-4)",
+          }}
+        >
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setShowDeleteConfirm(false);
+              setDeleteError("");
+            }}
+            disabled={deletingAccount}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={handleDeleteAccount}
+            disabled={deletingAccount}
+          >
+            {deletingAccount ? "Deleting…" : "Yes, delete my account"}
+          </Button>
+        </div>
+      </Modal>
     </DashboardLayout>
   );
 }

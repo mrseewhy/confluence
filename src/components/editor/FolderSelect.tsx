@@ -397,7 +397,7 @@ export function FolderSelect({ value, onChange, error }: FolderSelectProps) {
                           letterSpacing: "0.05em",
                           textTransform: "uppercase",
                           color: isSelected ? "var(--color-accent)" : "var(--color-text-muted)",
-                          background: isSelected ? "rgba(var(--color-accent-rgb), 0.1)" : "var(--color-bg-subtle)",
+                          background: isSelected ? "var(--color-accent-subtle)" : "var(--color-bg-subtle)",
                           borderRadius: "var(--radius-full)",
                           padding: "1px 6px",
                           border: `1px solid ${isSelected ? "var(--color-accent-muted)" : "var(--color-border)"}`,

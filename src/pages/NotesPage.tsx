@@ -21,99 +21,6 @@ interface NoteItem {
   folder_path: { title: string; slug: string }[];
 }
 
-// ─── Dummy Content ────────────────────────────────────────────
-
-const DUMMY_NOTES: NoteItem[] = [
-  {
-    id: "dn1", title: "Brand Identity Guidelines",
-    description: "Comprehensive brand guidelines covering logo usage, colour palette, typography, tone of voice, and application examples.",
-    slug: "brand-identity-guidelines",
-    updated_at: "2025-06-01T10:00:00Z",
-    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
-    folder_path: [
-      { title: "Design Portfolio", slug: "design-portfolio" },
-      { title: "Branding", slug: "branding" },
-    ],
-  },
-  {
-    id: "dn2", title: "Redesigning a SaaS Dashboard",
-    description: "A complete UX case study covering user research, information architecture, prototyping, and usability testing.",
-    slug: "redesigning-saas-dashboard",
-    updated_at: "2025-05-31T10:00:00Z",
-    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
-    folder_path: [
-      { title: "Design Portfolio", slug: "design-portfolio" },
-      { title: "UX Case Studies", slug: "ux-case-studies" },
-    ],
-  },
-  {
-    id: "dn3", title: "UI Sketch Ideas",
-    description: "Wireframes and rough UI concepts for a reimagined project management dashboard interface.",
-    slug: "ui-sketch-ideas",
-    updated_at: "2025-05-30T10:00:00Z",
-    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
-    folder_path: [
-      { title: "general", slug: "general" },
-      { title: "Sketches", slug: "sketches" },
-    ],
-  },
-  {
-    id: "dn4", title: "Design Inspiration Links",
-    description: "A running collection of beautifully designed websites, Dribbble shots, and design system references.",
-    slug: "design-inspiration-links",
-    updated_at: "2025-05-29T10:00:00Z",
-    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
-    folder_path: [
-      { title: "general", slug: "general" },
-      { title: "Inspiration", slug: "inspiration" },
-    ],
-  },
-  {
-    id: "dn5", title: "Flash Fiction: The Last Light",
-    description: "A short story about the final sunset on a distant planet, told through the eyes of the last botanist.",
-    slug: "flash-fiction-last-light",
-    updated_at: "2025-05-28T10:00:00Z",
-    owner_id: "u4", owner_name: "Priya Patel", owner_username: "priya-patel", owner_avatar: null,
-    folder_path: [
-      { title: "Creative Writing", slug: "creative-writing" },
-      { title: "Short Stories", slug: "short-stories" },
-    ],
-  },
-  {
-    id: "dn6", title: "A Collection of Poems",
-    description: "Original poetry exploring themes of nature, technology, and the spaces between them.",
-    slug: "collection-of-poems",
-    updated_at: "2025-05-27T10:00:00Z",
-    owner_id: "u4", owner_name: "Priya Patel", owner_username: "priya-patel", owner_avatar: null,
-    folder_path: [
-      { title: "Creative Writing", slug: "creative-writing" },
-      { title: "Poetry", slug: "poetry" },
-    ],
-  },
-  {
-    id: "dn7", title: "Project Ideas for 2026",
-    description: "A brainstorming list of creative projects, writing challenges, and collaboration opportunities for next year.",
-    slug: "project-ideas-2026",
-    updated_at: "2025-05-26T10:00:00Z",
-    owner_id: "u4", owner_name: "Priya Patel", owner_username: "priya-patel", owner_avatar: null,
-    folder_path: [
-      { title: "general", slug: "general" },
-      { title: "Ideas", slug: "ideas" },
-    ],
-  },
-  {
-    id: "dn8", title: "Weekly Journal Entry",
-    description: "Reflections on the past week, lessons learned, and intentions for the days ahead.",
-    slug: "weekly-journal-entry",
-    updated_at: "2025-05-25T10:00:00Z",
-    owner_id: "u4", owner_name: "Priya Patel", owner_username: "priya-patel", owner_avatar: null,
-    folder_path: [
-      { title: "general", slug: "general" },
-      { title: "Journal", slug: "journal" },
-    ],
-  },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────
 
 // (formatDate, timeAgo, Avatar, buildFolderPath, OWNER_QUERY imported from @/lib/helpers)
@@ -153,7 +60,7 @@ export function NotesPage() {
         if (!mounted) return;
 
         if (error || !data?.length) {
-          setNotes(DUMMY_NOTES);
+          setNotes([]);
           return;
         }
 
@@ -188,12 +95,9 @@ export function NotesPage() {
         );
 
         setNotes(mapped);
-        if (!mapped.length) {
-          setNotes(DUMMY_NOTES);
-        }
       } catch {
         if (!mounted) return;
-        setNotes(DUMMY_NOTES);
+        setNotes([]);
       } finally {
         if (mounted) setLoading(false);
       }

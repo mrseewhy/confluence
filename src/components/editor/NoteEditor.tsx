@@ -547,7 +547,7 @@ export function NoteEditor({
                 background: "var(--color-accent-subtle)",
                 border: "1px solid var(--color-accent-muted)",
                 borderRadius: "var(--radius-md)",
-                padding: "var(--space-2.5) var(--space-4)",
+                padding: "var(--space-2) var(--space-4)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -593,7 +593,7 @@ export function NoteEditor({
                 size="xs"
                 style={{
                   color: "var(--color-accent)",
-                  background: "rgba(var(--color-accent-rgb), 0.1)",
+                  background: "var(--color-accent-subtle)",
                   border: "none",
                   minWidth: "80px",
                 }}

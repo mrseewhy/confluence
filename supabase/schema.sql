@@ -126,6 +126,11 @@ drop policy if exists "Users can insert their own profile" on public.profiles;
 create policy "Users can insert their own profile"
   on public.profiles for insert to authenticated with check (auth.uid() = id);
 
+drop policy if exists "Users can delete their own profile" on public.profiles;
+create policy "Users can delete their own profile"
+  on public.profiles for delete to authenticated
+  using (auth.uid() = id);
+
 drop policy if exists "Profiles are readable by everyone" on public.profiles;
 create policy "Profiles are readable by everyone"
   on public.profiles for select to anon

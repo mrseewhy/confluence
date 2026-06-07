@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import { Button, Input, Badge } from '@/components/ui'
-import { mockCollaborators, type MockCollaborator } from '@/lib/mockData'
+
+// TODO: Replace with real Supabase collaborators API when implemented
+interface MockCollaborator {
+  id: string
+  inviter_id: string
+  invitee_email: string
+  folder_id?: string | null
+  note_id?: string | null
+  access_level: 'viewer' | 'editor'
+  created_at: string
+}
+
+// In-memory mock store for prototype collaborators
+const mockCollaboratorsStore: MockCollaborator[] = []
 
 interface ShareModalProps {
   isOpen: boolean
@@ -30,7 +43,7 @@ export function ShareModal({
 
   // Load collaborators for this item
   useEffect(() => {
-    const list = mockCollaborators.filter(c => 
+    const list = mockCollaboratorsStore.filter(c => 
       itemType === 'folder' ? c.folder_id === itemId : c.note_id === itemId
     )
     setCollaborators(list)
@@ -54,7 +67,7 @@ export function ShareModal({
     }
 
     // Check if already invited
-    const exists = mockCollaborators.some(c => 
+    const exists = mockCollaboratorsStore.some(c => 
       (itemType === 'folder' ? c.folder_id === itemId : c.note_id === itemId) &&
       c.invitee_email.toLowerCase() === email.trim().toLowerCase()
     )
@@ -66,7 +79,7 @@ export function ShareModal({
 
     const newCollab: MockCollaborator = {
       id: `collab-${Date.now()}`,
-      inviter_id: 'user-1', // Alex Johnson
+      inviter_id: 'current-user',
       invitee_email: email.trim().toLowerCase(),
       folder_id: itemType === 'folder' ? itemId : null,
       note_id: itemType === 'note' ? itemId : null,
@@ -75,7 +88,7 @@ export function ShareModal({
     }
 
     // Persist into mock store
-    mockCollaborators.push(newCollab)
+    mockCollaboratorsStore.push(newCollab)
     
     // Update local state
     setCollaborators(prev => [...prev, newCollab])
@@ -84,9 +97,9 @@ export function ShareModal({
 
   const handleRemove = (collabId: string) => {
     // Remove from mock store
-    const idx = mockCollaborators.findIndex(c => c.id === collabId)
+    const idx = mockCollaboratorsStore.findIndex(c => c.id === collabId)
     if (idx !== -1) {
-      mockCollaborators.splice(idx, 1)
+      mockCollaboratorsStore.splice(idx, 1)
     }
 
     // Update local state
@@ -140,7 +153,7 @@ export function ShareModal({
         }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-bold)' }}>
-              Share "{itemTitle}"
+              Share &ldquo;{itemTitle}&rdquo;
             </h3>
             <p style={{ margin: '2px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
               Manage access for this private {itemType}
@@ -225,14 +238,11 @@ export function ShareModal({
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-sm)'
                   }}>
-                    AJ
+                    Y
                   </div>
                   <div>
                     <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
-                      Alex Johnson (You)
-                    </p>
-                    <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-                      alex@confluence.com
+                      You (Owner)
                     </p>
                   </div>
                 </div>

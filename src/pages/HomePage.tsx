@@ -36,119 +36,9 @@ interface NoteItem {
   folder_path: { title: string; slug: string }[];
 }
 
-// ─── Dummy Content ────────────────────────────────────────────
-
-const DUMMY_FOLDERS: FolderItem[] = [
-  {
-    id: "d1", title: "general",
-    description: "Default folder for all notes and subfolders.",
-    slug: "general", note_count: 2,
-    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-  },
-  {
-    id: "d2", title: "System Architecture",
-    description: "Architecture patterns, system design principles, and infrastructure decisions for building scalable applications.",
-    slug: "system-architecture", note_count: 2,
-    owner_id: "u1", owner_name: "Alex Johnson", owner_username: "alex-johnson", owner_avatar: null,
-  },
-  {
-    id: "d3", title: "general",
-    description: "Default folder for all notes and subfolders.",
-    slug: "general", note_count: 2,
-    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-  },
-  {
-    id: "d4", title: "Data Science",
-    description: "Machine learning, statistical analysis, data visualisation, and analytical workflows.",
-    slug: "data-science", note_count: 2,
-    owner_id: "u2", owner_name: "Sarah Chen", owner_username: "sarah-chen", owner_avatar: null,
-  },
-  {
-    id: "d5", title: "general",
-    description: "Default folder for all notes and subfolders.",
-    slug: "general", note_count: 2,
-    owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
-  },
-  {
-    id: "d6", title: "Product Management",
-    description: "Product strategy, roadmaps, user research, and go-to-market planning.",
-    slug: "product-management", note_count: 2,
-    owner_id: "u3", owner_name: "Marcus Rivera", owner_username: "marcus-rivera", owner_avatar: null,
-  },
-];
-
-const DUMMY_NOTES: NoteItem[] = [
-  {
-    id: "dn1", title: "Brand Identity Guidelines",
-    description: "Comprehensive brand guidelines covering logo usage, colour palette, typography, tone of voice, and application examples.", slug: "brand-identity-guidelines",
-    updated_at: "2025-06-01T10:00:00Z",
-    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
-    folder_id: "dbrand", folder_title: "Branding", folder_slug: "branding",
-    folder_path: [
-      { title: "Design Portfolio", slug: "design-portfolio" },
-      { title: "Branding", slug: "branding" },
-    ],
-  },
-  {
-    id: "dn2", title: "Redesigning a SaaS Dashboard",
-    description: "A complete UX case study covering user research, information architecture, prototyping, and usability testing.", slug: "redesigning-saas-dashboard",
-    updated_at: "2025-05-31T10:00:00Z",
-    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
-    folder_id: "dux", folder_title: "UX Case Studies", folder_slug: "ux-case-studies",
-    folder_path: [
-      { title: "Design Portfolio", slug: "design-portfolio" },
-      { title: "UX Case Studies", slug: "ux-case-studies" },
-    ],
-  },
-  {
-    id: "dn3", title: "UI Sketch Ideas",
-    description: "Wireframes and rough UI concepts for a reimagined project management dashboard interface.", slug: "ui-sketch-ideas",
-    updated_at: "2025-05-30T10:00:00Z",
-    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
-    folder_id: "dsketches", folder_title: "Sketches", folder_slug: "sketches",
-    folder_path: [
-      { title: "general", slug: "general" },
-      { title: "Sketches", slug: "sketches" },
-    ],
-  },
-  {
-    id: "dn4", title: "Design Inspiration Links",
-    description: "A running collection of beautifully designed websites, Dribbble shots, and design system references.", slug: "design-inspiration-links",
-    updated_at: "2025-05-29T10:00:00Z",
-    owner_id: "u5", owner_name: "Emma Williams", owner_username: "emma-williams", owner_avatar: null,
-    folder_id: "dinsp", folder_title: "Inspiration", folder_slug: "inspiration",
-    folder_path: [
-      { title: "general", slug: "general" },
-      { title: "Inspiration", slug: "inspiration" },
-    ],
-  },
-  {
-    id: "dn5", title: "Flash Fiction: The Last Light",
-    description: "A short story about the final sunset on a distant planet, told through the eyes of the last botanist.", slug: "flash-fiction-last-light",
-    updated_at: "2025-05-28T10:00:00Z",
-    owner_id: "u4", owner_name: "Priya Patel", owner_username: "priya-patel", owner_avatar: null,
-    folder_id: "dstories", folder_title: "Short Stories", folder_slug: "short-stories",
-    folder_path: [
-      { title: "Creative Writing", slug: "creative-writing" },
-      { title: "Short Stories", slug: "short-stories" },
-    ],
-  },
-  {
-    id: "dn6", title: "A Collection of Poems",
-    description: "Original poetry exploring themes of nature, technology, and the spaces between them.", slug: "collection-of-poems",
-    updated_at: "2025-05-27T10:00:00Z",
-    owner_id: "u4", owner_name: "Priya Patel", owner_username: "priya-patel", owner_avatar: null,
-    folder_id: "dpoetry", folder_title: "Poetry", folder_slug: "poetry",
-    folder_path: [
-      { title: "Creative Writing", slug: "creative-writing" },
-      { title: "Poetry", slug: "poetry" },
-    ],
-  },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────
 
-// (formatDate, timeAgo, Avatar, buildFolderPath, OWNER_QUERY, mapOwner imported from @/lib/helpers)
+// (Avatar, timeAgo, buildFolderPath, OWNER_QUERY, mapOwner imported from @/lib/helpers)
 
 // ─── Static Content ───────────────────────────────────────────
 
@@ -195,8 +85,8 @@ const HOW_IT_WORKS = [
 // ─── HomePage Component ───────────────────────────────────────
 
 export function HomePage() {
-  const [folders, setFolders] = useState<FolderItem[]>(DUMMY_FOLDERS);
-  const [notes, setNotes] = useState<NoteItem[]>(DUMMY_NOTES);
+  const [folders, setFolders] = useState<FolderItem[]>([]);
+  const [notes, setNotes] = useState<NoteItem[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(true);
   const [notesLoading, setNotesLoading] = useState(true);
 
@@ -440,7 +330,7 @@ export function HomePage() {
           </div>
 
           <div style={styles.cardGrid}>
-            {foldersLoading && folders === DUMMY_FOLDERS ? (
+            {foldersLoading ? (
               <div style={styles.sectionLoader}>
                 <div style={styles.loaderSpinner} />
                 <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Loading folders...</span>
@@ -496,7 +386,7 @@ export function HomePage() {
           </div>
 
           <div style={styles.notesList}>
-            {notesLoading && notes === DUMMY_NOTES ? (
+            {notesLoading ? (
               <div style={styles.sectionLoader}>
                 <div style={styles.loaderSpinner} />
                 <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Loading notes...</span>

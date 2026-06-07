@@ -195,7 +195,7 @@ export function AdminFolders() {
               key={folder.id}
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 100px 90px 120px",
+                gridTemplateColumns: "1fr 100px 90px 90px 120px",
                 gap: "var(--space-4)",
                 alignItems: "center",
                 padding: "var(--space-4) var(--space-5)",
@@ -287,6 +287,17 @@ export function AdminFolders() {
                 }}
               >
                 {formatDate(folder.updated_at)}
+              </span>
+              <span
+                style={{
+                  fontSize: "var(--font-size-xs)",
+                  color: "var(--color-text-secondary)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {folder.owner?.full_name || "—"}
               </span>
             </div>
           ))}
