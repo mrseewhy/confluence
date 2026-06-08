@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { BlockType, BlockMetadata, Visibility } from '@/types'
 import { requireSupabase } from '@/lib/supabase'
 
@@ -28,10 +28,8 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 // ── Helpers ───────────────────────────────────────────────────
 
-let _idCounter = 0
 function nextId(): string {
-  _idCounter += 1
-  return `block-${Date.now()}-${_idCounter}`
+  return `block-${crypto.randomUUID()}`
 }
 
 function slugify(title: string): string {
@@ -50,22 +48,135 @@ const DEFAULT_METADATA: Record<BlockType, BlockMetadata> = {
   heading: { level: 'h2' },
 }
 
+// ── localStorage draft helpers ───────────────────────────────
+// Drafts survive accidental navigation/tab-closes so users never
+// lose unsaved content. Cleared after a successful manual save.
+
+const DRAFT_PREFIX = 'confluence-draft-'
+const DRAFT_SAVE_DELAY = 2000 // 2s debounce before writing to disk
+
+interface DraftData {
+  title:       string
+  description: string
+  slug:        string
+  folder_id:   string
+  visibility:  Visibility
+  /** block content sans ephemeral IDs */
+  blocks:      Array<{ type: BlockType; content: string; metadata: BlockMetadata }>
+  savedAt:     number
+}
+
+function draftKey(noteId: string | null): string {
+  return DRAFT_PREFIX + (noteId ?? 'new')
+}
+
+function saveDraft(state: EditorState): void {
+  try {
+    const data: DraftData = {
+      title:       state.title,
+      description: state.description,
+      slug:        state.slug,
+      folder_id:   state.folder_id,
+      visibility:  state.visibility,
+      blocks:      state.blocks.map(b => ({
+        type:     b.type,
+        content:  b.content,
+        metadata: b.metadata,
+      })),
+      savedAt: Date.now(),
+    }
+    localStorage.setItem(draftKey(state.noteId), JSON.stringify(data))
+  } catch {
+    // localStorage can throw (quota exceeded, disabled, etc.) — ignore
+  }
+}
+
+function loadDraft(noteId: string | null): DraftData | null {
+  try {
+    const raw = localStorage.getItem(draftKey(noteId))
+    if (!raw) return null
+    const data = JSON.parse(raw) as DraftData
+    return data
+  } catch {
+    return null
+  }
+}
+
+function clearDraft(noteId: string | null): void {
+  try {
+    localStorage.removeItem(draftKey(noteId))
+  } catch {
+    // ignore
+  }
+}
+
+/** Returns true when there's a saved draft that could be restored. */
+export function hasDraft(noteId: string | null): boolean {
+  try {
+    return localStorage.getItem(draftKey(noteId)) !== null
+  } catch {
+    return false
+  }
+}
+
 // ── useNoteEditor ─────────────────────────────────────────────
 
 export function useNoteEditor() {
-  const [state, setState] = useState<EditorState>({
-    noteId:      null,
-    title:       '',
-    description: '',
-    slug:        '',
-    folder_id:   '',
-    visibility:  'public',
-    blocks:      [],
+  // Try to restore a draft for a new note from localStorage on initial mount.
+  // This ensures content survives accidental navigation: if the user left
+  // the editor mid-edit and comes back, the draft is restored immediately
+  // rather than showing an empty form.
+  const [state, setState] = useState<EditorState>(() => {
+    const draft = loadDraft(null)
+    if (draft) {
+      return {
+        noteId:      null,
+        title:       draft.title,
+        description: draft.description,
+        slug:        draft.slug,
+        folder_id:   draft.folder_id,
+        visibility:  draft.visibility,
+        blocks:      draft.blocks.map((b, i) => ({
+          id:          `draft-${i}`,
+          type:        b.type,
+          content:     b.content,
+          metadata:    b.metadata,
+          order_index: i,
+        })),
+      }
+    }
+    return {
+      noteId:      null,
+      title:       '',
+      description: '',
+      slug:        '',
+      folder_id:   '',
+      visibility:  'public',
+      blocks:      [],
+    }
   })
+
+  // Always keep a ref to the latest state so that callbacks
+  // (e.g. the save function) never capture stale closures.
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [slugAvailable, setSlugAvailable] = useState(true)
+  const [slugChecking, setSlugChecking] = useState(false)
+  const slugCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Content version counter ─────────────────────────────────
+  // Incremented every time user content changes (title, desc,
+  // blocks). Auto-save effects can depend on this instead of
+  // sprawling object references to avoid re-creating timers on
+  // every keystroke.
+  const [contentVersion, setContentVersion] = useState(0)
+  const bumpVersion = useCallback(() => {
+    setContentVersion(v => v + 1)
+  }, [])
 
   // ── Metadata setters ────────────────────────────────────────
 
@@ -75,7 +186,8 @@ export function useNoteEditor() {
       title: value,
       slug:  slugManuallyEdited ? prev.slug : slugify(value),
     }))
-  }, [slugManuallyEdited])
+    bumpVersion()
+  }, [slugManuallyEdited, bumpVersion])
 
   const setSlug = useCallback((value: string) => {
     setSlugManuallyEdited(true)
@@ -85,7 +197,8 @@ export function useNoteEditor() {
 
   const setDescription = useCallback((value: string) => {
     setState(prev => ({ ...prev, description: value }))
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
   const setFolderId = useCallback((value: string) => {
     setState(prev => ({ ...prev, folder_id: value }))
@@ -109,14 +222,16 @@ export function useNoteEditor() {
       }
       return { ...prev, blocks: [...prev.blocks, block] }
     })
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
   const updateBlock = useCallback((id: string, content: string) => {
     setState(prev => ({
       ...prev,
       blocks: prev.blocks.map(b => b.id === id ? { ...b, content } : b),
     }))
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
   const updateBlockMeta = useCallback((id: string, meta: Partial<BlockMetadata>) => {
     setState(prev => ({
@@ -125,7 +240,8 @@ export function useNoteEditor() {
         b.id === id ? { ...b, metadata: { ...b.metadata, ...meta } } : b
       ),
     }))
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
   const removeBlock = useCallback((id: string) => {
     setState(prev => {
@@ -134,7 +250,8 @@ export function useNoteEditor() {
         .map((b, i) => ({ ...b, order_index: i }))
       return { ...prev, blocks: next }
     })
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
   const moveBlock = useCallback((id: string, direction: 'up' | 'down') => {
     setState(prev => {
@@ -152,7 +269,8 @@ export function useNoteEditor() {
       const reindexed = blocks.map((b, i) => ({ ...b, order_index: i }))
       return { ...prev, blocks: reindexed }
     })
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
   const reorderBlock = useCallback((fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return
@@ -163,9 +281,12 @@ export function useNoteEditor() {
       const reindexed = blocks.map((b, i) => ({ ...b, order_index: i }))
       return { ...prev, blocks: reindexed }
     })
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
-  // ── Load existing note into editor ───────────────────────────
+  // ── Load existing note into editor (with optional draft restore) ──
+  // If localStorage has a draft for this noteId, it takes precedence
+  // because the user likely navigated away with unsaved changes.
 
   const loadFromExisting = useCallback(
     (
@@ -173,6 +294,28 @@ export function useNoteEditor() {
       blocks: { id: string; type: string; content: string; metadata: Record<string, unknown> | null }[],
     ) => {
       setSlugManuallyEdited(true)
+
+      // Prefer localStorage draft over DB data
+      const draft = loadDraft(note.id)
+      if (draft) {
+        setState({
+          noteId:      note.id,
+          title:       draft.title,
+          description: draft.description,
+          slug:        draft.slug,
+          folder_id:   draft.folder_id,
+          visibility:  draft.visibility,
+          blocks:      draft.blocks.map((b, i) => ({
+            id:          `existing-draft-${i}`,
+            type:        b.type,
+            content:     b.content,
+            metadata:    b.metadata,
+            order_index: i,
+          })),
+        })
+        return
+      }
+
       setState({
         noteId:      note.id,
         title:       note.title,
@@ -192,10 +335,34 @@ export function useNoteEditor() {
     [],
   )
 
-  // ── Reset editor to blank state ─────────────────────────────
+  // ── Reset editor to blank state (with optional draft restore) ──
 
   const resetEditor = useCallback(() => {
     setSlugManuallyEdited(false)
+    setSlugAvailable(true)
+    setSlugChecking(false)
+
+    // Restore a saved draft for new notes, if one exists
+    const draft = loadDraft(null)
+    if (draft) {
+      setState({
+        noteId:      null,
+        title:       draft.title,
+        description: draft.description,
+        slug:        draft.slug,
+        folder_id:   draft.folder_id,
+        visibility:  draft.visibility,
+        blocks:      draft.blocks.map((b, i) => ({
+          id:          `draft-${i}`,
+          type:        b.type,
+          content:     b.content,
+          metadata:    b.metadata,
+          order_index: i,
+        })),
+      })
+      return
+    }
+
     setState({
       noteId:      null,
       title:       '',
@@ -208,8 +375,15 @@ export function useNoteEditor() {
   }, [])
 
   // ── Save (insert or update note + blocks into Supabase) ─────
+  //
+  // Reads from the ref instead of the closure—this means the callback
+  // is stable and never goes stale. As long as `stateRef.current` is
+  // updated on every render (which we do above), it always sees the
+  // freshest values.
 
   const save = useCallback(async (userId: string) => {
+    const s = stateRef.current
+
     if (!userId) {
       setSaveStatus('error')
       return
@@ -218,50 +392,41 @@ export function useNoteEditor() {
     setSaveStatus('saving')
     setSaveError(null)
 
-    const slug = state.slug || slugify(state.title)
+    const slug = s.slug || slugify(s.title)
 
     try {
       const supabase = requireSupabase()
 
-      if (state.noteId) {
+      if (s.noteId) {
         // ── UPDATE existing note ──
         const { error: noteError } = await supabase
           .from('notes')
           .update({
-            folder_id:   state.folder_id,
-            title:       state.title.trim(),
-            description: state.description.trim() || null,
+            folder_id:   s.folder_id,
+            title:       s.title.trim(),
+            description: s.description.trim() || null,
             slug,
-            visibility:  state.visibility,
+            visibility:  s.visibility,
           })
-          .eq('id', state.noteId)
+          .eq('id', s.noteId)
 
         if (noteError) throw noteError
 
-        // Replace blocks: delete existing, then insert new
-        const { error: deleteError } = await supabase
-          .from('note_blocks')
-          .delete()
-          .eq('note_id', state.noteId)
-
-        if (deleteError) throw deleteError
-
-        if (state.blocks.length > 0) {
-          const blocksToInsert = state.blocks.map((block, i) => ({
-            note_id:     state.noteId,
+        // Replace blocks atomically via stored procedure
+        // NOTE: Do NOT JSON.stringify here — supabase-js handles jsonb params automatically
+        const { error: rpcError } = await supabase.rpc('replace_note_blocks', {
+          p_note_id: s.noteId,
+          p_blocks:  s.blocks.map((block, i) => ({
             type:        block.type,
             content:     block.content,
             order_index: i,
             metadata:    block.metadata,
-          }))
+          })),
+        })
 
-          const { error: blocksError } = await supabase
-            .from('note_blocks')
-            .insert(blocksToInsert)
+        if (rpcError) throw rpcError
 
-          if (blocksError) throw blocksError
-        }
-
+        clearDraft(s.noteId)
         setSaveStatus('saved')
         return slug
       } else {
@@ -269,12 +434,12 @@ export function useNoteEditor() {
         const { data: noteData, error: noteError } = await supabase
           .from('notes')
           .insert({
-            folder_id:   state.folder_id,
+            folder_id:   s.folder_id,
             owner_id:    userId,
-            title:       state.title.trim(),
-            description: state.description.trim() || null,
+            title:       s.title.trim(),
+            description: s.description.trim() || null,
             slug,
-            visibility:  state.visibility,
+            visibility:  s.visibility,
           })
           .select('id, slug')
           .single()
@@ -286,8 +451,8 @@ export function useNoteEditor() {
         setState(prev => ({ ...prev, noteId: noteData.id }))
 
         // 2. Insert blocks (if any)
-        if (state.blocks.length > 0) {
-          const blocksToInsert = state.blocks.map((block, i) => ({
+        if (s.blocks.length > 0) {
+          const blocksToInsert = s.blocks.map((block, i) => ({
             note_id:     noteData.id,
             type:        block.type,
             content:     block.content,
@@ -302,6 +467,7 @@ export function useNoteEditor() {
           if (blocksError) throw blocksError
         }
 
+        clearDraft(null)
         setSaveStatus('saved')
         return noteData.slug
       }
@@ -321,7 +487,48 @@ export function useNoteEditor() {
 
       throw err
     }
-  }, [state])
+  }, [])  // stable — always reads latest via stateRef
+
+  // ── Slug availability check (debounced) ─────────────────────
+  // Calls the Postgres RPC function is_slug_available to
+  // proactively warn the user before they attempt to save.
+
+  const checkSlugAvailability = useCallback((userId: string) => {
+    const s = stateRef.current
+    const slug = s.slug || slugify(s.title)
+
+    // Don't check empty slugs
+    if (!slug) {
+      setSlugAvailable(true)
+      setSlugChecking(false)
+      return
+    }
+
+    // Clear previous timer
+    if (slugCheckTimerRef.current) {
+      clearTimeout(slugCheckTimerRef.current)
+    }
+
+    // Debounce: wait 400ms after last change before checking
+    slugCheckTimerRef.current = setTimeout(async () => {
+      setSlugChecking(true)
+      try {
+        const supabase = requireSupabase()
+        const { data, error } = await supabase.rpc('is_slug_available', {
+          p_slug:           slug,
+          p_owner_id:       userId,
+          p_exclude_note_id: s.noteId,
+        })
+        if (error) throw error
+        setSlugAvailable(data ?? true)
+      } catch {
+        // Silently fall back to available on network errors
+        setSlugAvailable(true)
+      } finally {
+        setSlugChecking(false)
+      }
+    }, 400)
+  }, [])
 
   // ── Derived ─────────────────────────────────────────────────
 
@@ -330,11 +537,78 @@ export function useNoteEditor() {
     [state.title, state.folder_id]
   )
 
+  // ── Draft auto-save (debounced to localStorage) ─────────────
+  // Persists editor content to localStorage so that accidental
+  // navigation, tab closes, or refreshes don't lose unsaved work.
+  // Drafts are cleared on successful DB save.
+  //
+  // The effect:
+  //   1. Debounces writes to localStorage (DRAFT_SAVE_DELAY) so we
+  //      don't hit disk on every keystroke.
+  //   2. On unmount (in-app navigation), **saves immediately** so no
+  //      draft is lost if the debounce hasn't fired yet.
+  //
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    // Don't save an empty initial state — that would overwrite an existing draft!
+    if (contentVersion === 0) return
+
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+
+    draftTimerRef.current = setTimeout(() => {
+      saveDraft(stateRef.current)
+    }, DRAFT_SAVE_DELAY)
+
+    return () => {
+      // Unmount-safety: save the latest state immediately so the
+      // draft survives in-app navigation even if the debounce timer
+      // hasn't elapsed yet.
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current)
+      }
+      // Write the very latest state to disk right now
+      saveDraft(stateRef.current)
+    }
+    // Re-run on every content change so the timer resets
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentVersion])
+
+  // ── beforeunload save + warning ─────────────────────────────
+  // Two concerns here:
+  //   - Save the draft so a tab close / refresh doesn't lose work
+  //   - Show a browser confirmation dialog to warn the user
+
+  useEffect(() => {
+    if (contentVersion === 0) return
+
+    const handler = (e: BeforeUnloadEvent) => {
+      // Save immediately before the page unloads
+      saveDraft(stateRef.current)
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [contentVersion])
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (slugCheckTimerRef.current) {
+        clearTimeout(slugCheckTimerRef.current)
+      }
+    }
+  }, [])
+
   return {
     state,
     saveStatus,
     saveError,
     isValid,
+    contentVersion,
+    slugAvailable,
+    slugChecking,
     // metadata
     setTitle,
     setSlug,
@@ -350,6 +624,7 @@ export function useNoteEditor() {
     reorderBlock,
     // actions
     save,
+    checkSlugAvailability,
     loadFromExisting,
     resetEditor,
   }

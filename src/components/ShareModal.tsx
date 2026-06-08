@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Button, Input, Badge } from '@/components/ui'
+import { requireSupabase } from '@/lib/supabase'
 
-// TODO: Replace with real Supabase collaborators API when implemented
-interface MockCollaborator {
+interface Collaborator {
   id: string
   inviter_id: string
   invitee_email: string
@@ -12,8 +12,7 @@ interface MockCollaborator {
   created_at: string
 }
 
-// In-memory mock store for prototype collaborators
-const mockCollaboratorsStore: MockCollaborator[] = []
+const INVITE_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-collaborator-invite`;
 
 interface ShareModalProps {
   isOpen: boolean
@@ -24,6 +23,8 @@ interface ShareModalProps {
   itemSlug: string
   /** Owner's username — needed to construct the share URL */
   ownerUsername: string
+  /** Owner's user ID — needed for Supabase queries */
+  ownerId?: string
 }
 
 export function ShareModal({
@@ -34,76 +35,188 @@ export function ShareModal({
   itemType,
   itemSlug,
   ownerUsername,
+  ownerId,
 }: ShareModalProps) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'viewer' | 'editor'>('viewer')
-  const [collaborators, setCollaborators] = useState<MockCollaborator[]>([])
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([])
+  const [loading, setLoading] = useState(false)
+  const [inviting, setInviting] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
 
-  // Load collaborators for this item
+
+  // Helper to fetch the inviter's profile fresh (avoids race condition with state)
+  const fetchInviterInfo = useCallback(async () => {
+    if (!ownerId) return { name: 'Someone', email: '' }
+    try {
+      const supabase = requireSupabase()
+      const [profileRes, userRes] = await Promise.all([
+        supabase.from('profiles').select('full_name').eq('id', ownerId).single(),
+        supabase.auth.getUser(),
+      ])
+      return {
+        name: profileRes.data?.full_name || 'Someone',
+        email: userRes.data?.user?.email || '',
+      }
+    } catch {
+      return { name: 'Someone', email: '' }
+    }
+  }, [ownerId])
+
+  const itemShareUrl = `${window.location.origin}/${ownerUsername}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
+
+  const loadCollaborators = useCallback(async () => {
+    if (!isOpen) return
+    setLoading(true)
+    setError('')
+    try {
+      const supabase = requireSupabase()
+      const filterKey = itemType === 'folder' ? 'folder_id' : 'note_id'
+      const { data, error: fetchError } = await supabase
+        .from('collaborators')
+        .select('*')
+        .eq(filterKey, itemId)
+        .order('created_at', { ascending: true })
+
+      if (fetchError) throw fetchError
+      setCollaborators(data || [])
+
+    } catch (err) {
+      console.error('Error loading collaborators:', err)
+      // If no RLS policy yet or table doesn't exist, silently fall back
+      setCollaborators([])
+    } finally {
+      setLoading(false)
+    }
+  }, [isOpen, itemId, itemType, fetchInviterInfo])
+
   useEffect(() => {
-    const list = mockCollaboratorsStore.filter(c => 
-      itemType === 'folder' ? c.folder_id === itemId : c.note_id === itemId
-    )
-    setCollaborators(list)
-  }, [itemId, itemType, isOpen])
+    void loadCollaborators()
+  }, [loadCollaborators])
 
   if (!isOpen) return null
 
-  // Correct share URL: /{username}/{type}/{slug}
-  const itemShareUrl = `${window.location.origin}/${ownerUsername}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
-
-  const handleInvite = (e: React.FormEvent) => {
+  const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
     if (!email.trim()) return
 
-    // Simple email check
     if (!email.includes('@')) {
       setError('Please enter a valid email address.')
       return
     }
 
-    // Check if already invited
-    const exists = mockCollaboratorsStore.some(c => 
-      (itemType === 'folder' ? c.folder_id === itemId : c.note_id === itemId) &&
-      c.invitee_email.toLowerCase() === email.trim().toLowerCase()
+    // Check if already invited (client-side check for instant feedback)
+    const exists = collaborators.some(
+      c => c.invitee_email.toLowerCase() === email.trim().toLowerCase()
     )
-
     if (exists) {
       setError('This email has already been invited.')
       return
     }
 
-    const newCollab: MockCollaborator = {
-      id: `collab-${Date.now()}`,
-      inviter_id: 'current-user',
-      invitee_email: email.trim().toLowerCase(),
-      folder_id: itemType === 'folder' ? itemId : null,
-      note_id: itemType === 'note' ? itemId : null,
-      access_level: role,
-      created_at: new Date().toISOString(),
-    }
+    setInviting(true)
+    try {
+      const supabase = requireSupabase()
 
-    // Persist into mock store
-    mockCollaboratorsStore.push(newCollab)
-    
-    // Update local state
-    setCollaborators(prev => [...prev, newCollab])
-    setEmail('')
+      const newCollab = {
+        inviter_id: ownerId || 'current-user',
+        invitee_email: email.trim().toLowerCase(),
+        folder_id: itemType === 'folder' ? itemId : null,
+        note_id: itemType === 'note' ? itemId : null,
+        access_level: role,
+      }
+
+      const { data, error: insertError } = await supabase
+        .from('collaborators')
+        .insert(newCollab)
+        .select()
+        .single()
+
+      if (insertError) throw insertError
+
+      if (data) {
+        setCollaborators(prev => [...prev, data as Collaborator])
+      }
+      setEmail('')
+
+      // Log invite to activity log
+      try {
+        await supabase.from('activity_log').insert({
+          inviter_id: ownerId || 'current-user',
+          invitee_email: email.trim().toLowerCase(),
+          action: 'invited',
+          folder_id: itemType === 'folder' ? itemId : null,
+          note_id: itemType === 'note' ? itemId : null,
+          access_level: role,
+          item_title: itemTitle,
+          item_slug: itemSlug,
+          item_type: itemType,
+        });
+      } catch (logErr) {
+        console.error('Failed to log invite:', logErr);
+      }
+
+      // Fire-and-forget: send email notification via Edge Function
+      // Check if the user has notifications enabled first
+      const info = await fetchInviterInfo()
+      let shouldSendEmail = true
+      try {
+        const { data: prefs } = await supabase
+          .from('notification_preferences')
+          .select('send_invite_emails')
+          .eq('user_id', ownerId)
+          .single()
+        if (prefs && !prefs.send_invite_emails) {
+          shouldSendEmail = false
+        }
+      } catch {
+        // If we can't check, proceed with sending
+      }
+
+      if (shouldSendEmail) {
+        fetch(INVITE_FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: JSON.stringify({
+          inviter_name: info.name,
+          inviter_email: info.email,
+          invitee_email: email.trim().toLowerCase(),
+          item_type: itemType,
+          item_title: itemTitle,
+          item_slug: itemSlug,
+          access_level: role,
+          owner_username: ownerUsername,
+        }),
+      }).catch(err => console.error('Failed to send invite notification:', err));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to invite collaborator.'
+      setError(message)
+    } finally {
+      setInviting(false)
+    }
   }
 
-  const handleRemove = (collabId: string) => {
-    // Remove from mock store
-    const idx = mockCollaboratorsStore.findIndex(c => c.id === collabId)
-    if (idx !== -1) {
-      mockCollaboratorsStore.splice(idx, 1)
-    }
+  const handleRemove = async (collabId: string) => {
+    try {
+      const supabase = requireSupabase()
+      const { error: deleteError } = await supabase
+        .from('collaborators')
+        .delete()
+        .eq('id', collabId)
 
-    // Update local state
-    setCollaborators(prev => prev.filter(c => c.id !== collabId))
+      if (deleteError) throw deleteError
+
+      setCollaborators(prev => prev.filter(c => c.id !== collabId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke access.')
+    }
   }
 
   const handleCopy = () => {
@@ -115,7 +228,7 @@ export function ShareModal({
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <div
         onClick={onClose}
         style={{
           position: 'fixed',
@@ -124,7 +237,7 @@ export function ShareModal({
           backdropFilter: 'blur(4px)',
           zIndex: 300,
           animation: 'fadeIn var(--duration-fast) var(--ease-out)',
-        }} 
+        }}
       />
 
       {/* Modal Dialog */}
@@ -159,7 +272,7 @@ export function ShareModal({
               Manage access for this private {itemType}
             </p>
           </div>
-          <button 
+          <button
             onClick={onClose}
             style={{
               background: 'transparent',
@@ -209,8 +322,8 @@ export function ShareModal({
                   <option value="editor">Editor</option>
                 </select>
               </div>
-              <Button type="submit" variant="primary" style={{ height: '42px' }}>
-                Invite
+              <Button type="submit" variant="primary" style={{ height: '42px' }} disabled={inviting}>
+                {inviting ? 'Inviting...' : 'Invite'}
               </Button>
             </div>
           </form>
@@ -225,7 +338,7 @@ export function ShareModal({
               color: 'var(--color-text-muted)',
               marginBottom: 'var(--space-3)',
             }}>
-              Who has access
+              Who has access ({loading ? '...' : collaborators.length + 1})
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -238,11 +351,11 @@ export function ShareModal({
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-sm)'
                   }}>
-                    Y
+                    O
                   </div>
                   <div>
                     <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
-                      You (Owner)
+                      Owner
                     </p>
                   </div>
                 </div>
@@ -250,52 +363,58 @@ export function ShareModal({
               </div>
 
               {/* Invited list */}
-              {collaborators.map(c => {
-                const initials = c.invitee_email.slice(0, 2).toUpperCase()
-                return (
-                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                      <div style={{
-                        width: '32px', height: '32px', borderRadius: 'var(--radius-full)',
-                        background: 'var(--color-bg-muted)', color: 'var(--color-text-secondary)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-sm)'
-                      }}>
-                        {initials}
+              {loading && collaborators.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)', fontStyle: 'italic', textAlign: 'center', padding: 'var(--space-4) 0' }}>
+                  Loading collaborators...
+                </p>
+              ) : (
+                collaborators.map(c => {
+                  const initials = c.invitee_email.slice(0, 2).toUpperCase()
+                  return (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: 'var(--radius-full)',
+                          background: 'var(--color-bg-muted)', color: 'var(--color-text-secondary)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-sm)'
+                        }}>
+                          {initials}
+                        </div>
+                        <div>
+                          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-primary)' }}>
+                            {c.invitee_email}
+                          </p>
+                          <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
+                            Invited
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-primary)' }}>
-                          {c.invitee_email}
-                        </p>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-                          Invited
-                        </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <Badge variant={c.access_level === 'editor' ? 'success' : 'default'} style={{ textTransform: 'capitalize' }}>
+                          {c.access_level}
+                        </Badge>
+                        <button
+                          onClick={() => handleRemove(c.id)}
+                          title="Revoke access"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--color-danger)',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            padding: '4px',
+                          }}
+                        >
+                          Revoke
+                        </button>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                      <Badge variant={c.access_level === 'editor' ? 'success' : 'default'} style={{ textTransform: 'capitalize' }}>
-                        {c.access_level}
-                      </Badge>
-                      <button
-                        onClick={() => handleRemove(c.id)}
-                        title="Revoke access"
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--color-danger)',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          padding: '4px',
-                        }}
-                      >
-                        Revoke
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })
+              )}
 
-              {collaborators.length === 0 && (
+              {!loading && collaborators.length === 0 && (
                 <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)', fontStyle: 'italic', textAlign: 'center', padding: 'var(--space-4) 0' }}>
                   No guest collaborators yet. Invite someone via email!
                 </p>
@@ -317,9 +436,9 @@ export function ShareModal({
             Share Link
           </label>
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-            <input 
-              readOnly 
-              type="text" 
+            <input
+              readOnly
+              type="text"
               value={itemShareUrl}
               style={{
                 flex: 1,

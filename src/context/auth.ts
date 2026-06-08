@@ -29,6 +29,8 @@ export function fallbackProfile(overrides?: Partial<Profile>): Profile {
     username: '',
     avatar_url: null,
     user_type: 'user',
+    subscription_tier: 'free',
+    is_banned: false,
     created_at: '',
     ...overrides,
   }

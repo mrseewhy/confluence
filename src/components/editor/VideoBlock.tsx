@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { BlockMetadata } from '@/types'
 import { detectVideoProvider, getVideoEmbedUrl } from '@/lib/helpers'
+import type { VideoProvider } from '@/lib/helpers'
 
 interface VideoBlockProps {
   content:  string

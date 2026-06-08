@@ -5,7 +5,10 @@ import { Footer } from "@/components/layout/Footer";
 import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import { ShareModal } from "@/components/ShareModal";
 import { formatDate } from "@/lib/helpers";
+import { ShareButtons } from "@/components/ShareButtons";
+import { useToast } from "@/components/Toast";
 import type { Folder, Note } from "@/types";
 
 export function FolderDetailPage() {
@@ -19,11 +22,23 @@ export function FolderDetailPage() {
     Pick<Note, "id" | "title" | "description" | "slug" | "updated_at" | "visibility">[]
   >([]);
   const [subfolders, setSubfolders] = useState<
-    Pick<Folder, "id" | "title" | "description" | "slug">[]
+    Pick<Folder, "id" | "title" | "description" | "slug" | "visibility">[]
   >([]);
-  const [parentFolder, setParentFolder] = useState<
-    Pick<Folder, "id" | "title" | "slug" | "owner_id"> | null
-  >(null);
+  const [breadcrumbs, setBreadcrumbs] = useState<
+    { title: string; slug: string }[]
+  >([]);
+  const { addToast } = useToast();
+  const [shareItem, setShareItem] = useState<Folder | null>(null);
+
+  // Listen for share-copy events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { message: string };
+      addToast(detail.message, "info");
+    };
+    window.addEventListener("share-copy", handler);
+    return () => window.removeEventListener("share-copy", handler);
+  }, [addToast]);
 
   useEffect(() => {
     if (!slug || !username) return;
@@ -72,7 +87,7 @@ export function FolderDetailPage() {
         // Get subfolders — owner sees all, others only public
         const subQuery = supabase
           .from("folders")
-          .select("id, title, description, slug")
+          .select("id, title, description, slug, visibility")
           .eq("parent_id", folderData.id);
 
         if (!authUser || authUser.id !== owner.id) {
@@ -83,20 +98,35 @@ export function FolderDetailPage() {
 
         setSubfolders(subfolderData || []);
 
-        // Get parent if exists
-        if (folderData.parent_id) {
-          const { data: parentData } = await supabase
-            .from("folders")
-            .select("id, title, slug, owner_id")
-            .eq("id", folderData.parent_id)
-            .single();
-          setParentFolder(parentData);
+        // Build full breadcrumb trail from root to current folder
+        const allOwnerFolders = await supabase
+          .from("folders")
+          .select("id, title, slug, parent_id")
+          .eq("owner_id", owner.id);
+
+        if (allOwnerFolders.data) {
+          const parentMap: Record<string, { id: string; title: string; slug: string; parent_id: string | null }> = {};
+          for (const f of allOwnerFolders.data) {
+            parentMap[f.id] = f;
+          }
+
+          const crumbs: { title: string; slug: string }[] = [{ title: folderData.title, slug: folderData.slug }];
+          let currentId = folderData.parent_id;
+          let maxDepth = 0;
+          while (currentId && maxDepth < 20) {
+            const entry = parentMap[currentId];
+            if (!entry) break;
+            crumbs.unshift({ title: entry.title, slug: entry.slug });
+            currentId = entry.parent_id;
+            maxDepth++;
+          }
+          setBreadcrumbs(crumbs);
         }
 
         // Get notes in this folder — owner sees all, others only public
         const notesQuery = supabase
           .from("notes")
-          .select("id, title, description, slug, updated_at, visibility")
+          .select("id, title, description, slug, updated_at, visibility, owner_id")
           .eq("folder_id", folderData.id);
 
         if (!authUser || authUser.id !== owner.id) {
@@ -166,6 +196,9 @@ export function FolderDetailPage() {
 
   const isPrivate = folder.visibility === "private";
 
+  // Determine owner's dashboard link
+  const editFolderLink = isOwner ? `/dashboard/folders` : null;
+
   return (
     <>
       <Navbar />
@@ -177,7 +210,7 @@ export function FolderDetailPage() {
           minHeight: "90vh",
         }}
       >
-        {/* Breadcrumb */}
+        {/* Breadcrumb trail */}
         <div
           style={{
             display: "flex",
@@ -185,6 +218,7 @@ export function FolderDetailPage() {
             gap: "var(--space-2)",
             fontSize: "var(--font-size-sm)",
             marginBottom: "var(--space-4)",
+            flexWrap: "wrap",
           }}
         >
           <Link
@@ -193,21 +227,24 @@ export function FolderDetailPage() {
           >
             Folders
           </Link>
-          {parentFolder && (
-            <>
-              <span style={{ color: "var(--color-border-strong)" }}>/</span>
+          {breadcrumbs.slice(0, -1).map((crumb) => (
+            <span key={crumb.slug} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+              <span style={{ color: "var(--color-border-strong)", userSelect: "none" }}>/</span>
               <Link
-                to={`/${ownerUsername}/folder/${parentFolder.slug}`}
+                to={`/${ownerUsername}/folder/${crumb.slug}`}
                 style={{
                   color: "var(--color-text-muted)",
                   textDecoration: "none",
+                  transition: "color var(--duration-fast)",
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-muted)")}
               >
-                {parentFolder.title}
+                {crumb.title}
               </Link>
-            </>
-          )}
-          <span style={{ color: "var(--color-border-strong)" }}>/</span>
+            </span>
+          ))}
+          <span style={{ color: "var(--color-border-strong)", userSelect: "none" }}>/</span>
           <span
             style={{
               fontWeight: "var(--font-weight-semibold)",
@@ -263,7 +300,11 @@ export function FolderDetailPage() {
                 gap: "var(--space-3)",
               }}
             >
-              {subfolders.map((sub) => (
+              {subfolders.map((sub) => {
+              // Check if this subfolder is private — we fetched all subfolders the user has access to,
+              // but we don't have the visibility field here. We'll note it in the display.
+              // (The subfolder query already filtered for public for non-owners)
+              return (
                 <Link
                   key={sub.id}
                   to={`/${ownerUsername}/folder/${sub.slug}`}
@@ -283,17 +324,23 @@ export function FolderDetailPage() {
                     className="subfolder-card-hover"
                   >
                     <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>📂</span>
-                    <div style={{ minWidth: 0 }}>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "var(--font-size-sm)",
-                          fontWeight: 600,
-                          color: "var(--color-text-primary)",
-                        }}
-                      >
-                        {sub.title}
-                      </p>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "var(--font-size-sm)",
+                            fontWeight: 600,
+                            color: "var(--color-text-primary)",
+                          }}
+                        >                        {sub.title}
+                          </p>
+                        {isOwner && sub.visibility === "private" && (
+                          <Badge variant="muted" style={{ fontSize: 10, padding: "1px 8px", lineHeight: "18px", marginLeft: "var(--space-2)" }}>
+                            Private
+                          </Badge>
+                        )}
+                      </div>
                       {sub.description && (
                         <p
                           style={{
@@ -312,7 +359,8 @@ export function FolderDetailPage() {
                     </div>
                   </div>
                 </Link>
-              ))}
+              );
+            })}
             </div>
           </div>
         )}
@@ -326,67 +374,78 @@ export function FolderDetailPage() {
               gap: "var(--space-3)",
             }}
           >
-            {notes.map((note) => (
-              <Link
-                key={note.id}
-                to={`/${ownerUsername}/n/${note.slug}`}
-                style={{ textDecoration: "none" }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "var(--space-4) var(--space-5)",
-                    background: "var(--color-bg-elevated)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: "var(--radius-xl)",
-                    transition: "all var(--duration-normal)",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor =
-                      "var(--color-accent-muted)";
-                    e.currentTarget.style.boxShadow = "var(--shadow-sm)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "var(--color-border)";
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
+            {notes.map((note) => {
+              const isNotePrivate = (note as Record<string, unknown>).visibility === "private";
+              return (
+                <Link
+                  key={note.id}
+                  to={`/${ownerUsername}/n/${note.slug}`}
+                  style={{ textDecoration: "none" }}
                 >
-                  <div>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "var(--font-size-sm)",
-                        fontWeight: "var(--font-weight-semibold)",
-                        color: "var(--color-text-primary)",
-                      }}
-                    >
-                      {note.title}
-                    </p>
-                    {note.description && (
-                      <p
-                        style={{
-                          margin: "2px 0 0",
-                          fontSize: "var(--font-size-xs)",
-                          color: "var(--color-text-muted)",
-                        }}
-                      >
-                        {note.description}
-                      </p>
-                    )}
-                  </div>
-                  <span
+                  <div
                     style={{
-                      fontSize: "var(--font-size-xs)",
-                      color: "var(--color-text-muted)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "var(--space-4) var(--space-5)",
+                      background: "var(--color-bg-elevated)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "var(--radius-xl)",
+                      transition: "all var(--duration-normal)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor =
+                        "var(--color-accent-muted)";
+                      e.currentTarget.style.boxShadow = "var(--shadow-sm)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "var(--color-border)";
+                      e.currentTarget.style.boxShadow = "none";
                     }}
                   >
-                    {formatDate(note.updated_at)}
-                  </span>
-                </div>
-              </Link>
-            ))}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "2px" }}>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "var(--font-size-sm)",
+                            fontWeight: "var(--font-weight-semibold)",
+                            color: "var(--color-text-primary)",
+                          }}
+                        >
+                          {note.title}
+                        </p>
+                        {isOwner && isNotePrivate && (
+                          <Badge variant="muted" style={{ fontSize: 10, padding: "1px 8px", lineHeight: "18px" }}>
+                            Private
+                          </Badge>
+                        )}
+                      </div>
+                      {note.description && (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "var(--font-size-xs)",
+                            color: "var(--color-text-muted)",
+                          }}
+                        >
+                          {note.description}
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "var(--font-size-xs)",
+                        color: "var(--color-text-muted)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {formatDate(note.updated_at)}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         ) : (
           <div
@@ -399,8 +458,51 @@ export function FolderDetailPage() {
             <p>{isOwner ? "No notes in this folder yet." : "No public notes in this folder yet."}</p>
           </div>
         )}
+
+        {/* Social share — visible to everyone */}
+        <div style={{ marginTop: "var(--space-8)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--color-border)" }}>
+          <ShareButtons
+            url={`/${ownerUsername}/folder/${folder.slug}`}
+            title={folder.title}
+            description={folder.description ?? undefined}
+          />
+        </div>
+
+        {/* Owner actions — only visible to the owner */}
+        {isOwner && (
+          <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>
+            {isPrivate && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShareItem(folder)}
+              >
+                Share
+              </Button>
+            )}
+            <a href={editFolderLink || "#"} style={{ textDecoration: "none" }}>
+              <Button variant="primary" size="sm">
+                Edit folder
+              </Button>
+            </a>
+          </div>
+        )}
       </div>
       <Footer />
+
+      {/* Share Modal */}
+      {shareItem && (
+        <ShareModal
+          isOpen={!!shareItem}
+          onClose={() => setShareItem(null)}
+          itemId={shareItem.id}
+          itemTitle={shareItem.title}
+          itemType="folder"
+          itemSlug={shareItem.slug}
+          ownerUsername={ownerUsername}
+          ownerId={authUser?.id}
+        />
+      )}
 
       <style>{`
         .subfolder-card-hover {

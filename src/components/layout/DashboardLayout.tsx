@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { useAuth } from "@/context/auth";
+import { requireSupabase } from "@/lib/supabase";
 import type { Profile } from "@/types";
 
 // ── Nav config ────────────────────────────────────────────────
@@ -19,6 +20,9 @@ const userNav: NavItem[] = [
   { label: "Folders", href: "/dashboard/folders", icon: IC.folder },
   { label: "Subfolders", href: "/dashboard/subfolders", icon: IC.subfolder },
   { label: "Notes", href: "/dashboard/notes", icon: IC.notes },
+  { label: "Collaborators", href: "/dashboard/collaborators", icon: IC.users },
+  { label: "Activity Log", href: "/dashboard/activity", icon: IC.bell },
+  { label: "Collaborations", href: "/dashboard/collaborations", icon: IC.share },
 ];
 
 const adminNav: NavItem[] = [
@@ -45,6 +49,8 @@ interface SidebarInnerProps {
   pathname: string;
   user: Profile;
   variant: "user" | "admin";
+  collaboratorCount: number | null;
+  collaborationCount: number | null;
 }
 
 function SidebarInner({
@@ -55,6 +61,8 @@ function SidebarInner({
   pathname,
   user,
   variant,
+  collaboratorCount,
+  collaborationCount,
 }: SidebarInnerProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -221,7 +229,41 @@ function SidebarInner({
               >
                 <Icon d={item.icon} />
               </span>
-              {!collapsed && item.label}
+              {!collapsed && (
+                <span
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    minWidth: 0,
+                  }}
+                >
+                  <span>{item.label}</span>
+                  {(item.label === "Collaborators" && collaboratorCount !== null) ||
+                      (item.label === "Collaborations" && collaborationCount !== null) ? (
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: "var(--font-weight-semibold)",
+                        color: active
+                          ? "var(--color-accent)"
+                          : "var(--color-text-muted)",
+                        background: active
+                          ? "var(--color-accent-subtle)"
+                          : "var(--color-bg-muted)",
+                        borderRadius: "var(--radius-full)",
+                        padding: "1px 7px",
+                        minWidth: "18px",
+                        textAlign: "center",
+                        lineHeight: "18px",
+                      }}
+                    >
+                      {item.label === "Collaborators" ? collaboratorCount : collaborationCount}
+                    </span>
+                  ) : null}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -373,8 +415,46 @@ export function DashboardLayout({
   const { signOut } = useAuth();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collaboratorCount, setCollaboratorCount] = useState<number | null>(null);
+  const [collaborationCount, setCollaborationCount] = useState<number | null>(null);
   const location = useLocation();
   const nav = variant === "admin" ? adminNav : userNav;
+
+  // Fetch collaborator count for the sidebar badge
+  useEffect(() => {
+    if (variant !== "user") return;
+    let mounted = true;
+    const fetchCounts = async () => {
+      try {
+        const supabase = requireSupabase();
+
+        // Count collaborators (items user shared with others)
+        const { count: cCount, error: cError } = await supabase
+          .from("collaborators")
+          .select("*", { count: "exact", head: true })
+          .eq("inviter_id", user.id);
+        if (mounted && !cError) {
+          setCollaboratorCount(cCount);
+        }
+
+        // Count collaborations (items shared with user)
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.email) {
+          const { count: shareCount, error: shareError } = await supabase
+            .from("collaborators")
+            .select("*", { count: "exact", head: true })
+            .eq("invitee_email", authData.user.email);
+          if (mounted && !shareError) {
+            setCollaborationCount(shareCount);
+          }
+        }
+      } catch {
+        // Silently fail — badges just won't show
+      }
+    };
+    void fetchCounts();
+    return () => { mounted = false; };
+  }, [variant, user.id]);
 
   const isActive = (href: string) =>
     href === (variant === "admin" ? "/admin/dashboard" : "/dashboard")
@@ -443,6 +523,8 @@ export function DashboardLayout({
           pathname={location.pathname}
           user={user}
           variant={variant}
+          collaboratorCount={collaboratorCount}
+          collaborationCount={collaborationCount}
         />
       </aside>
 
@@ -471,6 +553,8 @@ export function DashboardLayout({
           pathname={location.pathname}
           user={user}
           variant={variant}
+          collaboratorCount={collaboratorCount}
+          collaborationCount={collaborationCount}
         />
       </aside>
 

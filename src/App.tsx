@@ -25,6 +25,9 @@ const DashboardFolders     = lazy(() => import('@/pages/dashboard/Folders').then
 const DashboardSubfolders  = lazy(() => import('@/pages/dashboard/Subfolders').then(m => ({ default: m.DashboardSubfolders })))
 const DashboardNotes       = lazy(() => import('@/pages/dashboard/Notes').then(m => ({ default: m.DashboardNotes })))
 const DashboardSettings    = lazy(() => import('@/pages/dashboard/Settings').then(m => ({ default: m.DashboardSettings })))
+const DashboardCollaborators = lazy(() => import('@/pages/dashboard/Collaborators').then(m => ({ default: m.DashboardCollaborators })))
+const DashboardActivityLog  = lazy(() => import('@/pages/dashboard/ActivityLog').then(m => ({ default: m.DashboardActivityLog })))
+const DashboardCollaborations = lazy(() => import('@/pages/dashboard/Collaborations').then(m => ({ default: m.DashboardCollaborations })))
 const CreateNote           = lazy(() => import('@/pages/dashboard/CreateNote').then(m => ({ default: m.CreateNote })))
 const EditNote             = lazy(() => import('@/pages/dashboard/EditNote').then(m => ({ default: m.EditNote })))
 const AdminOverview        = lazy(() => import('@/pages/admin/Overview').then(m => ({ default: m.AdminOverview })))
@@ -83,6 +86,9 @@ export default function App() {
           <Route path="/dashboard/notes"          element={<RequireAuth userType="user"><DashboardNotes /></RequireAuth>} />
           <Route path="/dashboard/notes/new"      element={<RequireAuth userType="user"><CreateNote /></RequireAuth>} />
           <Route path="/dashboard/notes/:slug/edit" element={<RequireAuth userType="user"><EditNote /></RequireAuth>} />
+          <Route path="/dashboard/collaborators"  element={<RequireAuth userType="user"><DashboardCollaborators /></RequireAuth>} />
+          <Route path="/dashboard/activity"        element={<RequireAuth userType="user"><DashboardActivityLog /></RequireAuth>} />
+          <Route path="/dashboard/collaborations"  element={<RequireAuth userType="user"><DashboardCollaborations /></RequireAuth>} />
           <Route path="/dashboard/settings"       element={<RequireAuth userType="user"><DashboardSettings /></RequireAuth>} />
 
           {/* ── Admin dashboard ── */}

@@ -144,9 +144,24 @@ export function HomePage() {
               slug: f.slug as string,
               parent_id: null,
             };
-          });
+          });              // Build note count per folder from the notes query
+              const noteCountByFolder: Record<string, number> = {};
+              if (!noteResult.error && noteResult.data) {
+                for (const n of noteResult.data) {
+                  const nf = n.folder_id as string;
+                  noteCountByFolder[nf] = (noteCountByFolder[nf] || 0) + 1;
+                  // Also count for parent folders if the note's folder has ancestors
+                  const noteFolder = (allFoldersResult.data ?? []).find((af) => af.id === nf);
+                  if (noteFolder) {
+                    const pf = (noteFolder as Record<string, unknown>).parent_id;
+                    if (pf && typeof pf === 'string') {
+                      noteCountByFolder[pf] = (noteCountByFolder[pf] || 0) + 1;
+                    }
+                  }
+                }
+              }
 
-          const mappedFolders: FolderItem[] = (folderResult.data ?? []).map(
+              const mappedFolders: FolderItem[] = (folderResult.data ?? []).map(
             (f: Record<string, unknown>) => {
               const owner = mapOwner(f.owner as { full_name?: string; avatar_url?: string | null; username?: string | null } | null, "Unknown");
               return {
@@ -154,7 +169,7 @@ export function HomePage() {
                 title: f.title as string,
                 description: (f.description as string | null) ?? null,
                 slug: f.slug as string,
-                note_count: 0,
+                note_count: noteCountByFolder[f.id as string] || 0,
                 owner_id: f.owner_id as string,
                 owner_name: owner.name,
                 owner_username: (f.owner as { username?: string } | null)?.username || "unknown",

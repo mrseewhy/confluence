@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
@@ -30,53 +30,86 @@ export function DashboardFolders() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [newVisibility, setNewVisibility] = useState<Visibility>("public"); // notes/folders public by default!
+  const [newVisibility, setNewVisibility] = useState<Visibility>("public");
 
-  const loadData = async () => {
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [totalRootCount, setTotalRootCount] = useState(0);
+  const PAGE_SIZE = 20;
+
+  const loadData = useCallback(async () => {
     if (!user) return;
     try {
       const supabase = requireSupabase();
+
+      const from = (page - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
 
       const { data: folders, error: foldersErr } = await supabase
         .from("folders")
         .select("*")
         .eq("owner_id", user.id)
-        .order("created_at", { ascending: false });
+        .is("parent_id", null)
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
-      const { data: notes, error: notesErr } = await supabase
-        .from("notes")
-        .select("id, folder_id")
-        .eq("owner_id", user.id);
+      // Also fetch all subfolders + notes for the counts (lightweight query)
+      const [
+        { data: subfolders, error: subErr },
+        { data: notes, error: notesErr },
+      ] = await Promise.all([
+        supabase.from("folders").select("id, parent_id").eq("owner_id", user.id).not("parent_id", "is", null),
+        supabase.from("notes").select("id, folder_id").eq("owner_id", user.id),
+      ]);
 
       if (foldersErr) throw foldersErr;
+      if (subErr) throw subErr;
       if (notesErr) throw notesErr;
 
-      setFoldersList(folders || []);
+      // Combine root folders and all subfolders into foldersList (needed for enrichment)
+      const allSubs = subfolders || [];
+      setFoldersList([...(folders || []), ...allSubs]);
       setNotesList(notes || []);
     } catch (err) {
       console.error("Error fetching folders:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, page]);
 
   useEffect(() => {
     void loadData();
-  }, [user]);
+  }, [loadData]);
 
-  const rootFolders = foldersList.filter((f) => f.parent_id === null);
-  const filtered = rootFolders.filter((f) => {
-    const q = search.toLowerCase();
-    return (
-      (f.title.toLowerCase().includes(q) ||
-        (f.description ?? "").toLowerCase().includes(q)) &&
-      (vis === "all" || f.visibility === vis)
-    );
-  });
+  // Reset page when search/vis changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, vis]);// Build the enriched list from the root folders (those with parent_id === null in the fetched batch)
+const rootFolders = foldersList.filter((f) => f.parent_id === null);
+
+// Fetch total root folder count once on mount
+useEffect(() => {
+  if (!user) return;
+  const fetchCount = async () => {
+    const supabase = requireSupabase();
+    const { count } = await supabase
+      .from("folders")
+      .select("*", { count: "exact", head: true })
+      .eq("owner_id", user.id)
+      .is("parent_id", null);
+    if (count !== null) setTotalRootCount(count);
+  };
+  void fetchCount();
+}, [user]);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !user) return;
+
+    if (user.is_banned) {
+      console.error("Account is banned — cannot create folders.");
+      return;
+    }
 
     const slug = buildSlug(newTitle);
 
@@ -118,7 +151,7 @@ export function DashboardFolders() {
   };
 
   // Pre-calculate subfolders and notes count for rendering
-  const enrichedFolders = filtered.map((folder) => {
+  const enrichedFolders = rootFolders.map((folder) => {
     const subCount = foldersList.filter(
       (f) => f.parent_id === folder.id,
     ).length;
@@ -207,6 +240,8 @@ export function DashboardFolders() {
       >
         <input
           type="search"
+          id="folder-search"
+          name="folder-search"
           placeholder="Search folders…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -447,6 +482,60 @@ export function DashboardFolders() {
         />
       )}
 
+      {/* Pagination */}
+      {totalRootCount > PAGE_SIZE && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "var(--space-3)",
+            marginTop: "var(--space-6)",
+            marginBottom: "var(--space-6)",
+          }}
+        >
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--font-size-sm)",
+              fontWeight: "var(--font-weight-medium)",
+              padding: "var(--space-2) var(--space-4)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-elevated)",
+              color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)",
+              cursor: page <= 1 ? "not-allowed" : "pointer",
+              opacity: page <= 1 ? 0.5 : 1,
+            }}
+          >
+            ← Prev
+          </button>
+          <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+            Page {page} of {Math.ceil(totalRootCount / PAGE_SIZE)}
+          </span>
+          <button
+            disabled={page >= Math.ceil(totalRootCount / PAGE_SIZE)}
+            onClick={() => setPage((p) => p + 1)}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--font-size-sm)",
+              fontWeight: "var(--font-weight-medium)",
+              padding: "var(--space-2) var(--space-4)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-elevated)",
+              color: page >= Math.ceil(totalRootCount / PAGE_SIZE) ? "var(--color-text-muted)" : "var(--color-text-primary)",
+              cursor: page >= Math.ceil(totalRootCount / PAGE_SIZE) ? "not-allowed" : "pointer",
+              opacity: page >= Math.ceil(totalRootCount / PAGE_SIZE) ? 0.5 : 1,
+            }}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+
       {/* Delete confirm modal */}
       <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} width={360}>
         <h4 style={{ marginBottom: "var(--space-3)" }}>Delete folder?</h4>
@@ -582,6 +671,7 @@ export function DashboardFolders() {
           itemType="folder"
           itemSlug={shareItem.slug}
           ownerUsername={user?.username || "u"}
+          ownerId={user?.id}
         />
       )}
     </DashboardLayout>

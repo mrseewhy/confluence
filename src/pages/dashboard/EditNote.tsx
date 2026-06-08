@@ -69,9 +69,14 @@ export function EditNote() {
     };
 
     void loadNote();
-  }, [slug, user]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Intentionally omit `editor` from deps — loadNote only runs once per slug/user change.
+    // Including `editor` would cause an infinite loop since loadFromExisting modifies editor state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, user]);
 
   // ── Auto-save with debounce (only after initial load) ──
+  // Only depends on contentVersion + stable save() + loading,
+  // so the timer isn't re-created on every keystroke.
   useEffect(() => {
     if (!user || !editor.isValid || loading) return;
     const timer = setTimeout(async () => {
@@ -89,16 +94,7 @@ export function EditNote() {
       }
     }, AUTO_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [
-    user?.id,
-    loading,
-    editor.state.title,
-    editor.state.description,
-    editor.state.slug,
-    editor.state.folder_id,
-    editor.state.visibility,
-    editor.state.blocks,
-  ]);
+  }, [user?.id, loading, editor.contentVersion, editor.save, editor.isValid]);
 
   async function handleSave() {
     if (!editor.state.folder_id) {
@@ -193,6 +189,9 @@ export function EditNote() {
             setFolderError("");
           }}
           username={user.username}
+          userId={user.id}
+          slugAvailable={editor.slugAvailable}
+          slugChecking={editor.slugChecking}
           breadcrumbLabel="Edit note"
           headerActions={
             <>

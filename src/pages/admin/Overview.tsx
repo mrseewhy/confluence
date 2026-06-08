@@ -98,7 +98,7 @@ interface NoteItem {
   description: string | null;
   visibility: string;
   updated_at: string;
-  folder: any; // Supabase join type — shape: { id, title, slug } | null
+  folder: { id: string; title: string; slug: string } | null;
 }
 
 export function AdminOverview() {
@@ -112,6 +112,8 @@ export function AdminOverview() {
     subfolders: 0,
     notes: 0,
     publicNotes: 0,
+    collaborators: 0,
+    collaborations: 0,
   });
   const [recentUsers, setRecentUsers] = useState<
     Pick<Profile, "id" | "full_name" | "avatar_url" | "user_type" | "created_at">[]
@@ -145,7 +147,7 @@ export function AdminOverview() {
           );
 
         // All notes
-        const { data: notes } = await supabase
+        const { data: notesRaw } = await supabase
           .from("notes")
           .select(
             "id, title, description, visibility, updated_at, folder:folders(id, title, slug)",
@@ -153,10 +155,28 @@ export function AdminOverview() {
           .order("updated_at", { ascending: false })
           .limit(5);
 
+        // Supabase returns joined fields as arrays; convert folder from array to single object
+        const notes = (notesRaw || []).map((n) => ({
+          ...n,
+          folder: Array.isArray(n.folder) && n.folder.length > 0
+            ? n.folder[0]
+            : null,
+        }));
+
         const allFolders = folders || [];
         const rootF = allFolders.filter((f) => !f.parent_id);
         const subF = allFolders.filter((f) => f.parent_id);
-        const pubN = (notes || []).filter((n) => n.visibility === "public");
+        const pubN = notes.filter((n) => n.visibility === "public");
+
+        // Platform-wide collaborator stats
+        const { count: collabCount } = await supabase
+          .from("collaborators")
+          .select("*", { count: "exact", head: true });
+
+        // Activity log entries (proxy for collaboration actions)
+        const { count: activityCount } = await supabase
+          .from("activity_log")
+          .select("*", { count: "exact", head: true });
 
         setStats({
           users: usersCount || 0,
@@ -164,6 +184,8 @@ export function AdminOverview() {
           subfolders: subF.length,
           notes: notes?.length || 0,
           publicNotes: pubN.length,
+          collaborators: collabCount ?? 0,
+          collaborations: activityCount ?? 0,
         });
         setRecentUsers(users || []);
         setRecentNotes(notes || []);
@@ -276,6 +298,18 @@ export function AdminOverview() {
           value={stats.publicNotes}
           icon={IC.globe}
           sub="publicly accessible"
+        />
+        <StatCard
+          label="Collaborators"
+          value={stats.collaborators}
+          icon={IC.users}
+          sub="invited to items"
+        />
+        <StatCard
+          label="Activity log"
+          value={stats.collaborations}
+          icon={IC.bell}
+          sub="invite/revoke events"
         />
       </div>
 

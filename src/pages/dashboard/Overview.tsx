@@ -173,11 +173,13 @@ export function DashboardOverview() {
     subfolders: 0,
     notes: 0,
     publicNotes: 0,
+    collaborators: 0,
+    collaborations: 0,
   });
 
   // All data for pagination
   const [allNotes, setAllNotes] = useState<
-    { id: string; title: string; visibility: string; updated_at: string; folder_id: string; folder: any }[]
+    { id: string; title: string; visibility: string; updated_at: string; folder_id: string; folder: { id: string; title: string; slug: string } | null }[]
   >([]);
   const [allSubfolders, setAllSubfolders] = useState<
     { id: string; parent_id: string; title: string; description: string | null; slug: string; visibility: string; updated_at: string; noteCount: number }[]
@@ -205,10 +207,18 @@ export function DashboardOverview() {
           .eq("owner_id", user.id);
 
         // Fetch all notes for this user
-        const { data: notes } = await supabase
+        const { data: notesRaw } = await supabase
           .from("notes")
           .select("id, title, visibility, updated_at, folder_id, folder:folders(id, title, slug)")
           .eq("owner_id", user.id);
+
+        // Supabase returns joined fields as arrays; convert folder from array to single object
+        const notes = (notesRaw || []).map((n) => ({
+          ...n,
+          folder: Array.isArray(n.folder) && n.folder.length > 0
+            ? n.folder[0]
+            : null,
+        }));
 
         const allFolders = folders || [];
         const allNotes = notes || [];
@@ -217,11 +227,29 @@ export function DashboardOverview() {
         const subF = allFolders.filter((f) => f.parent_id !== null);
         const pubN = allNotes.filter((n) => n.visibility === "public");
 
+        // Fetch collaborator counts
+        const { count: cCount } = await supabase
+          .from("collaborators")
+          .select("*", { count: "exact", head: true })
+          .eq("inviter_id", user.id);
+
+        const { data: authData } = await supabase.auth.getUser();
+        let collabCount = 0;
+        if (authData?.user?.email) {
+          const { count: sCount } = await supabase
+            .from("collaborators")
+            .select("*", { count: "exact", head: true })
+            .eq("invitee_email", authData.user.email);
+          collabCount = sCount ?? 0;
+        }
+
         setStats({
           rootFolders: rootF.length,
           subfolders: subF.length,
           notes: allNotes.length,
           publicNotes: pubN.length,
+          collaborators: cCount ?? 0,
+          collaborations: collabCount,
         });
 
         // Compute subfolder and note counts per root folder
@@ -328,6 +356,8 @@ export function DashboardOverview() {
         <StatCard label="Subfolders" value={stats.subfolders} icon={IC.subfolder} href="/dashboard/subfolders" />
         <StatCard label="Notes" value={stats.notes} icon={IC.notes} href="/dashboard/notes" />
         <StatCard label="Public" value={stats.publicNotes} icon={IC.globe} href="/dashboard/notes" />
+        <StatCard label="Collaborators" value={stats.collaborators} icon={IC.users} href="/dashboard/collaborators" />
+        <StatCard label="Collaborations" value={stats.collaborations} icon={IC.share} href="/dashboard/collaborations" />
       </div>
 
       {/* Ready to create something */}

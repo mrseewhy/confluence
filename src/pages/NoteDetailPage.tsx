@@ -5,7 +5,10 @@ import { Footer } from "@/components/layout/Footer";
 import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import { ShareModal } from "@/components/ShareModal";
 import { formatDate, detectVideoProvider, getVideoEmbedUrl } from "@/lib/helpers";
+import { ShareButtons } from "@/components/ShareButtons";
+import { useToast } from "@/components/Toast";
 import type { Note, NoteBlock } from "@/types";
 
 export function NoteDetailPage() {
@@ -15,6 +18,18 @@ export function NoteDetailPage() {
   const [note, setNote] = useState<Note | null>(null);
   const [blocks, setBlocks] = useState<NoteBlock[]>([]);
   const [ownerUsername, setOwnerUsername] = useState<string>("");
+  const { addToast } = useToast();
+  const [showShareModal, setShowShareModal] = useState(false);
+
+  // Listen for share-copy events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { message: string };
+      addToast(detail.message, "info");
+    };
+    window.addEventListener("share-copy", handler);
+    return () => window.removeEventListener("share-copy", handler);
+  }, [addToast]);
 
   useEffect(() => {
     if (!slug || !username) return;
@@ -494,8 +509,51 @@ export function NoteDetailPage() {
             <p>This note has no content blocks.</p>
           </div>
         )}
+
+        {/* Social share — visible to everyone */}
+        <div style={{ marginTop: "var(--space-8)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--color-border)" }}>
+          <ShareButtons
+            url={`/${ownerUsername}/n/${note.slug}`}
+            title={note.title}
+            description={note.description ?? undefined}
+          />
+        </div>
+
+        {/* Owner actions — only visible to the owner */}
+        {isOwner && (
+          <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>
+            {!isPublic && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowShareModal(true)}
+              >
+                Share
+              </Button>
+            )}
+            <a href={`/dashboard/notes/${note.slug}/edit`} style={{ textDecoration: "none" }}>
+              <Button variant="primary" size="sm">
+                Edit note
+              </Button>
+            </a>
+          </div>
+        )}
       </div>
       <Footer />
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <ShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          itemId={note.id}
+          itemTitle={note.title}
+          itemType="note"
+          itemSlug={note.slug}
+          ownerUsername={ownerUsername}
+          ownerId={authUser?.id}
+        />
+      )}
     </>
   );
 }

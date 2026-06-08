@@ -20,6 +20,9 @@ export function CreateNote() {
   const [folderError, setFolderError] = useState("");
 
   // ── Auto-save with debounce ──
+  // Only depends on contentVersion (a counter bumped on every
+  // content change) + the stable save() callback, so the timer
+  // isn't re-created on every keystroke.
   useEffect(() => {
     if (!user || !editor.isValid) return;
     const timer = setTimeout(async () => {
@@ -37,15 +40,7 @@ export function CreateNote() {
       }
     }, AUTO_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [
-    user?.id,
-    editor.state.title,
-    editor.state.description,
-    editor.state.slug,
-    editor.state.folder_id,
-    editor.state.visibility,
-    editor.state.blocks,
-  ]);
+  }, [user?.id, editor.contentVersion, editor.save, editor.isValid]);
 
   async function handleSave() {
     if (!editor.state.folder_id) {
@@ -53,6 +48,10 @@ export function CreateNote() {
       return;
     }
     if (!user) return;
+    if (user.is_banned) {
+      console.error("Account is banned — cannot create notes.");
+      return;
+    }
     setFolderError("");
     justManuallySaved.current = true;
     try {
@@ -85,6 +84,9 @@ export function CreateNote() {
             setFolderError("");
           }}
           username={user.username}
+          userId={user.id}
+          slugAvailable={editor.slugAvailable}
+          slugChecking={editor.slugChecking}
           breadcrumbLabel="New note"
           headerActions={
             <>

@@ -1,0 +1,545 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Badge, EmptyState } from "@/components/ui";
+import { useAuth, fallbackProfile } from "@/context/auth";
+import { requireSupabase } from "@/lib/supabase";
+import { formatDate } from "@/lib/helpers";
+import { Icon } from "@/components/layout/DashboardIcon";
+import { IC } from "@/components/layout/dashboardIconPaths";
+
+// ─── Types ────────────────────────────────────────────────────
+
+interface CollaborationRow {
+  id: string;
+  inviter_id: string;
+  invitee_email: string;
+  folder_id: string | null;
+  note_id: string | null;
+  access_level: "viewer" | "editor";
+  created_at: string;
+  item_title: string;
+  item_slug: string;
+  item_visibility: string | null;
+  inviter_name: string;
+  inviter_username: string | null;
+  owner_name: string;
+  owner_username: string | null;
+}
+
+const PAGE_SIZE = 20;
+
+// ─── Component ────────────────────────────────────────────────
+
+export function DashboardCollaborations() {
+  const { profile } = useAuth();
+  const user = profile;
+
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<CollaborationRow[]>([]);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "folder" | "note">("all");
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+
+  // ─── Load data ────────────────────────────────────────────
+
+  const loadData = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const supabase = requireSupabase();
+
+      // Get current user's email
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user?.email) {
+        setRows([]);
+        setError("Could not determine your email address.");
+        return;
+      }
+      const email = authData.user.email;
+
+      // Fetch collaborators where current user is the invitee
+      const { data: collaborators, error: collabError } = await supabase
+        .from("collaborators")
+        .select(`
+          *,
+          folder:folders!folder_id(title, slug, visibility),
+          note:notes!note_id(title, slug, visibility),
+          inviter:profiles!inviter_id(full_name, username, avatar_url)
+        `)
+        .eq("invitee_email", email)
+        .order("created_at", { ascending: false });
+
+      if (collabError) throw collabError;
+
+      // Collect unique owner IDs from folders and notes
+      const ownerIds = new Set<string>();
+      (collaborators ?? []).forEach((c: Record<string, unknown>) => {
+        const folder = c.folder as { owner_id?: string } | null;
+        const note = c.note as { owner_id?: string } | null;
+        if (folder?.owner_id) ownerIds.add(folder.owner_id);
+        if (note?.owner_id) ownerIds.add(note.owner_id);
+      });
+
+      // Fetch owner names
+      let ownerMap: Record<string, { full_name: string; username: string | null }> = {};
+      if (ownerIds.size > 0) {
+        const { data: ownerProfiles } = await supabase
+          .from("profiles")
+          .select("id, full_name, username")
+          .in("id", Array.from(ownerIds));
+
+        if (ownerProfiles) {
+          for (const p of ownerProfiles) {
+            ownerMap[p.id] = { full_name: p.full_name, username: p.username };
+          }
+        }
+      }
+
+      const mapped: CollaborationRow[] = (collaborators ?? []).map((c: Record<string, unknown>) => {
+        const folder = c.folder as { title?: string; slug?: string; visibility?: string; owner_id?: string } | null;
+        const note = c.note as { title?: string; slug?: string; visibility?: string; owner_id?: string } | null;
+        const inviter = c.inviter as { full_name?: string; username?: string; avatar_url?: string | null } | null;
+
+        const ownerId = folder?.owner_id ?? note?.owner_id ?? "";
+        const owner = ownerMap[ownerId];
+
+        return {
+          id: c.id as string,
+          inviter_id: c.inviter_id as string,
+          invitee_email: c.invitee_email as string,
+          folder_id: (c.folder_id as string) ?? null,
+          note_id: (c.note_id as string) ?? null,
+          access_level: c.access_level as "viewer" | "editor",
+          created_at: c.created_at as string,
+          item_title: folder?.title ?? note?.title ?? "Unknown",
+          item_slug: folder?.slug ?? note?.slug ?? "",
+          item_visibility: folder?.visibility ?? note?.visibility ?? null,
+          inviter_name: inviter?.full_name ?? "Unknown",
+          inviter_username: inviter?.username ?? null,
+          owner_name: owner?.full_name ?? "Unknown",
+          owner_username: owner?.username ?? null,
+        };
+      });
+
+      setRows(mapped);
+    } catch (err) {
+      console.error("Error loading collaborations:", err);
+      setError("Failed to load collaborations.");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  // ─── Derived ──────────────────────────────────────────────
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, typeFilter]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return rows.filter((r) => {
+      const matchesSearch =
+        !q ||
+        r.item_title.toLowerCase().includes(q) ||
+        r.inviter_name.toLowerCase().includes(q);
+
+      const matchesType = typeFilter === "all" || (typeFilter === "folder" ? r.folder_id : r.note_id);
+
+      return matchesSearch && matchesType;
+    });
+  }, [rows, search, typeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // ─── Render: loading / no user ────────────────────────────
+
+  if (!user || loading) {
+    return (
+      <DashboardLayout user={user || fallbackProfile()} variant="user">
+        <div
+          style={{
+            padding: "var(--space-20)",
+            textAlign: "center",
+            color: "var(--color-text-muted)",
+          }}
+        >
+          Loading collaborations…
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout user={user} variant="user">
+        <EmptyState
+          icon="⚠️"
+          title="Something went wrong"
+          description={error}
+        />
+      </DashboardLayout>
+    );
+  }
+
+  // ─── Render ──────────────────────────────────────────────
+
+  return (
+    <DashboardLayout user={user} variant="user">
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: "var(--space-6)",
+          flexWrap: "wrap",
+          gap: "var(--space-4)",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: "var(--font-size-2xl)",
+              fontWeight: "var(--font-weight-bold)",
+              letterSpacing: "var(--letter-spacing-tight)",
+              marginBottom: "var(--space-1)",
+            }}
+          >
+            Collaborations
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              color: "var(--color-text-muted)",
+              fontSize: "var(--font-size-sm)",
+            }}
+          >
+            {rows.length} item{rows.length !== 1 ? "s" : ""} shared with you
+          </p>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div
+        style={{
+          display: "flex",
+          gap: "var(--space-3)",
+          marginBottom: "var(--space-6)",
+          flexWrap: "wrap",
+        }}
+      >
+        <input
+          type="search"
+          placeholder="Search by item title or inviter…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{
+            flex: "1 1 220px",
+            fontFamily: "var(--font-sans)",
+            fontSize: "var(--font-size-sm)",
+            color: "var(--color-text-primary)",
+            background: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-md)",
+            padding: "var(--space-2) var(--space-3)",
+            outline: "none",
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = "var(--color-accent)";
+            e.currentTarget.style.boxShadow =
+              "0 0 0 3px var(--color-accent-subtle)";
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = "var(--color-border)";
+            e.currentTarget.style.boxShadow = "none";
+          }}
+        />
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+          {(["all", "folder", "note"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setTypeFilter(v)}
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "var(--font-size-xs)",
+                fontWeight: "var(--font-weight-semibold)",
+                padding: "var(--space-2) var(--space-3)",
+                borderRadius: "var(--radius-md)",
+                border: `1px solid ${
+                  typeFilter === v
+                    ? "var(--color-accent-muted)"
+                    : "var(--color-border)"
+                }`,
+                background:
+                  typeFilter === v
+                    ? "var(--color-accent-subtle)"
+                    : "var(--color-bg-elevated)",
+                color:
+                  typeFilter === v
+                    ? "var(--color-accent)"
+                    : "var(--color-text-secondary)",
+                cursor: "pointer",
+                textTransform: "capitalize",
+                transition: "all var(--duration-fast)",
+              }}
+              onMouseEnter={(e) => {
+                if (typeFilter !== v) {
+                  e.currentTarget.style.background = "var(--color-bg-muted)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (typeFilter !== v) {
+                  e.currentTarget.style.background = "var(--color-bg-elevated)";
+                }
+              }}
+            >
+              {v === "all" ? "All" : v === "folder" ? "Folders" : "Notes"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* List */}
+      {filtered.length > 0 ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-3)",
+          }}
+        >
+          {paginated.map((row) => {
+            const isFolder = !!row.folder_id;
+            const itemPath = isFolder ? "folder" : "n";
+
+            return (
+              <div
+                key={row.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-4)",
+                  padding: "var(--space-4) var(--space-5)",
+                  background: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius-lg)",
+                  transition: "all var(--duration-fast)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor =
+                    "var(--color-border-strong)";
+                  e.currentTarget.style.boxShadow =
+                    "var(--shadow-sm)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor =
+                    "var(--color-border)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              >
+                {/* Icon */}
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "var(--radius-md)",
+                    background: "var(--color-bg-subtle)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "18px",
+                    flexShrink: 0,
+                  }}
+                >
+                  {isFolder ? "📁" : "📝"}
+                </div>
+
+                {/* Item info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--space-2)",
+                      marginBottom: "2px",
+                    }}
+                  >
+                    {row.item_slug ? (
+                      <a
+                        href={`/${row.inviter_username || "u"}/${itemPath}/${row.item_slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: "var(--font-size-sm)",
+                          fontWeight: "var(--font-weight-semibold)",
+                          color: "var(--color-accent)",
+                          textDecoration: "none",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.textDecoration = "underline")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.textDecoration = "none")
+                        }
+                      >
+                        {row.item_title}
+                      </a>
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: "var(--font-size-sm)",
+                          fontWeight: "var(--font-weight-semibold)",
+                          color: "var(--color-text-primary)",
+                        }}
+                      >
+                        {row.item_title}
+                      </span>
+                    )}
+                    {row.item_visibility !== "private" && (
+                      <Badge variant="muted" style={{ fontSize: "9px", padding: "0 6px", lineHeight: "16px" }}>
+                        public
+                      </Badge>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--space-3)",
+                      fontSize: "var(--font-size-xs)",
+                      color: "var(--color-text-muted)",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span>Shared by <strong style={{ color: "var(--color-text-secondary)" }}>{row.inviter_name}</strong></span>
+                    <span>·</span>
+                    <span>Owned by <strong style={{ color: "var(--color-text-secondary)" }}>{row.owner_name}</strong></span>
+                    <span>·</span>
+                    <span>{formatDate(row.created_at)}</span>
+                    <span>·</span>
+                    <Badge
+                      variant={row.access_level === "editor" ? "success" : "default"}
+                      style={{ textTransform: "capitalize", fontSize: "10px", padding: "1px 8px", lineHeight: "18px" }}
+                    >
+                      {row.access_level === "editor" ? "Editor" : "Viewer"}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Arrow */}
+                <a
+                  href={`/${row.inviter_username || "u"}/${itemPath}/${row.item_slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "var(--color-text-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    flexShrink: 0,
+                    textDecoration: "none",
+                    transition: "color var(--duration-fast)",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.color = "var(--color-accent)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.color = "var(--color-text-muted)")
+                  }
+                >
+                  <Icon d={IC.chevron} size={16} />
+                </a>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState
+          icon="🔗"
+          title={
+            search || typeFilter !== "all"
+              ? "No matching collaborations"
+              : "No collaborations yet"
+          }
+          description={
+            search || typeFilter !== "all"
+              ? "Try adjusting your search or filter."
+              : "When someone shares a folder or note with you, it will appear here."
+          }
+        />
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "var(--space-3)",
+            marginTop: "var(--space-8)",
+          }}
+        >
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--font-size-sm)",
+              fontWeight: "var(--font-weight-medium)",
+              padding: "var(--space-2) var(--space-4)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-elevated)",
+              color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)",
+              cursor: page <= 1 ? "not-allowed" : "pointer",
+              opacity: page <= 1 ? 0.5 : 1,
+              transition: "all var(--duration-fast)",
+            }}
+          >
+            ← Prev
+          </button>
+          <span
+            style={{
+              fontSize: "var(--font-size-sm)",
+              color: "var(--color-text-muted)",
+            }}
+          >
+            Page {page} of {totalPages}
+          </span>
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--font-size-sm)",
+              fontWeight: "var(--font-weight-medium)",
+              padding: "var(--space-2) var(--space-4)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-elevated)",
+              color: page >= totalPages ? "var(--color-text-muted)" : "var(--color-text-primary)",
+              cursor: page >= totalPages ? "not-allowed" : "pointer",
+              opacity: page >= totalPages ? 0.5 : 1,
+              transition: "all var(--duration-fast)",
+            }}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+    </DashboardLayout>
+  );
+}

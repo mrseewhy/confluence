@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button, Input } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
@@ -16,7 +16,6 @@ export function DashboardSettings() {
   const [saveError, setSaveError] = useState("");
 
   // Password state
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -29,12 +28,33 @@ export function DashboardSettings() {
   const [avatarError, setAvatarError] = useState("");
 
   // Delete account state
-  // Delete account state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
+  // Notification preference state
+  const [sendInviteEmails, setSendInviteEmails] = useState(true);
+  const [notifSaved, setNotifSaved] = useState(false);
+
   const { refreshProfile, signOut } = useAuth();
+
+  // Load notification preference
+  useEffect(() => {
+    if (!user) return;
+    void (async () => {
+      try {
+        const supabase = requireSupabase();
+        const { data } = await supabase
+          .from("notification_preferences")
+          .select("send_invite_emails")
+          .eq("user_id", user.id)
+          .single();
+        if (data) setSendInviteEmails(data.send_invite_emails);
+      } catch {
+        // Silently fall back to default
+      }
+    })();
+  }, [user?.id]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +78,6 @@ export function DashboardSettings() {
       });
       if (error) throw error;
       setPasswordSuccess(true);
-      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
@@ -477,17 +496,14 @@ export function DashboardSettings() {
                 Password updated successfully!
               </div>
             )}
-            <Input
-              label="Current password"
-              type="password"
-              placeholder={"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
-              value={currentPassword}
-              onChange={(e) => {
-                setPasswordError("");
-                setCurrentPassword(e.target.value);
-              }}
-              autoComplete="current-password"
-              required
+            {/* Hidden username field for password manager compatibility */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              defaultValue={user?.username || user?.full_name || user?.id || ""}
+              style={{ display: "none" }}
+              tabIndex={-1}
             />
             <Input
               label="New password"
@@ -526,7 +542,6 @@ export function DashboardSettings() {
                 size="sm"
                 disabled={
                   passwordLoading ||
-                  !currentPassword ||
                   !newPassword ||
                   !confirmPassword
                 }
@@ -535,6 +550,280 @@ export function DashboardSettings() {
               </Button>
             </div>
           </form>
+        </section>
+
+        {/* Subscription Plan */}
+        <section
+          style={{
+            background: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-xl)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "var(--space-5) var(--space-6)",
+              borderBottom: "1px solid var(--color-border)",
+            }}
+          >
+            <h3
+              style={{
+                fontSize: "var(--font-size-md)",
+                fontWeight: "var(--font-weight-semibold)",
+                margin: 0,
+                color: "var(--color-text-primary)",
+              }}
+            >
+              Plan & Subscription
+            </h3>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "var(--font-size-sm)",
+                color: "var(--color-text-muted)",
+                marginTop: "2px",
+              }}
+            >
+              Your current plan and billing information.
+            </p>
+          </div>
+          <div
+            style={{
+              padding: "var(--space-6)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-4)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "var(--font-size-sm)",
+                    fontWeight: "var(--font-weight-medium)",
+                    color: "var(--color-text-primary)",
+                  }}
+                >
+                  Current plan
+                </p>
+              </div>
+              <div
+                style={{
+                  padding: "4px 14px",
+                  borderRadius: "var(--radius-full)",
+                  background: "var(--color-accent-subtle)",
+                  border: "1px solid var(--color-accent-muted)",
+                  fontSize: "var(--font-size-sm)",
+                  fontWeight: "var(--font-weight-semibold)",
+                  color: "var(--color-accent)",
+                  textTransform: "capitalize",
+                }}
+              >
+                {user?.subscription_tier || "free"}
+              </div>
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "var(--font-size-xs)",
+                color: "var(--color-text-muted)",
+              }}
+            >
+              {user?.subscription_tier === "free"
+                ? "You're on the Free plan. No limits applied yet — upgrade options coming soon."
+                : `You're on the ${user?.subscription_tier} plan.`}
+            </p>
+            {user?.subscription_tier === "free" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "var(--space-2)",
+                  flexWrap: "wrap",
+                  marginTop: "var(--space-2)",
+                }}
+              >
+                {["bronze", "silver", "gold"].map((tier) => (
+                  <div
+                    key={tier}
+                    style={{
+                      flex: "1 0 80px",
+                      padding: "var(--space-2) var(--space-3)",
+                      background: "var(--color-bg-subtle)",
+                      borderRadius: "var(--radius-md)",
+                      textAlign: "center",
+                      fontSize: "11px",
+                      fontWeight: "var(--font-weight-semibold)",
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      color: "var(--color-text-muted)",
+                      opacity: 0.5,
+                    }}
+                  >
+                    {tier}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Notification Preferences */}
+        <section
+          style={{
+            background: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-xl)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "var(--space-5) var(--space-6)",
+              borderBottom: "1px solid var(--color-border)",
+            }}
+          >
+            <h3
+              style={{
+                fontSize: "var(--font-size-md)",
+                fontWeight: "var(--font-weight-semibold)",
+                margin: 0,
+                color: "var(--color-text-primary)",
+              }}
+            >
+              Notifications
+            </h3>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "var(--font-size-sm)",
+                color: "var(--color-text-muted)",
+                marginTop: "2px",
+              }}
+            >
+              Manage your email notification preferences.
+            </p>
+          </div>
+          <div
+            style={{
+              padding: "var(--space-6)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--space-4)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "var(--font-size-sm)",
+                    fontWeight: "var(--font-weight-medium)",
+                    color: "var(--color-text-primary)",
+                  }}
+                >
+                  Invite notification emails
+                </p>
+                <p
+                  style={{
+                    margin: "2px 0 0",
+                    fontSize: "var(--font-size-xs)",
+                    color: "var(--color-text-muted)",
+                  }}
+                >
+                  Receive email when someone is invited as a collaborator
+                </p>
+              </div>
+              <label
+                style={{
+                  position: "relative",
+                  display: "inline-block",
+                  width: "44px",
+                  height: "24px",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={sendInviteEmails}
+                  onChange={async (e) => {
+                    const newVal = e.target.checked;
+                    setSendInviteEmails(newVal);
+
+                    try {
+                      const supabase = requireSupabase();
+                      await supabase.from("notification_preferences").upsert(
+                        {
+                          user_id: user?.id,
+                          send_invite_emails: newVal,
+                        },
+                        { onConflict: "user_id" }
+                      );
+                      setNotifSaved(true);
+                      setTimeout(() => setNotifSaved(false), 2000);
+                    } catch (err) {
+                      console.error("Failed to save preference:", err);
+                      setSendInviteEmails(!newVal);
+                    }
+                  }}
+                  style={{
+                    opacity: 0,
+                    width: 0,
+                    height: 0,
+                    position: "absolute",
+                  }}
+                />
+                <span
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: sendInviteEmails
+                      ? "var(--color-accent)"
+                      : "var(--color-border)",
+                    borderRadius: "12px",
+                    transition: "all var(--duration-fast)",
+                  }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "2px",
+                      left: sendInviteEmails ? "22px" : "2px",
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      background: "#fff",
+                      transition: "left var(--duration-fast)",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                    }}
+                  />
+                </span>
+              </label>
+            </div>
+            {notifSaved && (
+              <span
+                style={{
+                  fontSize: "var(--font-size-xs)",
+                  color: "var(--color-success)",
+                }}
+              >
+                Preference saved
+              </span>
+            )}
+          </div>
         </section>
 
         {/* Danger zone */}

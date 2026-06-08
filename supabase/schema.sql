@@ -23,6 +23,8 @@ create table if not exists public.profiles (
   username text not null,
   avatar_url text,
   user_type public.user_type not null default 'user',
+  subscription_tier text not null default 'free',
+  is_banned boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -71,9 +73,10 @@ create table if not exists public.notes (
   updated_at timestamptz not null default now()
 );
 
--- Ensure slugs are unique to prevent duplicate note paths
+-- Ensure slugs are unique per owner to prevent duplicate note paths
 alter table public.notes drop constraint if exists notes_slug_key;
-alter table public.notes add constraint notes_slug_key unique (slug);
+alter table public.notes drop constraint if exists notes_slug_owner_key;
+alter table public.notes add constraint notes_slug_owner_key unique (slug, owner_id);
 
 alter table public.notes enable row level security;
 
@@ -90,11 +93,32 @@ create table if not exists public.note_blocks (
 
 alter table public.note_blocks enable row level security;
 
-drop policy if exists "Users can manage their own note blocks" on public.note_blocks;
-create policy "Users can manage their own note blocks"
-  on public.note_blocks for all to authenticated
+drop policy if exists "Users can select their own note blocks" on public.note_blocks;
+create policy "Users can select their own note blocks"
+  on public.note_blocks for select to authenticated
+  using (note_id in (select id from public.notes where owner_id = auth.uid()));
+
+drop policy if exists "Users can insert their own note blocks" on public.note_blocks;
+create policy "Users can insert their own note blocks"
+  on public.note_blocks for insert to authenticated
+  with check (
+    note_id in (select id from public.notes where owner_id = auth.uid()) AND
+    not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
+  );
+
+drop policy if exists "Users can update their own note blocks" on public.note_blocks;
+create policy "Users can update their own note blocks"
+  on public.note_blocks for update to authenticated
   using (note_id in (select id from public.notes where owner_id = auth.uid()))
-  with check (note_id in (select id from public.notes where owner_id = auth.uid()));
+  with check (
+    note_id in (select id from public.notes where owner_id = auth.uid()) AND
+    not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
+  );
+
+drop policy if exists "Users can delete their own note blocks" on public.note_blocks;
+create policy "Users can delete their own note blocks"
+  on public.note_blocks for delete to authenticated
+  using (note_id in (select id from public.notes where owner_id = auth.uid()));
 
 -- COLLABORATORS / INVITATIONS
 create table if not exists public.collaborators (
@@ -112,6 +136,63 @@ create table if not exists public.collaborators (
 );
 
 alter table public.collaborators enable row level security;
+
+-- RLS: Owners can read collaborators on their items
+drop policy if exists "Owners can read collaborators on their items" on public.collaborators;
+create policy "Owners can read collaborators on their items"
+  on public.collaborators for select to authenticated
+  using (
+    auth.uid() = inviter_id OR
+    (folder_id is not null and folder_id in (select id from public.folders where owner_id = auth.uid())) OR
+    (note_id is not null and note_id in (select id from public.notes where owner_id = auth.uid()))
+  );
+
+-- RLS: Owners can insert collaborators on their items
+drop policy if exists "Owners can insert collaborators on their items" on public.collaborators;
+create policy "Owners can insert collaborators on their items"
+  on public.collaborators for insert to authenticated
+  with check (
+    auth.uid() = inviter_id AND
+    (
+      (folder_id is not null and folder_id in (select id from public.folders where owner_id = auth.uid())) OR
+      (note_id is not null and note_id in (select id from public.notes where owner_id = auth.uid()))
+    )
+  );
+
+-- RLS: Owners can delete collaborators on their items
+drop policy if exists "Owners can delete collaborators on their items" on public.collaborators;
+create policy "Owners can delete collaborators on their items"
+  on public.collaborators for delete to authenticated
+  using (
+    (folder_id is not null and folder_id in (select id from public.folders where owner_id = auth.uid())) OR
+    (note_id is not null and note_id in (select id from public.notes where owner_id = auth.uid()))
+  );
+
+-- RLS: Invitees can read their own collaborator records (needed for "Collaborations" page)
+drop policy if exists "Invitees can read their own collaborator records" on public.collaborators;
+create policy "Invitees can read their own collaborator records"
+  on public.collaborators for select to authenticated
+  using (
+    invitee_email = (select email from auth.users where id = auth.uid())
+  );
+
+-- Ensure the authenticated role has base table permissions
+-- (RLS restricts rows within these grants, it does not grant base access)
+grant select, insert, delete on public.collaborators to authenticated;
+
+-- Allow the authenticated role to read auth.users for RLS policies that
+-- look up the user's email (e.g. collaborators invitee_email checks).
+-- This is safe because the RLS policy on collaborators already scopes the
+-- result to the current user via auth.uid().
+grant select on auth.users to authenticated;
+
+-- Allow admins to read all collaborator records (for admin dashboard stats)
+drop policy if exists "Admins can read all collaborators" on public.collaborators;
+create policy "Admins can read all collaborators"
+  on public.collaborators for select to authenticated
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and user_type = 'admin')
+  );
 
 -- RLS POLICIES FOR PROFILES
 drop policy if exists "Profiles are readable by authenticated users" on public.profiles;
@@ -262,11 +343,27 @@ create policy "Folders are visible by policy"
   on public.folders for select to authenticated
   using (public.has_access_to_folder(id, auth.uid()));
 
-drop policy if exists "Users can manage their own folders" on public.folders;
-create policy "Users can manage their own folders"
-  on public.folders for all to authenticated
+drop policy if exists "Users can insert their own folders" on public.folders;
+create policy "Users can insert their own folders"
+  on public.folders for insert to authenticated
+  with check (
+    owner_id = auth.uid() AND
+    not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
+  );
+
+drop policy if exists "Users can update their own folders" on public.folders;
+create policy "Users can update their own folders"
+  on public.folders for update to authenticated
   using (owner_id = auth.uid())
-  with check (owner_id = auth.uid());
+  with check (
+    owner_id = auth.uid() AND
+    not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
+  );
+
+drop policy if exists "Users can delete their own folders" on public.folders;
+create policy "Users can delete their own folders"
+  on public.folders for delete to authenticated
+  using (owner_id = auth.uid());
 
 -- RLS POLICIES FOR NOTES (authenticated)
 drop policy if exists "Notes are visible by policy" on public.notes;
@@ -274,11 +371,27 @@ create policy "Notes are visible by policy"
   on public.notes for select to authenticated
   using (public.has_access_to_note(id, auth.uid()));
 
-drop policy if exists "Users can manage their own notes" on public.notes;
-create policy "Users can manage their own notes"
-  on public.notes for all to authenticated
+drop policy if exists "Users can insert their own notes" on public.notes;
+create policy "Users can insert their own notes"
+  on public.notes for insert to authenticated
+  with check (
+    owner_id = auth.uid() AND
+    not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
+  );
+
+drop policy if exists "Users can update their own notes" on public.notes;
+create policy "Users can update their own notes"
+  on public.notes for update to authenticated
   using (owner_id = auth.uid())
-  with check (owner_id = auth.uid());
+  with check (
+    owner_id = auth.uid() AND
+    not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
+  );
+
+drop policy if exists "Users can delete their own notes" on public.notes;
+create policy "Users can delete their own notes"
+  on public.notes for delete to authenticated
+  using (owner_id = auth.uid());
 
 -- ═════════════════════════════════════════════════════════════
 -- STORAGE: Image upload bucket
@@ -373,6 +486,10 @@ begin
   )
   returning id into new_profile_id;
 
+  -- Auto-create notification preferences for new user
+  insert into public.notification_preferences (user_id, send_invite_emails)
+  values (new_profile_id, true);
+
   -- Auto-create 'general' folder by default for all new profiles
   insert into public.folders (owner_id, parent_id, title, description, slug, visibility)
   values (
@@ -392,3 +509,127 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- ═════════════════════════════════════════════════════════════
+-- ACTIVITY LOG (invite/revoke history)
+-- ═════════════════════════════════════════════════════════════
+
+create table if not exists public.activity_log (
+  id uuid primary key default gen_random_uuid(),
+  inviter_id uuid not null references public.profiles(id) on delete cascade,
+  invitee_email text not null default '',
+  action text not null, -- 'invited', 'revoked', 'note_deleted', 'folder_deleted', 'visibility_changed', 'user_banned', 'user_unbanned', 'tier_changed', 'user_promoted', 'user_deleted'
+  folder_id uuid references public.folders(id) on delete set null,
+  note_id uuid references public.notes(id) on delete set null,
+  access_level text, -- 'viewer' or 'editor'
+  item_title text not null default '',
+  item_slug text not null default '',
+  item_type text not null, -- 'folder' or 'note' or 'user'
+  details text, -- Extra context (e.g. "Changed visibility from private to public")
+  created_at timestamptz not null default now()
+);
+
+alter table public.activity_log enable row level security;
+
+drop policy if exists "Users can insert their own activity log" on public.activity_log;
+create policy "Users can insert their own activity log"
+  on public.activity_log for insert to authenticated
+  with check (
+    auth.uid() = inviter_id OR
+    exists (select 1 from public.profiles where id = auth.uid() and user_type = 'admin')
+  );
+
+drop policy if exists "Users can read their own activity log" on public.activity_log;
+create policy "Users can read their own activity log"
+  on public.activity_log for select to authenticated
+  using (auth.uid() = inviter_id);
+
+drop policy if exists "Admins can read all activity log" on public.activity_log;
+create policy "Admins can read all activity log"
+  on public.activity_log for select to authenticated
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and user_type = 'admin')
+  );
+
+grant select, insert on public.activity_log to authenticated;
+
+-- ═════════════════════════════════════════════════════════════
+-- ATOMIC BLOCK REPLACEMENT (single transaction)
+-- ═════════════════════════════════════════════════════════════
+-- Deletes all existing blocks for a note and inserts new ones
+-- in one atomic transaction. If the insert fails, the delete
+-- is rolled back, preventing data loss.
+
+create or replace function public.replace_note_blocks(
+  p_note_id uuid,
+  p_blocks jsonb
+)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  delete from public.note_blocks where note_id = p_note_id;
+
+  if jsonb_array_length(p_blocks) > 0 then
+    insert into public.note_blocks (note_id, type, content, order_index, metadata)
+    select
+      p_note_id,
+      (elem->>'type')::text,
+      (elem->>'content')::text,
+      (elem->>'order_index')::integer,
+      coalesce((elem->'metadata')::jsonb, '{}'::jsonb)
+    from jsonb_array_elements(p_blocks) as elem;
+  end if;
+end;
+$$;
+
+-- ═════════════════════════════════════════════════════════════
+-- SLUG AVAILABILITY CHECK
+-- ═════════════════════════════════════════════════════════════
+-- Returns true if the given slug is not already taken by another
+-- note owned by the same user. Pass p_exclude_note_id when
+-- editing an existing note to exclude itself from the check.
+
+create or replace function public.is_slug_available(
+  p_slug text,
+  p_owner_id uuid,
+  p_exclude_note_id uuid default null
+)
+returns boolean
+language plpgsql
+security definer
+as $$
+begin
+  if p_exclude_note_id is not null then
+    return not exists (
+      select 1 from public.notes
+      where slug = p_slug and owner_id = p_owner_id and id != p_exclude_note_id
+    );
+  else
+    return not exists (
+      select 1 from public.notes
+      where slug = p_slug and owner_id = p_owner_id
+    );
+  end if;
+end;
+$$;
+
+-- ═════════════════════════════════════════════════════════════
+-- NOTIFICATION PREFERENCES
+-- ═════════════════════════════════════════════════════════════
+
+create table if not exists public.notification_preferences (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  send_invite_emails boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.notification_preferences enable row level security;
+
+drop policy if exists "Users can manage their own notification preferences" on public.notification_preferences;
+create policy "Users can manage their own notification preferences"
+  on public.notification_preferences for all to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+

@@ -45,6 +45,10 @@ export function DashboardSubfolders() {
   const [search, setSearch] = useState("");
   const [shareItem, setShareItem] = useState<Folder | null>(null);
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
+
   // Creation state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -100,8 +104,12 @@ export function DashboardSubfolders() {
     [foldersList],
   );
 
+  // Reset page when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
   const allSubfolders = useMemo<SubfolderRow[]>(() => {
-    // Build a quick lookup for all folders (supports arbitrary depth)
     const byId = new Map(foldersList.map((f) => [f.id, f]));
 
     return foldersList
@@ -120,7 +128,7 @@ export function DashboardSubfolders() {
       });
   }, [foldersList, notesList]);
 
-  const filtered = useMemo(() => {
+  const filteredAll = useMemo(() => {
     const q = search.toLowerCase();
     if (!q) return allSubfolders;
     return allSubfolders.filter(
@@ -129,6 +137,10 @@ export function DashboardSubfolders() {
         sf.parentTitle.toLowerCase().includes(q),
     );
   }, [allSubfolders, search]);
+
+  // Client-side pagination (all subfolders already fetched)
+  const totalFiltered = filteredAll.length;
+  const paginated = filteredAll.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // ---------------------------------------------------------------------------
   // Modal helpers
@@ -149,6 +161,11 @@ export function DashboardSubfolders() {
   const handleCreateSubfolder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !parentId || !user) return;
+
+    if (user.is_banned) {
+      console.error("Account is banned — cannot create subfolders.");
+      return;
+    }
 
     const slug = buildSlug(newTitle);
 
@@ -309,6 +326,8 @@ export function DashboardSubfolders() {
       <div style={{ marginBottom: "var(--space-6)" }}>
         <input
           type="search"
+          id="subfolder-search"
+          name="subfolder-search"
           placeholder="Search subfolders or parent folder…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -337,7 +356,7 @@ export function DashboardSubfolders() {
       </div>
 
       {/* Table */}
-      {filtered.length > 0 ? (
+      {paginated.length > 0 ? (
         <div
           style={{
             background: "var(--color-bg-elevated)",
@@ -377,21 +396,19 @@ export function DashboardSubfolders() {
                 {h}
               </span>
             ))}
-          </div>
-
-          {filtered.map((sf, i) => (
-            <div
-              key={sf.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 180px 80px 100px 120px 140px",
-                gap: "var(--space-4)",
-                alignItems: "center",
-                padding: "var(--space-4) var(--space-5)",
-                borderBottom:
-                  i < filtered.length - 1
-                    ? "1px solid var(--color-border-subtle)"
-                    : "none",
+          </div>          {paginated.map((sf, i) => (
+              <div
+                key={sf.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 180px 80px 100px 120px 140px",
+                  gap: "var(--space-4)",
+                  alignItems: "center",
+                  padding: "var(--space-4) var(--space-5)",
+                  borderBottom:
+                    i < paginated.length - 1
+                      ? "1px solid var(--color-border-subtle)"
+                      : "none",
                 transition: "background var(--duration-fast)",
               }}
               onMouseEnter={(e) =>
@@ -591,6 +608,59 @@ export function DashboardSubfolders() {
         />
       )}
 
+      {/* Pagination */}
+      {totalFiltered > PAGE_SIZE && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "var(--space-3)",
+            marginTop: "var(--space-6)",
+          }}
+        >
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--font-size-sm)",
+              fontWeight: "var(--font-weight-medium)",
+              padding: "var(--space-2) var(--space-4)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-elevated)",
+              color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)",
+              cursor: page <= 1 ? "not-allowed" : "pointer",
+              opacity: page <= 1 ? 0.5 : 1,
+            }}
+          >
+            ← Prev
+          </button>
+          <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+            Page {page} of {Math.ceil(totalFiltered / PAGE_SIZE)}
+          </span>
+          <button
+            disabled={page >= Math.ceil(totalFiltered / PAGE_SIZE)}
+            onClick={() => setPage((p) => p + 1)}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--font-size-sm)",
+              fontWeight: "var(--font-weight-medium)",
+              padding: "var(--space-2) var(--space-4)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-elevated)",
+              color: page >= Math.ceil(totalFiltered / PAGE_SIZE) ? "var(--color-text-muted)" : "var(--color-text-primary)",
+              cursor: page >= Math.ceil(totalFiltered / PAGE_SIZE) ? "not-allowed" : "pointer",
+              opacity: page >= Math.ceil(totalFiltered / PAGE_SIZE) ? 0.5 : 1,
+            }}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+
       {/* ------------------------------------------------------------------ */}
       {/* Create modal                                                        */}
       {/* ------------------------------------------------------------------ */}
@@ -772,6 +842,7 @@ export function DashboardSubfolders() {
           itemType="folder"
           itemSlug={shareItem.slug}
           ownerUsername={user?.username || "u"}
+          ownerId={user?.id}
         />
       )}
     </DashboardLayout>

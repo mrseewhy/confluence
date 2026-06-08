@@ -24,6 +24,8 @@ function profileFromUser(user: User): Profile {
     username: user.user_metadata.username ?? generateUsername(full_name),
     avatar_url: user.user_metadata.avatar_url ?? null,
     user_type: 'user',
+    subscription_tier: 'free',
+    is_banned: false,
     created_at: user.created_at,
   }
 }
@@ -32,7 +34,7 @@ async function fetchProfile(user: User): Promise<Profile> {
   const client = requireSupabase()
   const { data, error } = await client
     .from('profiles')
-    .select('id, full_name, username, avatar_url, user_type, created_at')
+    .select('id, full_name, username, avatar_url, user_type, subscription_tier, is_banned, created_at')
     .eq('id', user.id)
     .single()
 
@@ -42,7 +44,7 @@ async function fetchProfile(user: User): Promise<Profile> {
   const { data: created, error: upsertError } = await client
     .from('profiles')
     .upsert(fallback, { onConflict: 'id' })
-    .select('id, full_name, username, avatar_url, user_type, created_at')
+    .select('id, full_name, username, avatar_url, user_type, subscription_tier, is_banned, created_at')
     .single()
 
   if (upsertError) throw upsertError

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
@@ -7,6 +7,7 @@ import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
+import { Modal } from "@/components/Modal";
 import { formatDate } from "@/lib/helpers";
 import type { Note } from "@/types";
 
@@ -23,11 +24,24 @@ export function DashboardNotes() {
   const [vis, setVis] = useState<"all" | "public" | "private">("all");
   const [shareItem, setShareItem] = useState<Note | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const loadData = async () => {
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 20;
+
+  const loadData = useCallback(async () => {
     if (!user) return;
     try {
       const supabase = requireSupabase();
+
+      // Get total count
+      const { count } = await supabase
+        .from("notes")
+        .select("*", { count: "exact", head: true })
+        .eq("owner_id", user.id);
+      setTotalCount(count ?? 0);
 
       // Fetch all folders for this user (to build parent hierarchy)
       const { data: allFolders } = await supabase
@@ -40,11 +54,14 @@ export function DashboardNotes() {
         folderMap.set(f.id, f as { id: string; title: string; slug: string; parent_id: string | null });
       }
 
+      const from = (page - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
       const { data, error } = await supabase
         .from("notes")
         .select("*, folder:folders!folder_id(id, title, slug, parent_id)")
         .eq("owner_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
 
@@ -66,11 +83,16 @@ export function DashboardNotes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, page]);
 
   useEffect(() => {
     void loadData();
-  }, [user]);
+  }, [loadData]);
+
+  // Reset page when search/vis changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, vis]);
 
   const filtered = notesList.filter((n) => {
     const q = search.toLowerCase();
@@ -92,8 +114,6 @@ export function DashboardNotes() {
   };
 
   const handleDeleteNote = async (id: string) => {
-    if (!confirm("Are you sure you want to permanently delete this note?"))
-      return;
     try {
       const supabase = requireSupabase();
       const { error } = await supabase.from("notes").delete().eq("id", id);
@@ -102,6 +122,8 @@ export function DashboardNotes() {
       await loadData();
     } catch (err) {
       console.error("Error deleting note:", err);
+    } finally {
+      setDeleteConfirmId(null);
     }
   };
 
@@ -484,7 +506,7 @@ export function DashboardNotes() {
                 <Button
                   variant="danger"
                   size="xs"
-                  onClick={() => handleDeleteNote(note.id)}
+                  onClick={() => setDeleteConfirmId(note.id)}
                 >
                   Delete
                 </Button>
@@ -511,6 +533,110 @@ export function DashboardNotes() {
         />
       )}
 
+      {/* Pagination */}
+      {totalCount > PAGE_SIZE && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "var(--space-3)",
+            marginTop: "var(--space-6)",
+          }}
+        >
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--font-size-sm)",
+              fontWeight: "var(--font-weight-medium)",
+              padding: "var(--space-2) var(--space-4)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-elevated)",
+              color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)",
+              cursor: page <= 1 ? "not-allowed" : "pointer",
+              opacity: page <= 1 ? 0.5 : 1,
+            }}
+          >
+            ← Prev
+          </button>
+          <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+            Page {page} of {Math.ceil(totalCount / PAGE_SIZE)}
+          </span>
+          <button
+            disabled={page >= Math.ceil(totalCount / PAGE_SIZE)}
+            onClick={() => setPage((p) => p + 1)}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--font-size-sm)",
+              fontWeight: "var(--font-weight-medium)",
+              padding: "var(--space-2) var(--space-4)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-elevated)",
+              color: page >= Math.ceil(totalCount / PAGE_SIZE) ? "var(--color-text-muted)" : "var(--color-text-primary)",
+              cursor: page >= Math.ceil(totalCount / PAGE_SIZE) ? "not-allowed" : "pointer",
+              opacity: page >= Math.ceil(totalCount / PAGE_SIZE) ? 0.5 : 1,
+            }}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      <Modal
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        width={400}
+      >
+        <h3
+          style={{
+            fontSize: "var(--font-size-lg)",
+            fontWeight: "var(--font-weight-bold)",
+            marginBottom: "var(--space-3)",
+            color: "var(--color-danger)",
+          }}
+        >
+          Delete this note?
+        </h3>
+        <p
+          style={{
+            fontSize: "var(--font-size-sm)",
+            color: "var(--color-text-secondary)",
+            marginBottom: "var(--space-2)",
+            lineHeight: "var(--line-height-normal)",
+          }}
+        >
+          This will permanently delete this note. This action cannot be undone.
+        </p>
+        <div
+          style={{
+            display: "flex",
+            gap: "var(--space-3)",
+            justifyContent: "flex-end",
+            marginTop: "var(--space-4)",
+          }}
+        >
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setDeleteConfirmId(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => deleteConfirmId ? handleDeleteNote(deleteConfirmId) : null}
+          >
+            Yes, delete
+          </Button>
+        </div>
+      </Modal>
+
       {/* Share Modal */}
       {shareItem && (
         <ShareModal
@@ -521,6 +647,7 @@ export function DashboardNotes() {
           itemType="note"
           itemSlug={shareItem.slug}
           ownerUsername={user?.username || "u"}
+          ownerId={user?.id}
         />
       )}
     </DashboardLayout>

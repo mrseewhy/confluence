@@ -13,4 +13,5 @@ export const IC = {
   search:     'M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z',
   plus:       'M12 5v14M5 12h14',
   menu:       'M3 12h18M3 6h18M3 18h18',
+  share:      'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8 M16 6l-4-4-4 4 M12 2v13',
 }

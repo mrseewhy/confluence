@@ -1,5 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { Button, Divider } from "@/components/ui";
@@ -56,12 +72,32 @@ function SlugField({
   slug,
   onChange,
   username,
+  available,
+  checking,
 }: {
   slug: string;
   onChange: (v: string) => void;
   username: string;
+  available?: boolean;
+  checking?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+
+  const slugStatusColor = !slug
+    ? "var(--color-text-muted)"
+    : checking
+      ? "var(--color-text-muted)"
+      : available
+        ? slug
+          ? "var(--color-success)"
+          : "var(--color-text-muted)"
+        : "var(--color-danger)";
+
+  const slugStatusIcon = !slug ? null : checking
+    ? null
+    : available
+      ? null
+      : "\u26A0";
 
   return (
     <div
@@ -103,13 +139,17 @@ function SlugField({
             flex: "1 1 200px",
             fontFamily: "var(--font-mono)",
             fontSize: "var(--font-size-sm)",
-            color: "var(--color-text-primary)",
+            color: slug && !available ? "var(--color-danger)" : "var(--color-text-primary)",
             background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-accent)",
+            border: `1px solid ${
+              slug && !available ? "var(--color-danger)" : "var(--color-accent)"
+            }`,
             borderRadius: "var(--radius-md)",
             padding: "var(--space-1) var(--space-2)",
             outline: "none",
-            boxShadow: "0 0 0 3px var(--color-accent-subtle)",
+            boxShadow: `0 0 0 3px ${
+              slug && !available ? "var(--color-danger-subtle)" : "var(--color-accent-subtle)"
+            }`,
           }}
         />
       ) : (
@@ -117,13 +157,14 @@ function SlugField({
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: "var(--font-size-sm)",
-            color: slug
-              ? "var(--color-text-secondary)"
-              : "var(--color-text-muted)",
+            color: slugStatusColor,
             wordBreak: "break-all",
           }}
         >
           {slug || "auto-generated-from-title"}
+          {slugStatusIcon && (
+            <span style={{ marginLeft: "6px" }}>{slugStatusIcon}</span>
+          )}
         </span>
       )}
       <button
@@ -178,6 +219,23 @@ function SlugField({
           </svg>
         )}
       </button>
+      {slug && !editing && (
+        <span
+          style={{
+            fontSize: "11px",
+            fontWeight: "var(--font-weight-medium)",
+            color: slugStatusColor,
+            whiteSpace: "nowrap",
+            animation: "fadeIn var(--duration-normal) var(--ease-out)",
+          }}
+        >
+          {checking
+            ? "Checking…"
+            : available
+              ? "Available"
+              : "Already taken — edit slug"}
+        </span>
+      )}
     </div>
   );
 }
@@ -378,6 +436,7 @@ export interface NoteEditorActions {
   removeBlock: (id: string) => void;
   moveBlock: (id: string, direction: "up" | "down") => void;
   reorderBlock: (fromIndex: number, toIndex: number) => void;
+  checkSlugAvailability: (userId: string) => void;
 }
 
 interface NoteEditorProps {
@@ -395,6 +454,12 @@ interface NoteEditorProps {
   bottomActions?: React.ReactNode;
   /** Current user's username for constructing public URLs */
   username: string;
+  /** Current user's ID — needed for slug availability checks */
+  userId: string;
+  /** Whether the current slug is available (only meaningful when slug is non-empty) */
+  slugAvailable?: boolean;
+  /** Whether a slug availability check is in flight */
+  slugChecking?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -408,46 +473,38 @@ export function NoteEditor({
   headerActions,
   bottomActions,
   username,
+  userId,
+  slugAvailable = true,
+  slugChecking = false,
 }: NoteEditorProps) {
   const [copied, setCopied] = useState(false);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  // ── Drag-and-drop handlers ──
-  const handleDragStart = (idx: number) => (e: React.DragEvent) => {
-    setDragIndex(idx);
-    e.dataTransfer.effectAllowed = "move";
-    // Make the drag image slightly transparent
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = "0.5";
+  // ── Auto-check slug availability on change ──
+  useEffect(() => {
+    if (state.slug) {
+      actions.checkSlugAvailability(userId);
     }
-  };
+  }, [state.slug, userId, actions.checkSlugAvailability]);
 
-  const handleDragEnd = (e: React.DragEvent) => {
-    setDragIndex(null);
-    setDragOverIndex(null);
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = "1";
+  // ── dnd-kit sensors ──
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = state.blocks.findIndex(b => b.id === active.id);
+      const newIndex = state.blocks.findIndex(b => b.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        actions.reorderBlock(oldIndex, newIndex);
+      }
     }
-  };
-
-  const handleDragOver = (idx: number) => (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverIndex(prev => prev !== idx ? idx : prev);
-  };
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
-
-  const handleDrop = (toIndex: number) => (e: React.DragEvent) => {
-    e.preventDefault();
-    if (dragIndex !== null && dragIndex !== toIndex) {
-      actions.reorderBlock(dragIndex, toIndex);
-    }
-    setDragIndex(null);
-    setDragOverIndex(null);
   };
 
   return (
@@ -538,6 +595,8 @@ export function NoteEditor({
               slug={state.slug}
               onChange={actions.setSlug}
               username={username}
+              available={slugAvailable}
+              checking={slugChecking}
             />
           </div>
           {state.visibility === "public" && (
@@ -733,265 +792,28 @@ export function NoteEditor({
           </div>
         )}
 
-        {state.blocks.map((block, idx) => {
-          const isFirst = idx === 0;
-          const isLast = idx === state.blocks.length - 1;
-          const isCode = block.type === "code";
-          const isDragging = dragIndex === idx;
-          const isDragOver = dragOverIndex === idx;
-          return (
-            <div
-              key={block.id}
-              draggable
-              onDragStart={handleDragStart(idx)}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver(idx)}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop(idx)}
-              style={{
-                border: `1px solid ${isDragOver ? "var(--color-accent)" : "var(--color-border)"}`,
-                borderRadius: "var(--radius-xl)",
-                overflow: "hidden",
-                background: isCode
-                  ? "var(--color-code-bg)"
-                  : "var(--color-bg-elevated)",
-                boxShadow: isDragOver
-                  ? "0 0 0 2px var(--color-accent-subtle)"
-                  : "var(--shadow-xs)",
-                opacity: isDragging ? 0.4 : 1,
-                transition: "opacity var(--duration-fast), box-shadow var(--duration-fast), border-color var(--duration-fast)",
-                cursor: "grab",
-              }}
+        {state.blocks.length > 0 && (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={state.blocks.map(b => b.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "var(--space-3) var(--space-4)",
-                  borderBottom: `1px solid ${isCode ? "rgba(255,255,255,0.07)" : "var(--color-border)"}`,
-                  background: isCode
-                    ? "rgba(0,0,0,0.3)"
-                    : "var(--color-bg-subtle)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "var(--space-2)",
-                  }}
-                >
-                  {/* Drag handle (6-dot grid) */}
-                  <span
-                    title="Drag to reorder"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "20px",
-                      height: "24px",
-                      cursor: "grab",
-                      color: isCode
-                        ? "rgba(255,255,255,0.2)"
-                        : "var(--color-text-muted)",
-                      opacity: 0.5,
-                      transition: "opacity var(--duration-fast)",
-                      flexShrink: 0,
-                      userSelect: "none",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.5")}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                      <circle cx="3" cy="2" r="1.2" />
-                      <circle cx="11" cy="2" r="1.2" />
-                      <circle cx="3" cy="7" r="1.2" />
-                      <circle cx="11" cy="7" r="1.2" />
-                      <circle cx="3" cy="12" r="1.2" />
-                      <circle cx="11" cy="12" r="1.2" />
-                    </svg>
-                  </span>
-                  <span style={{ fontSize: "14px" }}>
-                    {BLOCK_TYPE_EMOJIS[block.type]}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "var(--font-size-xs)",
-                      fontWeight: "var(--font-weight-semibold)",
-                      letterSpacing: "var(--letter-spacing-wide)",
-                      textTransform: "uppercase",
-                      color: isCode
-                        ? "rgba(232,230,242,0.45)"
-                        : "var(--color-text-muted)",
-                    }}
-                  >
-                    {BLOCK_TYPE_LABELS[block.type]}
-                  </span>
-                </div>
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "2px" }}
-                >
-                  <button
-                    onClick={() => actions.moveBlock(block.id, "up")}
-                    disabled={isFirst}
-                    title="Move up"
-                    style={{
-                      width: "26px",
-                      height: "26px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      border: "none",
-                      background: "transparent",
-                      borderRadius: "var(--radius-sm)",
-                      color: isFirst
-                        ? isCode
-                          ? "rgba(255,255,255,0.12)"
-                          : "var(--color-border)"
-                        : isCode
-                          ? "rgba(255,255,255,0.45)"
-                          : "var(--color-text-muted)",
-                      cursor: isFirst ? "default" : "pointer",
-                      transition: "all var(--duration-fast)",
-                      fontSize: "14px",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isFirst)
-                        e.currentTarget.style.background = isCode
-                          ? "rgba(255,255,255,0.06)"
-                          : "var(--color-bg-muted)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "transparent";
-                    }}
-                  >
-                    {"\u2191"}
-                  </button>
-                  <button
-                    onClick={() => actions.moveBlock(block.id, "down")}
-                    disabled={isLast}
-                    title="Move down"
-                    style={{
-                      width: "26px",
-                      height: "26px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      border: "none",
-                      background: "transparent",
-                      borderRadius: "var(--radius-sm)",
-                      color: isLast
-                        ? isCode
-                          ? "rgba(255,255,255,0.12)"
-                          : "var(--color-border)"
-                        : isCode
-                          ? "rgba(255,255,255,0.45)"
-                          : "var(--color-text-muted)",
-                      cursor: isLast ? "default" : "pointer",
-                      transition: "all var(--duration-fast)",
-                      fontSize: "14px",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isLast)
-                        e.currentTarget.style.background = isCode
-                          ? "rgba(255,255,255,0.06)"
-                          : "var(--color-bg-muted)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "transparent";
-                    }}
-                  >
-                    {"\u2193"}
-                  </button>
-                  <div
-                    style={{
-                      width: "1px",
-                      height: "16px",
-                      background: isCode
-                        ? "rgba(255,255,255,0.1)"
-                        : "var(--color-border)",
-                      margin: "0 var(--space-2)",
-                    }}
-                  />
-                  <button
-                    onClick={() => actions.removeBlock(block.id)}
-                    title="Delete block"
-                    style={{
-                      width: "26px",
-                      height: "26px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      border: "none",
-                      background: "transparent",
-                      borderRadius: "var(--radius-sm)",
-                      color: isCode
-                        ? "rgba(255,255,255,0.35)"
-                        : "var(--color-text-muted)",
-                      cursor: "pointer",
-                      transition: "all var(--duration-fast)",
-                      fontSize: "14px",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background =
-                        "var(--color-danger-subtle)";
-                      e.currentTarget.style.color = "var(--color-danger)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "transparent";
-                      e.currentTarget.style.color = isCode
-                        ? "rgba(255,255,255,0.35)"
-                        : "var(--color-text-muted)";
-                    }}
-                  >
-                    {"\u2715"}
-                  </button>
-                </div>
-              </div>
-              <div style={{ padding: isCode ? 0 : "var(--space-4)" }}>
-                {block.type === "text" && (
-                  <TextBlock
-                    content={block.content}
-                    onChange={(c) => actions.updateBlock(block.id, c)}
-                  />
-                )}
-                {block.type === "code" && (
-                  <CodeBlock
-                    content={block.content}
-                    metadata={block.metadata}
-                    onChange={(c) => actions.updateBlock(block.id, c)}
-                    onMeta={(m) => actions.updateBlockMeta(block.id, m)}
-                  />
-                )}
-                {block.type === "image" && (
-                  <ImageBlock
-                    content={block.content}
-                    metadata={block.metadata}
-                    onChange={(c) => actions.updateBlock(block.id, c)}
-                    onMeta={(m) => actions.updateBlockMeta(block.id, m)}
-                  />
-                )}
-                {block.type === "video" && (
-                  <VideoBlock
-                    content={block.content}
-                    metadata={block.metadata}
-                    onChange={(c) => actions.updateBlock(block.id, c)}
-                    onMeta={(m) => actions.updateBlockMeta(block.id, m)}
-                  />
-                )}
-                {block.type === "heading" && (
-                  <HeadingBlock
-                    content={block.content}
-                    metadata={block.metadata}
-                    onChange={(c) => actions.updateBlock(block.id, c)}
-                    onMeta={(m) => actions.updateBlockMeta(block.id, m)}
-                  />
-                )}
-              </div>
-            </div>
-          );
-        })}
+              {state.blocks.map((block, idx) => (
+                <SortableBlock
+                  key={block.id}
+                  block={block}
+                  idx={idx}
+                  totalBlocks={state.blocks.length}
+                  actions={actions}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        )}
       </div>
 
       {/* Add block bar */}
@@ -1081,5 +903,264 @@ export function NoteEditor({
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
     </>
+  );
+}
+
+// ── Sortable Block ────────────────────────────────────────────
+
+function SortableBlock({
+  block,
+  idx,
+  totalBlocks,
+  actions,
+}: {
+  block: NoteEditorState['blocks'][number];
+  idx: number;
+  totalBlocks: number;
+  actions: NoteEditorActions;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: block.id });
+
+  const isFirst = idx === 0;
+  const isLast = idx === totalBlocks - 1;
+  const isCode = block.type === "code";
+
+  const style: React.CSSProperties = {
+    border: `1px solid var(--color-border)`,
+    borderRadius: "var(--radius-xl)",
+    overflow: "hidden",
+    background: isCode ? "var(--color-code-bg)" : "var(--color-bg-elevated)",
+    boxShadow: isDragging ? "var(--shadow-lg)" : "var(--shadow-xs)",
+    opacity: isDragging ? 0.85 : 1,
+    transform: CSS.Transform.toString(transform),
+    transition: transition || undefined,
+    position: "relative" as const,
+    zIndex: isDragging ? 10 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "var(--space-3) var(--space-4)",
+          borderBottom: `1px solid ${isCode ? "rgba(255,255,255,0.07)" : "var(--color-border)"}`,
+          background: isCode
+            ? "rgba(0,0,0,0.3)"
+            : "var(--color-bg-subtle)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-2)",
+          }}
+        >
+          {/* Drag handle (6-dot grid) — with dnd-kit listeners */}
+          <span
+            title="Drag to reorder"
+            {...attributes}
+            {...listeners}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "20px",
+              height: "24px",
+              cursor: isDragging ? "grabbing" : "grab",
+              color: isCode
+                ? "rgba(255,255,255,0.2)"
+                : "var(--color-text-muted)",
+              opacity: 0.5,
+              transition: "opacity var(--duration-fast)",
+              flexShrink: 0,
+              userSelect: "none",
+              touchAction: "none",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.5")}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <circle cx="3" cy="2" r="1.2" />
+              <circle cx="11" cy="2" r="1.2" />
+              <circle cx="3" cy="7" r="1.2" />
+              <circle cx="11" cy="7" r="1.2" />
+              <circle cx="3" cy="12" r="1.2" />
+              <circle cx="11" cy="12" r="1.2" />
+            </svg>
+          </span>
+          <span style={{ fontSize: "14px" }}>{BLOCK_TYPE_EMOJIS[block.type]}</span>
+          <span
+            style={{
+              fontSize: "var(--font-size-xs)",
+              fontWeight: "var(--font-weight-semibold)",
+              letterSpacing: "var(--letter-spacing-wide)",
+              textTransform: "uppercase",
+              color: isCode
+                ? "rgba(232,230,242,0.45)"
+                : "var(--color-text-muted)",
+            }}
+          >
+            {BLOCK_TYPE_LABELS[block.type]}
+          </span>
+        </div>
+        <div
+          style={{ display: "flex", alignItems: "center", gap: "2px" }}
+        >
+          <button
+            onClick={() => actions.moveBlock(block.id, "up")}
+            disabled={isFirst}
+            title="Move up"
+            style={{
+              width: "26px",
+              height: "26px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "none",
+              background: "transparent",
+              borderRadius: "var(--radius-sm)",
+              color: isFirst
+                ? isCode ? "rgba(255,255,255,0.12)" : "var(--color-border)"
+                : isCode ? "rgba(255,255,255,0.45)" : "var(--color-text-muted)",
+              cursor: isFirst ? "default" : "pointer",
+              transition: "all var(--duration-fast)",
+              fontSize: "14px",
+            }}
+            onMouseEnter={(e) => {
+              if (!isFirst)
+                e.currentTarget.style.background = isCode
+                  ? "rgba(255,255,255,0.06)"
+                  : "var(--color-bg-muted)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            {"\u2191"}
+          </button>
+          <button
+            onClick={() => actions.moveBlock(block.id, "down")}
+            disabled={isLast}
+            title="Move down"
+            style={{
+              width: "26px",
+              height: "26px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "none",
+              background: "transparent",
+              borderRadius: "var(--radius-sm)",
+              color: isLast
+                ? isCode ? "rgba(255,255,255,0.12)" : "var(--color-border)"
+                : isCode ? "rgba(255,255,255,0.45)" : "var(--color-text-muted)",
+              cursor: isLast ? "default" : "pointer",
+              transition: "all var(--duration-fast)",
+              fontSize: "14px",
+            }}
+            onMouseEnter={(e) => {
+              if (!isLast)
+                e.currentTarget.style.background = isCode
+                  ? "rgba(255,255,255,0.06)"
+                  : "var(--color-bg-muted)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            {"\u2193"}
+          </button>
+          <div
+            style={{
+              width: "1px",
+              height: "16px",
+              background: isCode ? "rgba(255,255,255,0.1)" : "var(--color-border)",
+              margin: "0 var(--space-2)",
+            }}
+          />
+          <button
+            onClick={() => actions.removeBlock(block.id)}
+            title="Delete block"
+            style={{
+              width: "26px",
+              height: "26px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "none",
+              background: "transparent",
+              borderRadius: "var(--radius-sm)",
+              color: isCode ? "rgba(255,255,255,0.35)" : "var(--color-text-muted)",
+              cursor: "pointer",
+              transition: "all var(--duration-fast)",
+              fontSize: "14px",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--color-danger-subtle)";
+              e.currentTarget.style.color = "var(--color-danger)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = isCode
+                ? "rgba(255,255,255,0.35)"
+                : "var(--color-text-muted)";
+            }}
+          >
+            {"\u2715"}
+          </button>
+        </div>
+      </div>
+      <div style={{ padding: isCode ? 0 : "var(--space-4)" }}>
+        {block.type === "text" && (
+          <TextBlock
+            content={block.content}
+            onChange={(c) => actions.updateBlock(block.id, c)}
+          />
+        )}
+        {block.type === "code" && (
+          <CodeBlock
+            content={block.content}
+            metadata={block.metadata}
+            onChange={(c) => actions.updateBlock(block.id, c)}
+            onMeta={(m) => actions.updateBlockMeta(block.id, m)}
+          />
+        )}
+        {block.type === "image" && (
+          <ImageBlock
+            content={block.content}
+            metadata={block.metadata}
+            onChange={(c) => actions.updateBlock(block.id, c)}
+            onMeta={(m) => actions.updateBlockMeta(block.id, m)}
+          />
+        )}
+        {block.type === "video" && (
+          <VideoBlock
+            content={block.content}
+            metadata={block.metadata}
+            onChange={(c) => actions.updateBlock(block.id, c)}
+            onMeta={(m) => actions.updateBlockMeta(block.id, m)}
+          />
+        )}
+        {block.type === "heading" && (
+          <HeadingBlock
+            content={block.content}
+            metadata={block.metadata}
+            onChange={(c) => actions.updateBlock(block.id, c)}
+            onMeta={(m) => actions.updateBlockMeta(block.id, m)}
+          />
+        )}
+      </div>
+    </div>
   );
 }

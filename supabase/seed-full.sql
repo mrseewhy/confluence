@@ -3,9 +3,9 @@
 -- Run via: supabase db reset (auto-runs seed.sql)
 --
 -- Users: 4 regular + 1 admin
--- Each user has 2 root folders (general + custom), each with 2 subfolders = 4 subfolders
--- Each subfolder has 1 note with 1 text block
--- Total: 10 root folders, 20 subfolders, 20 notes, 20 note blocks
+-- Each user has 2 root folders (general + custom), each with 3 subfolders
+-- Each subfolder has 3 notes, each note has 1 text block
+-- Total: 10 root folders, 30 subfolders, 90 notes, 90 note blocks
 -- ─────────────────────────────────────────────────────────────
 
 -- ═════════════════════════════════════════════════════════════
@@ -421,8 +421,132 @@ VALUES
     now() - interval '2 days'
   );
 
+-- 4c. Third subfolder under each root folder (for 3 subfolders total)
+INSERT INTO public.folders (id, owner_id, parent_id, title, description, slug, visibility, created_at, updated_at)
+VALUES
+  -- Alex's general > Archive
+  (
+    'b3000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    (SELECT id FROM public.folders WHERE slug = 'general' AND owner_id = '00000000-0000-0000-0000-000000000001'),
+    'Archive',
+    'Historical notes, past projects, and reference materials.',
+    'archive',
+    'public',
+    now() - interval '22 days',
+    now() - interval '3 days'
+  ),
+  -- Sarah's general > Favorites
+  (
+    'b3000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000002',
+    (SELECT id FROM public.folders WHERE slug = 'general' AND owner_id = '00000000-0000-0000-0000-000000000002'),
+    'Favorites',
+    'Top picks, frequently referenced notes, and go-to resources.',
+    'favorites',
+    'public',
+    now() - interval '19 days',
+    now() - interval '3 days'
+  ),
+  -- Marcus's general > Goals
+  (
+    'b3000000-0000-0000-0000-000000000003',
+    '00000000-0000-0000-0000-000000000003',
+    (SELECT id FROM public.folders WHERE slug = 'general' AND owner_id = '00000000-0000-0000-0000-000000000003'),
+    'Goals',
+    'Personal and professional goals, tracking progress over time.',
+    'goals',
+    'public',
+    now() - interval '17 days',
+    now() - interval '4 days'
+  ),
+  -- Priya's general > Drafts
+  (
+    'b3000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000004',
+    (SELECT id FROM public.folders WHERE slug = 'general' AND owner_id = '00000000-0000-0000-0000-000000000004'),
+    'Drafts',
+    'Unfinished pieces, works in progress, and early outlines.',
+    'drafts',
+    'public',
+    now() - interval '15 days',
+    now() - interval '5 days'
+  ),
+  -- Emma's general > References
+  (
+    'b3000000-0000-0000-0000-000000000005',
+    '00000000-0000-0000-0000-000000000005',
+    (SELECT id FROM public.folders WHERE slug = 'general' AND owner_id = '00000000-0000-0000-0000-000000000005'),
+    'References',
+    'Design references, style guides, and resource libraries.',
+    'references',
+    'public',
+    now() - interval '12 days',
+    now() - interval '2 days'
+  ),
+  -- Alex: System Architecture > Microservices
+  (
+    'b3000000-0000-0000-0000-000000000006',
+    '00000000-0000-0000-0000-000000000001',
+    'c0000000-0000-0000-0000-000000000001',
+    'Microservices',
+    'Service decomposition strategies, inter-service communication, and observability.',
+    'microservices',
+    'public',
+    now() - interval '22 days',
+    now() - interval '3 days'
+  ),
+  -- Sarah: Data Science > Statistics
+  (
+    'b3000000-0000-0000-0000-000000000007',
+    '00000000-0000-0000-0000-000000000002',
+    'c0000000-0000-0000-0000-000000000002',
+    'Statistics',
+    'Statistical methods, hypothesis testing, and experimental design.',
+    'statistics',
+    'public',
+    now() - interval '19 days',
+    now() - interval '3 days'
+  ),
+  -- Marcus: Product Management > OKRs
+  (
+    'b3000000-0000-0000-0000-000000000008',
+    '00000000-0000-0000-0000-000000000003',
+    'c0000000-0000-0000-0000-000000000003',
+    'OKRs',
+    'Objective and key results planning, tracking, and retrospectives.',
+    'okrs',
+    'public',
+    now() - interval '17 days',
+    now() - interval '4 days'
+  ),
+  -- Priya: Creative Writing > Essays
+  (
+    'b3000000-0000-0000-0000-000000000009',
+    '00000000-0000-0000-0000-000000000004',
+    'c0000000-0000-0000-0000-000000000004',
+    'Essays',
+    'Personal essays, opinion pieces, and reflective non-fiction.',
+    'essays',
+    'public',
+    now() - interval '14 days',
+    now() - interval '5 days'
+  ),
+  -- Emma: Design Portfolio > Motion
+  (
+    'b3000000-0000-0000-0000-000000000010',
+    '00000000-0000-0000-0000-000000000005',
+    'c0000000-0000-0000-0000-000000000005',
+    'Motion Design',
+    'Animation principles, micro-interactions, and motion prototypes.',
+    'motion-design',
+    'public',
+    now() - interval '11 days',
+    now() - interval '2 days'
+  );
+
 -- ═════════════════════════════════════════════════════════════
--- 5. NOTES (1 per subfolder = 20 total)
+-- 5. NOTES (3 per subfolder = 90 total)
 -- Note slugs must be GLOBALLY UNIQUE per the notes_slug_key constraint.
 -- Each note is public so it appears on the homepage / notes page.
 -- ═════════════════════════════════════════════════════════════
@@ -670,8 +794,100 @@ VALUES
     now() - interval '2 days'
   );
 
+-- 5b. Second note per subfolder (notes 21-50)
+INSERT INTO public.notes (id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at)
+SELECT * FROM (VALUES
+  -- Alex: Getting Started (subfolder 1)
+  ('a2000000-0000-0000-0000-000000000001'::uuid, 'b1000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Setting Up Your Profile', 'How to customise your profile, set preferences, and manage your account settings.', 'setting-up-your-profile'::text, 'public'::public.visibility_type, now() - interval '23 days', now() - interval '2 days'),
+  ('a2000000-0000-0000-0000-000000000002'::uuid, 'b1000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Markdown Formatting Guide', 'A comprehensive reference for formatting your notes with markdown-style syntax.', 'markdown-formatting-guide'::text, 'public'::public.visibility_type, now() - interval '22 days', now() - interval '2 days'),
+  ('a2000000-0000-0000-0000-000000000003'::uuid, 'b2000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Event-Driven Architecture', 'Understanding event sourcing, CQRS, and message brokers for decoupled systems.', 'event-driven-architecture'::text, 'public'::public.visibility_type, now() - interval '21 days', now() - interval '3 days'),
+  ('a2000000-0000-0000-0000-000000000004'::uuid, 'b2000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Database Sharding Strategies', 'Techniques for distributing data across multiple database instances for performance.', 'database-sharding-strategies'::text, 'public'::public.visibility_type, now() - interval '20 days', now() - interval '3 days'),
+  ('a2000000-0000-0000-0000-000000000005'::uuid, 'b3000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Past Project Retrospectives', 'Lessons learned from previous projects, what worked well and what could be improved.', 'past-project-retrospectives'::text, 'public'::public.visibility_type, now() - interval '20 days', now() - interval '3 days'),
+  -- Sarah: Workflows (subfolder 3)
+  ('a2000000-0000-0000-0000-000000000006'::uuid, 'b1000000-0000-0000-0000-000000000003'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Pomodoro Technique Deep Dive', 'How to implement effective time-blocking using focused work intervals.', 'pomodoro-technique-deep-dive'::text, 'public'::public.visibility_type, now() - interval '19 days', now() - interval '2 days'),
+  ('a2000000-0000-0000-0000-000000000007'::uuid, 'b1000000-0000-0000-0000-000000000004'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Recommended Reading List', 'Books and articles that have shaped my thinking on data and technology.', 'recommended-reading-list'::text, 'public'::public.visibility_type, now() - interval '18 days', now() - interval '2 days'),
+  ('a2000000-0000-0000-0000-000000000008'::uuid, 'b2000000-0000-0000-0000-000000000003'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Neural Network Architectures', 'Overview of CNNs, RNNs, Transformers, and when to use each architecture.', 'neural-network-architectures'::text, 'public'::public.visibility_type, now() - interval '17 days', now() - interval '2 days'),
+  ('a2000000-0000-0000-0000-000000000009'::uuid, 'b2000000-0000-0000-0000-000000000004'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Dashboard Design Principles', 'How to design dashboards that communicate insights clearly at a glance.', 'dashboard-design-principles'::text, 'public'::public.visibility_type, now() - interval '16 days', now() - interval '2 days'),
+  ('a2000000-0000-0000-0000-000000000010'::uuid, 'b3000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Top Data Science Resources', 'My favourite datasets, notebooks, and communities for data science learning.', 'top-data-science-resources'::text, 'public'::public.visibility_type, now() - interval '17 days', now() - interval '2 days'),
+  -- Marcus: Notes (subfolder 5)
+  ('a2000000-0000-0000-0000-000000000011'::uuid, 'b1000000-0000-0000-0000-000000000005'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Meeting Notes Template', 'A structured template for capturing meeting notes, decisions, and action items.', 'meeting-notes-template'::text, 'public'::public.visibility_type, now() - interval '15 days', now() - interval '3 days'),
+  ('a2000000-0000-0000-0000-000000000012'::uuid, 'b1000000-0000-0000-0000-000000000006'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Top Productivity Extensions', 'VS Code extensions and browser plugins that save time and reduce friction.', 'top-productivity-extensions'::text, 'public'::public.visibility_type, now() - interval '14 days', now() - interval '3 days'),
+  ('a2000000-0000-0000-0000-000000000013'::uuid, 'b2000000-0000-0000-0000-000000000005'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Feature Prioritisation Matrix', 'Using ICE and RICE frameworks to prioritise features objectively.', 'feature-prioritisation-matrix'::text, 'public'::public.visibility_type, now() - interval '13 days', now() - interval '4 days'),
+  ('a2000000-0000-0000-0000-000000000014'::uuid, 'b2000000-0000-0000-0000-000000000006'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Survey Design Best Practices', 'How to craft effective surveys that yield actionable user insights.', 'survey-design-best-practices'::text, 'public'::public.visibility_type, now() - interval '12 days', now() - interval '4 days'),
+  ('a2000000-0000-0000-0000-000000000015'::uuid, 'b3000000-0000-0000-0000-000000000003'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, '2026 Personal Goals', 'My personal development objectives for the year ahead with measurable milestones.', '2026-personal-goals'::text, 'public'::public.visibility_type, now() - interval '15 days', now() - interval '4 days'),
+  -- Priya: Journal (subfolder 7)
+  ('a2000000-0000-0000-0000-000000000016'::uuid, 'b1000000-0000-0000-0000-000000000007'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Monthly Reflection: May', 'A thoughtful review of the past month, accomplishments, and areas for growth.', 'monthly-reflection-may'::text, 'public'::public.visibility_type, now() - interval '11 days', now() - interval '4 days'),
+  ('a2000000-0000-0000-0000-000000000017'::uuid, 'b1000000-0000-0000-0000-000000000008'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Blog Post Ideas', 'A running list of blog post topics and angles for my personal blog.', 'blog-post-ideas'::text, 'public'::public.visibility_type, now() - interval '10 days', now() - interval '4 days'),
+  ('a2000000-0000-0000-0000-000000000018'::uuid, 'b2000000-0000-0000-0000-000000000007'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Haiku Collection', 'A series of original haiku exploring nature, technology, and everyday moments.', 'haiku-collection'::text, 'public'::public.visibility_type, now() - interval '9 days', now() - interval '5 days'),
+  ('a2000000-0000-0000-0000-000000000019'::uuid, 'b2000000-0000-0000-0000-000000000008'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'The Silent Library', 'A short story about a magical library where books whisper forgotten memories.', 'the-silent-library'::text, 'public'::public.visibility_type, now() - interval '8 days', now() - interval '5 days'),
+  ('a2000000-0000-0000-0000-000000000020'::uuid, 'b3000000-0000-0000-0000-000000000004'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Work in Progress: Novel', 'Chapter outlines and character notes for my novel-in-progress.', 'work-in-progress-novel'::text, 'public'::public.visibility_type, now() - interval '10 days', now() - interval '5 days'),
+  -- Emma: Inspiration (subfolder 9)
+  ('a2000000-0000-0000-0000-000000000021'::uuid, 'b1000000-0000-0000-0000-000000000009'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Colour Palette Inspirations', 'Beautiful colour combinations I have discovered and want to use in future projects.', 'colour-palette-inspirations'::text, 'public'::public.visibility_type, now() - interval '7 days', now() - interval '1 day'),
+  ('a2000000-0000-0000-0000-000000000022'::uuid, 'b1000000-0000-0000-0000-000000000010'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Mobile App Wireframes', 'Rough sketches for a mobile-first note-taking application concept.', 'mobile-app-wireframes'::text, 'public'::public.visibility_type, now() - interval '6 days', now() - interval '1 day'),
+  ('a2000000-0000-0000-0000-000000000023'::uuid, 'b2000000-0000-0000-0000-000000000009'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Design System Audit Template', 'A template for auditing existing design systems and identifying improvement areas.', 'design-system-audit-template'::text, 'public'::public.visibility_type, now() - interval '5 days', now() - interval '2 days'),
+  ('a2000000-0000-0000-0000-000000000024'::uuid, 'b2000000-0000-0000-0000-000000000010'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Logo Design Process', 'A walkthrough of my logo design workflow from brief to final delivery.', 'logo-design-process'::text, 'public'::public.visibility_type, now() - interval '4 days', now() - interval '2 days'),
+  ('a2000000-0000-0000-0000-000000000025'::uuid, 'b3000000-0000-0000-0000-000000000005'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Typography Pairing Guide', 'A reference for combining typefaces effectively in design projects.', 'typography-pairing-guide'::text, 'public'::public.visibility_type, now() - interval '7 days', now() - interval '1 day')
+) AS t(id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at);
+
+-- 5c. Third note per subfolder (notes 51-80)
+INSERT INTO public.notes (id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at)
+SELECT * FROM (VALUES
+  -- Alex: Getting Started 3
+  ('a3000000-0000-0000-0000-000000000001'::uuid, 'b1000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Keyboard Shortcuts Reference', 'A complete list of keyboard shortcuts to speed up your workflow in Confluence.', 'keyboard-shortcuts-reference'::text, 'public'::public.visibility_type, now() - interval '22 days', now() - interval '2 days'),
+  ('a3000000-0000-0000-0000-000000000002'::uuid, 'b1000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Collaboration Features Overview', 'How to share notes, invite collaborators, and work together in real time.', 'collaboration-features-overview'::text, 'public'::public.visibility_type, now() - interval '21 days', now() - interval '2 days'),
+  ('a3000000-0000-0000-0000-000000000003'::uuid, 'b2000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'API Gateway Patterns', 'How API gateways manage traffic, authentication, rate limiting, and service discovery.', 'api-gateway-patterns'::text, 'public'::public.visibility_type, now() - interval '20 days', now() - interval '3 days'),
+  ('a3000000-0000-0000-0000-000000000004'::uuid, 'b2000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'CDN and Edge Computing', 'Leveraging CDNs and edge functions for globally distributed low-latency applications.', 'cdn-and-edge-computing'::text, 'public'::public.visibility_type, now() - interval '19 days', now() - interval '3 days'),
+  ('a3000000-0000-0000-0000-000000000005'::uuid, 'b3000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Code Snippets Collection', 'Useful code snippets for common tasks across different programming languages.', 'code-snippets-collection'::text, 'public'::public.visibility_type, now() - interval '19 days', now() - interval '3 days'),
+  -- Sarah: Workflows 3
+  ('a3000000-0000-0000-0000-000000000006'::uuid, 'b1000000-0000-0000-0000-000000000003'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Inbox Zero Methodology', 'Strategies for processing email efficiently and maintaining a clear inbox.', 'inbox-zero-methodology'::text, 'public'::public.visibility_type, now() - interval '18 days', now() - interval '2 days'),
+  ('a3000000-0000-0000-0000-000000000007'::uuid, 'b1000000-0000-0000-0000-000000000004'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Online Course Tracker', 'Tracking progress through various online courses with notes and key takeaways.', 'online-course-tracker'::text, 'public'::public.visibility_type, now() - interval '17 days', now() - interval '2 days'),
+  ('a3000000-0000-0000-0000-000000000008'::uuid, 'b2000000-0000-0000-0000-000000000003'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Feature Engineering Techniques', 'Methods for creating informative features that improve machine learning model performance.', 'feature-engineering-techniques'::text, 'public'::public.visibility_type, now() - interval '16 days', now() - interval '2 days'),
+  ('a3000000-0000-0000-0000-000000000009'::uuid, 'b2000000-0000-0000-0000-000000000004'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Accessible Data Visualisation', 'How to create charts and graphs that are inclusive and accessible to all users.', 'accessible-data-visualisation'::text, 'public'::public.visibility_type, now() - interval '15 days', now() - interval '2 days'),
+  ('a3000000-0000-0000-0000-000000000010'::uuid, 'b3000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Conference Notes: DataConf', 'Key takeaways and highlights from the annual Data Science Conference.', 'conference-notes-dataconf'::text, 'public'::public.visibility_type, now() - interval '16 days', now() - interval '2 days'),
+  -- Marcus: Notes 3
+  ('a3000000-0000-0000-0000-000000000011'::uuid, 'b1000000-0000-0000-0000-000000000005'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Leadership Reading Notes', 'Summaries and reflections from books on leadership and management.', 'leadership-reading-notes'::text, 'public'::public.visibility_type, now() - interval '14 days', now() - interval '3 days'),
+  ('a3000000-0000-0000-0000-000000000012'::uuid, 'b1000000-0000-0000-0000-000000000006'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Podcast Recommendations', 'My favourite product and tech podcasts with episode recommendations.', 'podcast-recommendations'::text, 'public'::public.visibility_type, now() - interval '13 days', now() - interval '3 days'),
+  ('a3000000-0000-0000-0000-000000000013'::uuid, 'b2000000-0000-0000-0000-000000000005'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Stakeholder Communication Guide', 'Best practices for communicating product decisions to different stakeholder groups.', 'stakeholder-communication-guide'::text, 'public'::public.visibility_type, now() - interval '12 days', now() - interval '4 days'),
+  ('a3000000-0000-0000-0000-000000000014'::uuid, 'b2000000-0000-0000-0000-000000000006'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Usability Testing Script', 'A standardised script for moderated usability testing sessions.', 'usability-testing-script'::text, 'public'::public.visibility_type, now() - interval '11 days', now() - interval '4 days'),
+  ('a3000000-0000-0000-0000-000000000015'::uuid, 'b3000000-0000-0000-0000-000000000003'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Weekly Review Template', 'A structured template for conducting effective weekly self-reviews.', 'weekly-review-template'::text, 'public'::public.visibility_type, now() - interval '13 days', now() - interval '4 days'),
+  -- Priya: Journal 3
+  ('a3000000-0000-0000-0000-000000000016'::uuid, 'b1000000-0000-0000-0000-000000000007'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Gratitude Log', 'Daily gratitude entries to cultivate mindfulness and appreciation.', 'gratitude-log'::text, 'public'::public.visibility_type, now() - interval '10 days', now() - interval '4 days'),
+  ('a3000000-0000-0000-0000-000000000017'::uuid, 'b1000000-0000-0000-0000-000000000008'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Creative Challenges', 'Monthly creative prompts and challenges to keep the creative muscles active.', 'creative-challenges'::text, 'public'::public.visibility_type, now() - interval '9 days', now() - interval '4 days'),
+  ('a3000000-0000-0000-0000-000000000018'::uuid, 'b2000000-0000-0000-0000-000000000007'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Nature Poetry Cycle', 'A four-part poetry series following the changing seasons and their moods.', 'nature-poetry-cycle'::text, 'public'::public.visibility_type, now() - interval '8 days', now() - interval '5 days'),
+  ('a3000000-0000-0000-0000-000000000019'::uuid, 'b2000000-0000-0000-0000-000000000008'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'The Travelling Salesman', 'A humorous short story about a data salesman selling algorithms door-to-door.', 'the-travelling-salesman'::text, 'public'::public.visibility_type, now() - interval '7 days', now() - interval '5 days'),
+  ('a3000000-0000-0000-0000-000000000020'::uuid, 'b3000000-0000-0000-0000-000000000004'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Essay: On Digital Minimalism', 'Thoughts on reducing digital clutter and finding focus in a distracted world.', 'essay-digital-minimalism'::text, 'public'::public.visibility_type, now() - interval '8 days', now() - interval '5 days'),
+  -- Emma: Inspiration 3
+  ('a3000000-0000-0000-0000-000000000021'::uuid, 'b1000000-0000-0000-0000-000000000009'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Mood Board Collection', 'Curated mood boards for different design aesthetics and brand personalities.', 'mood-board-collection'::text, 'public'::public.visibility_type, now() - interval '6 days', now() - interval '1 day'),
+  ('a3000000-0000-0000-0000-000000000022'::uuid, 'b1000000-0000-0000-0000-000000000010'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Component Library Planning', 'Planning the components needed for a scalable design system.', 'component-library-planning'::text, 'public'::public.visibility_type, now() - interval '5 days', now() - interval '1 day'),
+  ('a3000000-0000-0000-0000-000000000023'::uuid, 'b2000000-0000-0000-0000-000000000009'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'User Flow Documentation', 'How to document and communicate user flows effectively to stakeholders.', 'user-flow-documentation'::text, 'public'::public.visibility_type, now() - interval '4 days', now() - interval '2 days'),
+  ('a3000000-0000-0000-0000-000000000024'::uuid, 'b2000000-0000-0000-0000-000000000010'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Brand Voice and Tone Guide', 'Defining brand personality through consistent voice and tone in communications.', 'brand-voice-tone-guide'::text, 'public'::public.visibility_type, now() - interval '3 days', now() - interval '2 days'),
+  ('a3000000-0000-0000-0000-000000000025'::uuid, 'b3000000-0000-0000-0000-000000000005'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Animation Principles Reference', 'The 12 principles of animation applied to UI motion design.', 'animation-principles-reference'::text, 'public'::public.visibility_type, now() - interval '5 days', now() - interval '1 day')
+) AS t(id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at);
+
 -- ═════════════════════════════════════════════════════════════
--- 6. NOTE BLOCKS (1 text block per note = 20 blocks)
+-- 6. NOTE BLOCKS (1 text block per note = 20 existing + 60 new = 80 total)
+
+-- Additional blocks for the second batch of notes (21-50)
+INSERT INTO public.note_blocks (note_id, type, content, order_index, metadata)
+SELECT n.id, 'text',
+  'This is one of several notes in this subfolder. Each subfolder contains at least three notes ' ||
+  'covering different aspects of the topic, providing a rich set of content to explore.',
+  0, '{}'::jsonb
+FROM public.notes n
+WHERE n.id >= 'a2000000-0000-0000-0000-000000000001'::uuid
+  AND n.id <= 'a2000000-0000-0000-0000-000000000025'::uuid
+  AND NOT EXISTS (SELECT 1 FROM public.note_blocks WHERE note_id = n.id);
+
+-- Additional blocks for the third batch of notes (51-80)
+INSERT INTO public.note_blocks (note_id, type, content, order_index, metadata)
+SELECT n.id, 'text',
+  'This subfolder contains multiple notes for testing pagination, search, and filtering. ' ||
+  'Each note has a unique title and description to make them distinguishable in lists and search results.',
+  0, '{}'::jsonb
+FROM public.notes n
+WHERE n.id >= 'a3000000-0000-0000-0000-000000000001'::uuid
+  AND n.id <= 'a3000000-0000-0000-0000-000000000025'::uuid
+  AND NOT EXISTS (SELECT 1 FROM public.note_blocks WHERE note_id = n.id);
 -- ═════════════════════════════════════════════════════════════
 
 INSERT INTO public.note_blocks (note_id, type, content, order_index, metadata)
@@ -836,3 +1052,109 @@ VALUES
     0,
     '{}'
   );
+
+-- 5d. Fourth note per subfolder — completing subfolders 21-25 to reach 3 notes each
+-- (b3-001 through b3-005: Archive, Favorites, Goals, Drafts, References)
+INSERT INTO public.notes (id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at)
+SELECT * FROM (VALUES
+  ('a4000000-0000-0000-0000-000000000001'::uuid, 'b3000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'References & Cheat Sheets', 'Quick-reference guides and cheat sheets for common development tasks.', 'references-cheat-sheets'::text, 'public'::public.visibility_type, now() - interval '21 days', now() - interval '3 days'),
+  ('a4000000-0000-0000-0000-000000000002'::uuid, 'b3000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Bookmarks: Data Science Edition', 'Hand-picked bookmarks for data science tools, datasets, and tutorials.', 'bookmarks-data-science'::text, 'public'::public.visibility_type, now() - interval '18 days', now() - interval '3 days'),
+  ('a4000000-0000-0000-0000-000000000003'::uuid, 'b3000000-0000-0000-0000-000000000003'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Career Development Plan', 'A structured plan for professional growth and skill development over the next 12 months.', 'career-development-plan'::text, 'public'::public.visibility_type, now() - interval '16 days', now() - interval '4 days'),
+  ('a4000000-0000-0000-0000-000000000004'::uuid, 'b3000000-0000-0000-0000-000000000004'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Draft: The City of Glass', 'An early draft of a speculative fiction piece about a transparent metropolis.', 'draft-city-of-glass'::text, 'public'::public.visibility_type, now() - interval '13 days', now() - interval '5 days'),
+  ('a4000000-0000-0000-0000-000000000005'::uuid, 'b3000000-0000-0000-0000-000000000005'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Design Handoff Checklist', 'A comprehensive checklist for handing off designs to developers.', 'design-handoff-checklist'::text, 'public'::public.visibility_type, now() - interval '6 days', now() - interval '1 day')
+) AS t(id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at);
+
+-- 5e. First notes for subfolders 26-30 (b3-006 through b3-010: Microservices, Statistics, OKRs, Essays, Motion)
+INSERT INTO public.notes (id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at)
+SELECT * FROM (VALUES
+  ('a5000000-0000-0000-0000-000000000001'::uuid, 'b3000000-0000-0000-0000-000000000006'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Service Mesh Fundamentals', 'An introduction to service mesh architectures using Istio and Linkerd.', 'service-mesh-fundamentals'::text, 'public'::public.visibility_type, now() - interval '21 days', now() - interval '3 days'),
+  ('a5000000-0000-0000-0000-000000000002'::uuid, 'b3000000-0000-0000-0000-000000000007'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Bayesian Statistics Primer', 'Understanding Bayesian inference, prior distributions, and posterior analysis.', 'bayesian-statistics-primer'::text, 'public'::public.visibility_type, now() - interval '18 days', now() - interval '3 days'),
+  ('a5000000-0000-0000-0000-000000000003'::uuid, 'b3000000-0000-0000-0000-000000000008'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Q2 OKR Retrospective', 'Review of Q2 objectives and key results, including what worked and what did not.', 'q2-okr-retrospective'::text, 'public'::public.visibility_type, now() - interval '16 days', now() - interval '4 days'),
+  ('a5000000-0000-0000-0000-000000000004'::uuid, 'b3000000-0000-0000-0000-000000000009'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Essay: On Writing Every Day', 'Reflections on building a daily writing habit and the creative rewards of consistency.', 'essay-on-writing-every-day'::text, 'public'::public.visibility_type, now() - interval '12 days', now() - interval '5 days'),
+  ('a5000000-0000-0000-0000-000000000005'::uuid, 'b3000000-0000-0000-0000-000000000010'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Micro-interactions Catalogue', 'A catalogue of delightful micro-interactions for inspiration and reference.', 'micro-interactions-catalogue'::text, 'public'::public.visibility_type, now() - interval '4 days', now() - interval '1 day')
+) AS t(id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at);
+
+-- 5f. Second notes for subfolders 26-30
+INSERT INTO public.notes (id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at)
+SELECT * FROM (VALUES
+  ('a5000000-0000-0000-0000-000000000006'::uuid, 'b3000000-0000-0000-0000-000000000006'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Distributed Tracing Guide', 'Implementing distributed tracing with OpenTelemetry for microservices observability.', 'distributed-tracing-guide'::text, 'public'::public.visibility_type, now() - interval '20 days', now() - interval '3 days'),
+  ('a5000000-0000-0000-0000-000000000007'::uuid, 'b3000000-0000-0000-0000-000000000007'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'A/B Testing Methodology', 'Designing and analysing A/B tests with statistical rigour.', 'ab-testing-methodology'::text, 'public'::public.visibility_type, now() - interval '17 days', now() - interval '3 days'),
+  ('a5000000-0000-0000-0000-000000000008'::uuid, 'b3000000-0000-0000-0000-000000000008'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Cross-Functional Alignment', 'Strategies for aligning engineering, design, and business teams around shared objectives.', 'cross-functional-alignment'::text, 'public'::public.visibility_type, now() - interval '15 days', now() - interval '4 days'),
+  ('a5000000-0000-0000-0000-000000000009'::uuid, 'b3000000-0000-0000-0000-000000000009'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Essay: The Attention Economy', 'Critical thoughts on how digital platforms compete for attention and what we can do about it.', 'essay-attention-economy'::text, 'public'::public.visibility_type, now() - interval '11 days', now() - interval '5 days'),
+  ('a5000000-0000-0000-0000-000000000010'::uuid, 'b3000000-0000-0000-0000-000000000010'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Loading State Animations', 'Creative approaches to loading states, skeleton screens, and progress indicators.', 'loading-state-animations'::text, 'public'::public.visibility_type, now() - interval '3 days', now() - interval '1 day')
+) AS t(id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at);
+
+-- 5g. Third notes for subfolders 26-30
+INSERT INTO public.notes (id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at)
+SELECT * FROM (VALUES
+  ('a5000000-0000-0000-0000-000000000011'::uuid, 'b3000000-0000-0000-0000-000000000006'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Container Orchestration Comparison', 'Comparing Kubernetes, Docker Swarm, and Nomad for container orchestration.', 'container-orchestration-comparison'::text, 'public'::public.visibility_type, now() - interval '19 days', now() - interval '3 days'),
+  ('a5000000-0000-0000-0000-000000000012'::uuid, 'b3000000-0000-0000-0000-000000000007'::uuid, '00000000-0000-0000-0000-000000000002'::uuid, 'Time Series Analysis Notes', 'Methods for analysing time-dependent data including ARIMA, Prophet, and LSTM models.', 'time-series-analysis-notes'::text, 'public'::public.visibility_type, now() - interval '16 days', now() - interval '3 days'),
+  ('a5000000-0000-0000-0000-000000000013'::uuid, 'b3000000-0000-0000-0000-000000000008'::uuid, '00000000-0000-0000-0000-000000000003'::uuid, 'Product Discovery Framework', 'A framework for continuous product discovery and opportunity assessment.', 'product-discovery-framework'::text, 'public'::public.visibility_type, now() - interval '14 days', now() - interval '4 days'),
+  ('a5000000-0000-0000-0000-000000000014'::uuid, 'b3000000-0000-0000-0000-000000000009'::uuid, '00000000-0000-0000-0000-000000000004'::uuid, 'Essay: The Art of Revision', 'Why the real writing happens in revision and how to embrace the editing process.', 'essay-art-of-revision'::text, 'public'::public.visibility_type, now() - interval '10 days', now() - interval '5 days'),
+  ('a5000000-0000-0000-0000-000000000015'::uuid, 'b3000000-0000-0000-0000-000000000010'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Design Tokens Architecture', 'Building a scalable design tokens system for multi-platform design systems.', 'design-tokens-architecture'::text, 'public'::public.visibility_type, now() - interval '2 days', now() - interval '1 day')
+) AS t(id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at);
+
+-- 6f. Note blocks for the new 20 notes (a4* and a5* batches)
+INSERT INTO public.note_blocks (note_id, type, content, order_index, metadata)
+SELECT n.id, 'text',
+  'This subfolder contains multiple notes covering different aspects of the topic. ' ||
+  'Navigate through the notes to explore the full breadth of content available.',
+  0, '{}'::jsonb
+FROM public.notes n
+WHERE n.id >= 'a4000000-0000-0000-0000-000000000001'::uuid
+  AND n.id <= 'a5000000-0000-0000-0000-000000000015'::uuid
+  AND NOT EXISTS (SELECT 1 FROM public.note_blocks WHERE note_id = n.id);
+
+-- ═════════════════════════════════════════════════════════════
+-- 7. COLLABORATORS (sample data for dashboard badges)
+-- ═════════════════════════════════════════════════════════════
+-- Prompts:
+--   "Collaborators"  = people YOU have invited to YOUR items
+--   "Collaborations" = items that OTHER people have shared with YOU
+-- ═════════════════════════════════════════════════════════════
+
+INSERT INTO public.collaborators (inviter_id, invitee_email, folder_id, note_id, access_level)
+SELECT * FROM (VALUES
+  -- Alex invited Sarah to collaborate on Alex's "System Architecture" folder
+  (
+    '00000000-0000-0000-0000-000000000001'::uuid,  -- Alex
+    'sarah@confluence.test',
+    'c0000000-0000-0000-0000-000000000001'::uuid,  -- System Architecture
+    null::uuid,
+    'editor'
+  ),
+  -- Alex invited Marcus to collaborate on Alex's "API Gateway Patterns" note
+  (
+    '00000000-0000-0000-0000-000000000001'::uuid,  -- Alex
+    'marcus@confluence.test',
+    null::uuid,
+    'a3000000-0000-0000-0000-000000000003'::uuid,  -- API Gateway Patterns
+    'viewer'
+  ),
+  -- Sarah invited Marcus to collaborate on Sarah's "Data Science" folder
+  (
+    '00000000-0000-0000-0000-000000000002'::uuid,  -- Sarah
+    'marcus@confluence.test',
+    'c0000000-0000-0000-0000-000000000002'::uuid,  -- Data Science
+    null::uuid,
+    'editor'
+  ),
+  -- Marcus invited Priya to collaborate on Marcus's "Q3 Product Roadmap" note
+  (
+    '00000000-0000-0000-0000-000000000003'::uuid,  -- Marcus
+    'priya@confluence.test',
+    null::uuid,
+    'a1000000-0000-0000-0000-000000000011'::uuid,  -- Q3 Product Roadmap
+    'viewer'
+  )
+) AS t(inviter_id, invitee_email, folder_id, note_id, access_level)
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.collaborators c
+  WHERE c.inviter_id = t.inviter_id AND c.invitee_email = t.invitee_email
+  AND (c.folder_id IS NOT DISTINCT FROM t.folder_id)
+  AND (c.note_id IS NOT DISTINCT FROM t.note_id)
+);
+
+-- ═════════════════════════════════════════════════════════════
+-- End of seed data
+-- ═════════════════════════════════════════════════════════════

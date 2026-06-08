@@ -19,6 +19,9 @@ const routeLabels: Record<string, string> = {
   '/dashboard/folders':     'Folders',
   '/dashboard/subfolders':  'Subfolders',
   '/dashboard/notes':       'Notes',
+  '/dashboard/collaborators': 'Collaborators',
+  '/dashboard/activity':       'Activity Log',
+  '/dashboard/collaborations': 'Collaborations',
   '/dashboard/settings':    'Settings',
 }
 

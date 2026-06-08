@@ -124,7 +124,7 @@ export function buildFolderPath(
 
 // ── Video embed helpers ────────────────────────────────────────
 
-type VideoProvider = 'youtube' | 'loom' | 'vimeo' | null
+export type VideoProvider = 'youtube' | 'loom' | 'vimeo' | null
 
 export function detectVideoProvider(url: string): VideoProvider {
   if (!url) return null

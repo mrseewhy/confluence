@@ -11,6 +11,11 @@ export type BlockType  = 'text' | 'code' | 'image' | 'video' | 'heading'
 
 export type UserType = 'user' | 'admin'
 
+// ── Subscription Plans ────────────────────────────────────────
+// Free is default. Bronze, Silver, Gold reserved for future paid tiers.
+
+export type SubscriptionTier = 'free' | 'bronze' | 'silver' | 'gold'
+
 // ── Profile ──────────────────────────────────────────────────
 
 export interface Profile {
@@ -19,6 +24,8 @@ export interface Profile {
   username: string
   avatar_url: string | null
   user_type: UserType
+  subscription_tier: SubscriptionTier
+  is_banned: boolean
   created_at: string
 }
 
