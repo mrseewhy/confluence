@@ -9,6 +9,8 @@ import { useToast } from "@/components/Toast";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
+import { safeStr, safeBool, safeNum } from "@/lib/safeParse";
+import styles from "@/styles/admin.module.css";
 
 const TIERS = ["free", "bronze", "silver", "gold"] as const;
 
@@ -86,7 +88,7 @@ export function AdminUsers() {
       if (countError) throw countError;
 
       // Fetch notes/folders counts for the returned users
-      const ids = (usersWithEmail || []).map((p: Record<string, unknown>) => (p.user_id as string) || (p.id as string));
+      const ids = (usersWithEmail || []).map((p: Record<string, unknown>) => safeStr(p.user_id) || safeStr(p.id));
       let noteCounts: Record<string, number> = {};
       let folderCounts: Record<string, number> = {};
       if (ids.length > 0) {
@@ -94,28 +96,28 @@ export function AdminUsers() {
           supabase.from("notes").select("owner_id").in("owner_id", ids),
           supabase.from("folders").select("owner_id").in("owner_id", ids),
         ]);
-        (notesData || []).forEach((n) => { noteCounts[n.owner_id] = (noteCounts[n.owner_id] || 0) + 1; });
-        (foldersData || []).forEach((f) => { folderCounts[f.owner_id] = (folderCounts[f.owner_id] || 0) + 1; });
+        (notesData || []).forEach((n: Record<string, unknown>) => { noteCounts[safeStr(n.owner_id)] = (noteCounts[safeStr(n.owner_id)] || 0) + 1; });
+        (foldersData || []).forEach((f: Record<string, unknown>) => { folderCounts[safeStr(f.owner_id)] = (folderCounts[safeStr(f.owner_id)] || 0) + 1; });
       }
 
       const rows: UserRow[] = (usersWithEmail || []).map((p: Record<string, unknown>) => {
-        const uid = (p.user_id as string) || (p.id as string);
+        const uid = safeStr(p.user_id) || safeStr(p.id);
         return {
           id: uid,
-          email: (p.user_email as string) || (p.email as string) || "",
-          full_name: (p.user_full_name as string) || (p.full_name as string),
-          avatar_url: (p.user_avatar_url as string) || (p.avatar_url as string) || null,
-          user_type: p.user_type as "user" | "admin",
-          subscription_tier: p.subscription_tier as string,
-          is_banned: p.is_banned as boolean,
-          created_at: p.created_at as string,
-          notes_count: noteCounts[uid] || 0,
-          folders_count: folderCounts[uid] || 0,
+          email: safeStr(p.user_email) || safeStr(p.email),
+          full_name: safeStr(p.user_full_name) || safeStr(p.full_name),
+          avatar_url: safeStr(p.user_avatar_url) || safeStr(p.avatar_url) || null,
+          user_type: (safeStr(p.user_type) as "user" | "admin") || "user",
+          subscription_tier: safeStr(p.subscription_tier, "free"),
+          is_banned: safeBool(p.is_banned),
+          created_at: safeStr(p.created_at),
+          notes_count: safeNum(noteCounts[uid]),
+          folders_count: safeNum(folderCounts[uid]),
         };
       });
 
       setUsersList(rows);
-      setTotalCount((countData as number) || 0);
+      setTotalCount(safeNum(countData));
     } catch (err) {
       console.error("Error loading users:", err);
       addToast("Failed to load users. Try again.", "error");
@@ -166,7 +168,7 @@ export function AdminUsers() {
   if (!user || loading) {
     return (
       <DashboardLayout user={user || fallbackProfile({ user_type: "admin" })} variant="admin">
-        <div style={{ padding: "var(--space-20)", textAlign: "center", color: "var(--color-text-muted)" }}>
+        <div className={styles.loadingState}>
           Loading users…
         </div>
       </DashboardLayout>
@@ -180,30 +182,20 @@ export function AdminUsers() {
   return (
     <DashboardLayout user={user} variant="admin">
       {/* ── Page header ── */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: "var(--space-6)",
-          flexWrap: "wrap",
-          gap: "var(--space-4)",
-        }}
-      >
+      <div className={styles.pageHeader}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-1)" }}>
-            <div style={{
-              width: "28px", height: "28px", borderRadius: "var(--radius-md)",
+          <div className={styles.headerTitleRow}>
+            <div className={styles.headerIcon} style={{
               background: "var(--color-warning-subtle)", border: "1px solid var(--color-warning)",
-              display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-warning)",
+              color: "var(--color-warning)",
             }}>
               <Icon d={IC.shield} size={14} />
             </div>
-            <h1 style={{ fontSize: "var(--font-size-2xl)", fontWeight: "var(--font-weight-bold)", letterSpacing: "var(--letter-spacing-tight)", margin: 0 }}>
+            <h1 className={styles.headerTitle}>
               User Management
             </h1>
           </div>
-          <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+          <p className={styles.headerSubtitle}>
             {totalCount} registered user{totalCount !== 1 ? "s" : ""} · Full control over accounts, roles, and access
           </p>
         </div>
@@ -213,20 +205,20 @@ export function AdminUsers() {
       {/* SECTION 1: ALL USERS — clean table with delete only      */}
       {/* ========================================================= */}
 
-      <Card style={{ padding: 0, overflow: "hidden", marginBottom: "var(--space-8)" }}>
-        <div style={{ padding: "var(--space-5) var(--space-5) 0" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-4)", flexWrap: "wrap", gap: "var(--space-3)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-              <h2 style={{ fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)", margin: 0 }}>
+      <Card className={styles.cardTable}>
+        <div className={styles.cardHeader}>
+          <div className={styles.cardFlexRow}>
+            <div className={styles.cardFlexLeft}>
+              <h2 className={styles.cardTitle}>
                 All Users
               </h2>
-              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+              <span className={styles.cardSubtitle}>
                 {paginated.length} on this page · Page {page} of {totalPages} ({totalCount} total)
               </span>
             </div>
-            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+            <div className={styles.filterBtnGroup}>
               {(["all", "admin", "user"] as const).map((v) => (
-                <Button key={v} variant={filter === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => setFilter(v)} style={{ textTransform: "capitalize" }}>
+                <Button key={v} variant={filter === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => setFilter(v)} style={{ textTransform: "capitalize" }} aria-pressed={filter === v}>
                   {v}
                 </Button>
               ))}
@@ -237,32 +229,17 @@ export function AdminUsers() {
             placeholder="Search by name or email…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: "100%", fontFamily: "var(--font-sans)", fontSize: "var(--font-size-sm)", color: "var(--color-text-primary)",
-              background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)",
-              padding: "var(--space-2) var(--space-3)", outline: "none", marginBottom: "var(--space-3)", boxSizing: "border-box",
-            }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-accent)"; e.currentTarget.style.boxShadow = "0 0 0 3px var(--color-accent-subtle)"; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.boxShadow = "none"; }}
+            className={styles.searchInput}
+            aria-label="Search users"
           />
         </div>
 
         {filtered.length > 0 ? (
           <div>
             {/* Table header */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1.5fr 1fr 80px 70px 60px 60px 110px 60px",
-                gap: "var(--space-3)",
-                padding: "var(--space-3) var(--space-5)",
-                borderTop: "1px solid var(--color-border)",
-                borderBottom: "1px solid var(--color-border)",
-                background: "var(--color-bg-subtle)",
-              }}
-            >
+            <div className={styles.tableHeader} style={{ gridTemplateColumns: "1.5fr 1fr 80px 70px 60px 60px 110px 60px" }}>
               {["User", "Email", "Plan", "Status", "Notes", "Folders", "Joined", ""].map((h) => (
-                <span key={h} style={{ fontSize: "11px", fontWeight: "var(--font-weight-semibold)", letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--color-text-muted)" }}>
+                <span className={styles.tableHeaderCell}>
                   {h}
                 </span>
               ))}
@@ -282,11 +259,8 @@ export function AdminUsers() {
                   background: u.is_banned ? "var(--color-danger-subtle)" : "transparent",
                   transition: "background var(--duration-fast)",
                 }}
-                onMouseEnter={(e) => { if (!u.is_banned) e.currentTarget.style.background = "var(--color-bg-subtle)"; }}
-                onMouseLeave={(e) => { if (!u.is_banned) e.currentTarget.style.background = "transparent"; }}
               >
-                {/* User avatar + name */}
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", minWidth: 0 }}>
+                <div className={styles.cellFlex}>
                   <div
                     style={{
                       width: "32px", height: "32px", borderRadius: "var(--radius-full)",
@@ -298,7 +272,7 @@ export function AdminUsers() {
                     {u.full_name.charAt(0)}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <p className={styles.cellText}>
                       {u.full_name}
                       {u.id === user.id && <span style={{ marginLeft: "var(--space-2)", fontSize: "10px", color: "var(--color-text-muted)" }}>(you)</span>}
                     </p>
@@ -336,7 +310,7 @@ export function AdminUsers() {
                 <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>{formatDate(u.created_at)}</span>
 
                 {/* Delete (only for non-admin, non-self) */}
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div className={styles.cellActions}>
                   {u.user_type !== "admin" && u.id !== user.id && (
                     <Button
                       variant="danger"
@@ -361,13 +335,11 @@ export function AdminUsers() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+          <div className={styles.paginationBar}>
             <span>{totalCount} total · Page {page} of {totalPages}</span>
-            <div style={{ display: "flex", gap: "var(--space-2)" }}>
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
-                style={{ padding: "4px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: page <= 1 ? "var(--color-bg-muted)" : "var(--color-bg-elevated)", color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)", cursor: page <= 1 ? "default" : "pointer", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>← Prev</button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
-                style={{ padding: "4px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: page >= totalPages ? "var(--color-bg-muted)" : "var(--color-bg-elevated)", color: page >= totalPages ? "var(--color-text-muted)" : "var(--color-text-primary)", cursor: page >= totalPages ? "default" : "pointer", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>Next →</button>
+            <div className={styles.paginationBtnGroup}>
+              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className={styles.paginationBtn} aria-label="Previous page">← Prev</button>
+              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className={styles.paginationBtn} aria-label="Next page">Next →</button>
             </div>
           </div>
         )}
@@ -377,11 +349,11 @@ export function AdminUsers() {
       {/* SECTIONS 2-5: QUICK ACTION CARDS                        */}
       {/* ========================================================= */}
 
-      <h2 style={{ fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)", margin: "0 0 var(--space-4)" }}>
+      <h2 className={styles.sectionTitle}>
         Quick Actions
       </h2>
 
-      <div className="action-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-5)" }}>
+      <div className={styles.actionGrid}>
         {/* ── Ban/Unban ── */}
         <ActionPanel title="Ban / Unban" description="Restore or restrict content creation" icon={IC.shield} accent="warning">
           <ItemSelect items={usersList.map(userToSelect)} selectedId={banSelectedId} onSelect={setBanSelectedId} placeholder="Choose user to moderate…" />
@@ -634,7 +606,7 @@ export function AdminUsers() {
         </div>
       </Modal>
 
-      <style>{`@media (max-width: 768px) { .action-grid { grid-template-columns: 1fr !important; } }`}</style>
+
     </DashboardLayout>
   );
 }

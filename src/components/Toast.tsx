@@ -66,6 +66,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {/* Toast container */}
       {toasts.length > 0 && (
         <div
+          aria-live="polite"
+          aria-atomic="false"
           style={{
             position: 'fixed',
             bottom: 'var(--space-6)',

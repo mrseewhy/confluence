@@ -5,6 +5,7 @@ import { Button } from "@/components/ui";
 import { NoteEditor, SaveIndicator } from "@/components/editor/NoteEditor";
 import { useNoteEditor } from "@/hooks/useNoteEditor";
 import { useAuth, fallbackProfile } from "@/context/auth";
+import styles from "@/styles/dashboard.module.css";
 import { requireSupabase } from "@/lib/supabase";
 
 const AUTO_SAVE_DELAY_MS = 5000;
@@ -116,13 +117,7 @@ export function EditNote() {
   if (loading) {
     return (
       <DashboardLayout user={sharedUser} variant="user" defaultCollapsed>
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading note editor…
         </div>
       </DashboardLayout>

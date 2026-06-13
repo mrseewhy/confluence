@@ -4,6 +4,7 @@ import { Button, Input } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { Modal } from "@/components/Modal";
+import styles from "@/styles/dashboard.module.css";
 import { uploadImage } from "@/lib/upload";
 
 export function DashboardSettings() {
@@ -211,13 +212,7 @@ export function DashboardSettings() {
         user={fallbackProfile()}
         variant="user"
       >
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading settings…
         </div>
       </DashboardLayout>

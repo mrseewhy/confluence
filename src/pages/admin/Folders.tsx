@@ -10,6 +10,8 @@ import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
 import { useToast } from "@/components/Toast";
 import { TransferOwnershipModal } from "@/components/TransferOwnershipModal";
+import styles from "@/styles/admin.module.css";
+import { safeStr } from "@/lib/safeParse";
 import type { Folder } from "@/types";
 
 interface FolderRow extends Folder {
@@ -89,7 +91,7 @@ export function AdminFolders() {
             .in("folder_id", ids);
           const map: Record<string, number> = {};
           (collabs || []).forEach((c: Record<string, unknown>) => {
-            const fid = c.folder_id as string;
+            const fid = safeStr(c.folder_id);
             map[fid] = (map[fid] || 0) + 1;
           });
           setCollaboratorMap(map);
@@ -141,7 +143,7 @@ export function AdminFolders() {
   if (!user || loading) {
     return (
       <DashboardLayout user={user || fallbackProfile({ user_type: "admin" })} variant="admin">
-        <div style={{ padding: "var(--space-20)", textAlign: "center", color: "var(--color-text-muted)" }}>Loading folders…</div>
+        <div className={styles.loadingState}>Loading folders…</div>
       </DashboardLayout>
     );
   }
@@ -149,15 +151,15 @@ export function AdminFolders() {
   return (
     <DashboardLayout user={user} variant="admin">
       {/* ── Page header ── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "var(--space-6)", flexWrap: "wrap", gap: "var(--space-4)" }}>
+      <div className={styles.pageHeader}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-1)" }}>
+          <div className={styles.headerTitleRow}>
             <div style={{ width: "28px", height: "28px", borderRadius: "var(--radius-md)", background: "var(--color-warning-subtle)", border: "1px solid var(--color-warning)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-warning)" }}>
               <Icon d={IC.folder} size={14} />
             </div>
-            <h1 style={{ fontSize: "var(--font-size-2xl)", fontWeight: "var(--font-weight-bold)", letterSpacing: "var(--letter-spacing-tight)", margin: 0 }}>Folder Management</h1>
+            <h1 className={styles.headerTitle}>Folder Management</h1>
           </div>
-          <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+          <p className={styles.headerSubtitle}>
             {allFolders.length} folder{allFolders.length !== 1 ? "s" : ""} across the platform · Manage visibility and ownership
           </p>
         </div>
@@ -166,45 +168,42 @@ export function AdminFolders() {
       {/* ========================================================= */}
       {/* ALL FOLDERS TABLE                                         */}
       {/* ========================================================= */}
-      <Card style={{ padding: 0, overflow: "hidden", marginBottom: "var(--space-8)" }}>
-        <div style={{ padding: "var(--space-5) var(--space-5) 0" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-4)", flexWrap: "wrap", gap: "var(--space-3)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-              <h2 style={{ fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)", margin: 0 }}>All Folders</h2>
-              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+      <Card className={styles.cardTable}>
+        <div className={styles.cardHeader}>
+          <div className={styles.cardFlexRow}>
+            <div className={styles.cardFlexLeft}>
+              <h2 className={styles.cardTitle}>All Folders</h2>
+              <span className={styles.cardSubtitle}>
                 {totalCount} of {allFolders.length} · Page {page} of {totalPages}
               </span>
             </div>
-            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+            <div className={styles.filterBtnGroup}>
               {(["all", "public", "private"] as const).map((v) => (
-                <Button key={v} variant={vis === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => setVis(v)} style={{ textTransform: "capitalize" }}>{v}</Button>
+                <Button key={v} variant={vis === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => setVis(v)} style={{ textTransform: "capitalize" }} aria-pressed={vis === v}>{v}</Button>
               ))}
             </div>
           </div>
           <input type="search" placeholder="Search folders by title…" value={search} onChange={(e) => setSearch(e.target.value)}
-            style={{ width: "100%", fontFamily: "var(--font-sans)", fontSize: "var(--font-size-sm)", color: "var(--color-text-primary)", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "var(--space-2) var(--space-3)", outline: "none", marginBottom: "var(--space-3)", boxSizing: "border-box" }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-accent)"; e.currentTarget.style.boxShadow = "0 0 0 3px var(--color-accent-subtle)"; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.boxShadow = "none"; }} />
+            className={styles.searchInput}
+            aria-label="Search folders" />
         </div>
 
         {paginated.length > 0 ? (
           <div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 70px 60px 90px 100px 80px", gap: "var(--space-3)", padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border)", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-subtle)" }}>
+            <div className={`${styles.tableHeader} ${styles.cols7_Default}`}>
               {["Folder", "Type", "Vis.", "Collabs", "Updated", "Owner", ""].map((h) => (
-                <span key={h} style={{ fontSize: "11px", fontWeight: "var(--font-weight-semibold)", letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--color-text-muted)" }}>{h}</span>
+                <span className={styles.tableHeaderCell}>{h}</span>
               ))}
             </div>
-            {paginated.map((folder, i) => (
-              <div key={folder.id} style={{ display: "grid", gridTemplateColumns: "1fr 60px 70px 60px 90px 100px 80px", gap: "var(--space-3)", alignItems: "center", padding: "var(--space-3) var(--space-5)", borderBottom: i < paginated.length - 1 ? "1px solid var(--color-border-subtle)" : "none", transition: "background var(--duration-fast)" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-subtle)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", minWidth: 0 }}>
-                  <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-lg)", background: "var(--color-accent-subtle)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-accent)", flexShrink: 0 }}>
+            {paginated.map((folder) => (
+              <div key={folder.id} className={`${styles.tableRow} ${styles.cols7_Default}`}>
+                <div className={styles.cellFlex}>
+                  <div className={styles.iconBadge} style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)" }}>
                     <Icon d={IC.folder} size={15} />
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder.title}</p>
-                    {folder.description && <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder.description}</p>}
+                    <p className={styles.cellText}>{folder.title}</p>
+                    {folder.description && <p className={styles.cellTextSecondary}>{folder.description}</p>}
                   </div>
                 </div>
                 <Badge variant="muted">Root</Badge>
@@ -214,7 +213,7 @@ export function AdminFolders() {
                 </span>
                 <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>{formatDate(folder.updated_at)}</span>
                 <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder.owner?.full_name || "—"}</span>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div className={styles.cellActions}>
                   <Button variant="danger" size="xs" onClick={() => setPendingDeleteId(folder.id)}>Delete</Button>
                 </div>
               </div>
@@ -228,13 +227,11 @@ export function AdminFolders() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+          <div className={styles.paginationBar}>
             <span>{totalCount} total · Page {page} of {totalPages}</span>
-            <div style={{ display: "flex", gap: "var(--space-2)" }}>
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
-                style={{ padding: "4px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: page <= 1 ? "var(--color-bg-muted)" : "var(--color-bg-elevated)", color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)", cursor: page <= 1 ? "default" : "pointer", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>← Prev</button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
-                style={{ padding: "4px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: page >= totalPages ? "var(--color-bg-muted)" : "var(--color-bg-elevated)", color: page >= totalPages ? "var(--color-text-muted)" : "var(--color-text-primary)", cursor: page >= totalPages ? "default" : "pointer", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>Next →</button>
+            <div className={styles.paginationBtnGroup}>
+              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className={styles.paginationBtn} aria-label="Previous page">← Prev</button>
+              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className={styles.paginationBtn} aria-label="Next page">Next →</button>
             </div>
           </div>
         )}
@@ -244,9 +241,9 @@ export function AdminFolders() {
       {/* QUICK ACTION CARDS                                        */}
       {/* ========================================================= */}
 
-      <h2 style={{ fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)", margin: "0 0 var(--space-4)" }}>Quick Actions</h2>
+      <h2 className={styles.sectionTitle}>Quick Actions</h2>
 
-      <div className="action-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-5)" }}>
+      <div className={styles.actionGrid}>
         {/* ── Visibility Toggle ── */}
         <ActionPanel title="Toggle Visibility" description="Switch a folder between public and private" icon={IC.globe} accent="accent">
           <ItemSelect items={allFolders.map(folderToSelect)} selectedId={visSelectedId} onSelect={setVisSelectedId} placeholder="Choose a folder…" />
@@ -267,7 +264,7 @@ export function AdminFolders() {
                     try {
                       const supabase = requireSupabase();
                       await supabase.from("folders").update({ visibility: newVis }).eq("id", target.id);
-                      setAllFolders((prev) => prev.map((f) => f.id === target.id ? { ...f, visibility: newVis as "public" | "private" } : f));
+                      setAllFolders((prev) => prev.map((f) => f.id === target.id ? { ...f, visibility: newVis } : f));
                       addToast(`"${target.title}" set to ${newVis}`, "success");
                       void (async () => {
                         try { await supabase.from("activity_log").insert({
@@ -293,8 +290,8 @@ export function AdminFolders() {
             const target = getFolder(transferSelectedId);
             if (!target) return null;
             return (
-              <div style={{ marginTop: "var(--space-3)", display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
-                <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-secondary)" }}>
+              <div className={styles.actionRow}>
+                <span className={styles.actionLabel}>
                   Current owner: <strong>{target.owner?.full_name || "Unknown"}</strong>
                 </span>
                 <Button variant="primary" size="sm" onClick={() => setShowTransferModal(true)}>
@@ -340,11 +337,11 @@ export function AdminFolders() {
 
       {/* ── Delete modal ── */}
       <Modal isOpen={!!pendingDeleteId} onClose={() => setPendingDeleteId(null)} width={360}>
-        <h3 style={{ marginBottom: "var(--space-2)", fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-bold)" }}>Delete folder?</h3>
-        <p style={{ marginBottom: "var(--space-6)", fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+        <h3 className={styles.modalTitle}>Delete folder?</h3>
+        <p className={styles.modalBody}>
           This will permanently delete "{getFolder(pendingDeleteId)?.title}" and all its contents. This action cannot be undone.
         </p>
-        <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "flex-end" }}>
+        <div className={styles.modalActions}>
           <Button variant="secondary" size="sm" onClick={() => setPendingDeleteId(null)}>Cancel</Button>
           <Button variant="danger" size="sm" onClick={() => pendingDeleteId && handleDelete(pendingDeleteId)}>Delete</Button>
         </div>

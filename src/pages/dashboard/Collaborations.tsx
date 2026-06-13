@@ -6,6 +6,8 @@ import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
+import styles from "@/styles/dashboard.module.css";
+import { safeStr, safeArray } from "@/lib/safeParse";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -99,10 +101,12 @@ export function DashboardCollaborations() {
       // Collect unique owner IDs from returned items
       const ownerIds = new Set<string>();
       (collaborators ?? []).forEach((c: Record<string, unknown>) => {
-        const folder = c.folder as { owner_id?: string } | null;
-        const note = c.note as { owner_id?: string } | null;
-        if (folder?.owner_id) ownerIds.add(folder.owner_id);
-        if (note?.owner_id) ownerIds.add(note.owner_id);
+        const folderArr = safeArray<Record<string, unknown>>(c.folder);
+        const noteArr = safeArray<Record<string, unknown>>(c.note);
+        const folder = folderArr.length > 0 ? folderArr[0] : null;
+        const note = noteArr.length > 0 ? noteArr[0] : null;
+        if (folder && safeStr(folder.owner_id)) ownerIds.add(safeStr(folder.owner_id));
+        if (note && safeStr(note.owner_id)) ownerIds.add(safeStr(note.owner_id));
       });
 
       // Fetch owner names for returned items only
@@ -120,26 +124,29 @@ export function DashboardCollaborations() {
       }
 
       const mapped: CollaborationRow[] = (collaborators ?? []).map((c: Record<string, unknown>) => {
-        const folder = c.folder as { title?: string; slug?: string; visibility?: string; owner_id?: string } | null;
-        const note = c.note as { title?: string; slug?: string; visibility?: string; owner_id?: string } | null;
-        const inviter = c.inviter as { full_name?: string; username?: string; avatar_url?: string | null } | null;
+        const folder2Arr = safeArray<Record<string, unknown>>(c.folder);
+        const note2Arr = safeArray<Record<string, unknown>>(c.note);
+        const inviterArr = safeArray<Record<string, unknown>>(c.inviter);
+        const folder = folder2Arr.length > 0 ? folder2Arr[0] : null;
+        const note = note2Arr.length > 0 ? note2Arr[0] : null;
+        const inviter = inviterArr.length > 0 ? inviterArr[0] : null;
 
-        const ownerId = folder?.owner_id ?? note?.owner_id ?? "";
+        const ownerId = folder ? safeStr(folder.owner_id) : note ? safeStr(note.owner_id) : "";
         const owner = ownerMap[ownerId];
 
         return {
-          id: c.id as string,
-          inviter_id: c.inviter_id as string,
-          invitee_email: c.invitee_email as string,
-          folder_id: (c.folder_id as string) ?? null,
-          note_id: (c.note_id as string) ?? null,
-          access_level: c.access_level as "viewer" | "editor",
-          created_at: c.created_at as string,
-          item_title: folder?.title ?? note?.title ?? "Unknown",
-          item_slug: folder?.slug ?? note?.slug ?? "",
-          item_visibility: folder?.visibility ?? note?.visibility ?? null,
-          inviter_name: inviter?.full_name ?? "Unknown",
-          inviter_username: inviter?.username ?? null,
+          id: safeStr(c.id),
+          inviter_id: safeStr(c.inviter_id),
+          invitee_email: safeStr(c.invitee_email),
+          folder_id: safeStr(c.folder_id) || null,
+          note_id: safeStr(c.note_id) || null,
+          access_level: (safeStr(c.access_level) as "viewer" | "editor") || "viewer",
+          created_at: safeStr(c.created_at),
+          item_title: folder ? safeStr(folder.title, "Unknown") : note ? safeStr(note.title, "Unknown") : "Unknown",
+          item_slug: folder ? safeStr(folder.slug) : note ? safeStr(note.slug) : "",
+          item_visibility: folder ? safeStr(folder.visibility) || null : note ? safeStr(note.visibility) || null : null,
+          inviter_name: inviter ? safeStr(inviter.full_name, "Unknown") : "Unknown",
+          inviter_username: inviter ? safeStr(inviter.username) || null : null,
           owner_name: owner?.full_name ?? "Unknown",
           owner_username: owner?.username ?? null,
         };
@@ -179,13 +186,7 @@ export function DashboardCollaborations() {
   if (!user || loading) {
     return (
       <DashboardLayout user={user || fallbackProfile()} variant="user">
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading collaborations…
         </div>
       </DashboardLayout>

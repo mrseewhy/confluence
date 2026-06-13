@@ -5,6 +5,8 @@ import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
+import styles from "@/styles/dashboard.module.css";
+import { safeStr, safeArray } from "@/lib/safeParse";
 import { Modal } from "@/components/Modal";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -96,25 +98,23 @@ export function DashboardCollaborators() {
       if (error) throw error;
 
       // Map the joined data into flat rows
-      const mapped: CollaboratorRow[] = (collaborators ?? []).map((c: Record<string, unknown>) => {
-        const folder = Array.isArray(c.folder) && (c.folder as Array<Record<string, unknown>>).length > 0
-          ? (c.folder as Array<Record<string, unknown>>)[0] as { title?: string; slug?: string; visibility?: string }
-          : (c.folder as { title?: string; slug?: string; visibility?: string } | null);
-        const note = Array.isArray(c.note) && (c.note as Array<Record<string, unknown>>).length > 0
-          ? (c.note as Array<Record<string, unknown>>)[0] as { title?: string; slug?: string; visibility?: string }
-          : (c.note as { title?: string; slug?: string; visibility?: string } | null);
+      const mapped: CollaboratorRow[] = safeArray<Record<string, unknown>>(collaborators).map((c) => {
+        const folderArr = safeArray<Record<string, unknown>>(c.folder);
+        const noteArr = safeArray<Record<string, unknown>>(c.note);
+        const folder = folderArr.length > 0 ? folderArr[0] : null;
+        const note = noteArr.length > 0 ? noteArr[0] : null;
 
         return {
-          id: c.id as string,
-          inviter_id: c.inviter_id as string,
-          invitee_email: c.invitee_email as string,
-          folder_id: (c.folder_id as string) ?? null,
-          note_id: (c.note_id as string) ?? null,
-          access_level: c.access_level as "viewer" | "editor",
-          created_at: c.created_at as string,
-          item_title: folder?.title ?? note?.title ?? "Unknown",
-          item_slug: folder?.slug ?? note?.slug ?? "",
-          item_visibility: folder?.visibility ?? note?.visibility ?? null,
+          id: safeStr(c.id),
+          inviter_id: safeStr(c.inviter_id),
+          invitee_email: safeStr(c.invitee_email),
+          folder_id: safeStr(c.folder_id) || null,
+          note_id: safeStr(c.note_id) || null,
+          access_level: (safeStr(c.access_level) as "viewer" | "editor") || "viewer",
+          created_at: safeStr(c.created_at),
+          item_title: folder ? safeStr(folder.title, "Unknown") : note ? safeStr(note.title, "Unknown") : "Unknown",
+          item_slug: folder ? safeStr(folder.slug) : note ? safeStr(note.slug) : "",
+          item_visibility: folder ? safeStr(folder.visibility) || null : note ? safeStr(note.visibility) || null : null,
           is_banned: false,
         };
       });
@@ -266,13 +266,7 @@ export function DashboardCollaborators() {
   if (!user || loading) {
     return (
       <DashboardLayout user={user || fallbackProfile()} variant="user">
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading collaborators…
         </div>
       </DashboardLayout>
@@ -284,34 +278,12 @@ export function DashboardCollaborators() {
   return (
     <DashboardLayout user={user} variant="user">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: "var(--space-6)",
-          flexWrap: "wrap",
-          gap: "var(--space-4)",
-        }}
-      >
+      <div className={styles.pageHeader}>
         <div>
-          <h1
-            style={{
-              fontSize: "var(--font-size-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              letterSpacing: "var(--letter-spacing-tight)",
-              marginBottom: "var(--space-1)",
-            }}
-          >
+          <h1 className={styles.headerTitle}>
             Collaborators
           </h1>
-          <p
-            style={{
-              margin: 0,
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-            }}
-          >
+          <p className={styles.headerSubtitle}>
             {totalCount} collaborator{totalCount !== 1 ? "s" : ""} invited to your
             workspace
           </p>
@@ -324,41 +296,16 @@ export function DashboardCollaborators() {
       </Link>
 
       {/* Controls */}
-      <div
-        style={{
-          display: "flex",
-          gap: "var(--space-3)",
-          marginBottom: "var(--space-6)",
-          flexWrap: "wrap",
-        }}
-      >
+      <div className={styles.filterRow}>
         <input
           type="search"
           placeholder="Search by email or item name…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{
-            flex: "1 1 220px",
-            fontFamily: "var(--font-sans)",
-            fontSize: "var(--font-size-sm)",
-            color: "var(--color-text-primary)",
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-md)",
-            padding: "var(--space-2) var(--space-3)",
-            outline: "none",
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-accent)";
-            e.currentTarget.style.boxShadow =
-              "0 0 0 3px var(--color-accent-subtle)";
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-border)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
+          className={styles.searchInput}
+          aria-label="Search collaborators"
         />
-        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+        <div className={styles.filterBtnGroup}>
           {(["all", "folder", "note"] as const).map((v) => (
             <Button
               key={v}

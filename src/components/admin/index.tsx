@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { Badge, Card } from "@/components/ui";
 
@@ -65,28 +65,97 @@ interface ItemSelectProps {
 export function ItemSelect({ items, selectedId, onSelect, placeholder }: ItemSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(-1);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const selected = items.find((i) => i.id === selectedId);
 
+  const filtered = query
+    ? items.filter((i) => i.primary.toLowerCase().includes(query.toLowerCase()))
+    : items;
+
+  const listboxId = useId();
+
+  // Close on click outside
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setActiveIndex(-1);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const filtered = query
-    ? items.filter((i) => i.primary.toLowerCase().includes(query.toLowerCase()))
-    : items;
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (open) {
+      setActiveIndex(-1);
+      // Small delay to allow DOM to render
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  // Scroll active option into view
+  useEffect(() => {
+    if (activeIndex < 0 || !listRef.current) return;
+    const option = listRef.current.querySelector(`[data-option-index="${activeIndex}"]`) as HTMLElement | null;
+    option?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex]);
+
+  const selectOption = (id: string) => {
+    onSelect(id);
+    setOpen(false);
+    setQuery("");
+    setActiveIndex(-1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setActiveIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : 0));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setActiveIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (activeIndex >= 0 && activeIndex < filtered.length) {
+          selectOption(filtered[activeIndex].id);
+        }
+        break;
+      case "Escape":
+        e.preventDefault();
+        setOpen(false);
+        setActiveIndex(-1);
+        break;
+    }
+  };
 
   return (
     <div ref={ref} style={{ position: "relative", width: "100%" }}>
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
+        onKeyDown={handleKeyDown}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-label={placeholder || "Select an item"}
         style={{
           width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
           gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)",
@@ -100,20 +169,34 @@ export function ItemSelect({ items, selectedId, onSelect, placeholder }: ItemSel
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
           {selected ? (selected.secondary ? `${selected.primary} (${selected.secondary})` : selected.primary) : placeholder || "Select…"}
         </span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
       {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
-          background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-lg)",
-          maxHeight: "220px", overflow: "hidden", display: "flex", flexDirection: "column",
-        }}>
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-label="Options"
+          tabIndex={-1}
+          onKeyDown={handleKeyDown}
+          style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
+            background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-lg)",
+            maxHeight: "220px", overflow: "hidden", display: "flex", flexDirection: "column",
+          }}
+        >
           <input
-            type="text" placeholder="Search…" value={query}
-            onChange={(e) => setQuery(e.target.value)} autoFocus
+            ref={inputRef}
+            type="text"
+            placeholder="Search…"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setActiveIndex(-1); }}
+            onKeyDown={handleKeyDown}
+            aria-autocomplete="list"
+            aria-controls={listboxId}
+            aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
             style={{
               width: "100%", fontFamily: "var(--font-sans)", fontSize: "var(--font-size-sm)",
               color: "var(--color-text-primary)", background: "var(--color-bg-base)",
@@ -121,20 +204,28 @@ export function ItemSelect({ items, selectedId, onSelect, placeholder }: ItemSel
               padding: "var(--space-2) var(--space-3)", outline: "none", boxSizing: "border-box",
             }}
           />
-          <div style={{ overflowY: "auto", flex: 1 }}>
-            {filtered.length > 0 ? filtered.map((item) => (
+          <div ref={listRef} style={{ overflowY: "auto", flex: 1 }} role="presentation">
+            {filtered.length > 0 ? filtered.map((item, index) => (
               <button
-                key={item.id} type="button"
-                onClick={() => { onSelect(item.id); setOpen(false); setQuery(""); }}
+                key={item.id}
+                type="button"
+                id={`${listboxId}-option-${index}`}
+                role="option"
+                aria-selected={item.id === selectedId}
+                data-option-index={index}
+                onClick={() => selectOption(item.id)}
+                onMouseEnter={() => setActiveIndex(index)}
                 style={{
                   display: "block", width: "100%", padding: "var(--space-2) var(--space-3)",
                   border: "none",
-                  background: item.id === selectedId ? "var(--color-accent-subtle)" : "transparent",
+                  background: activeIndex === index
+                    ? "var(--color-bg-muted)"
+                    : item.id === selectedId
+                      ? "var(--color-accent-subtle)"
+                      : "transparent",
                   color: "var(--color-text-primary)", fontSize: "var(--font-size-sm)",
                   textAlign: "left", cursor: "pointer", fontFamily: "var(--font-sans)",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-muted)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = item.id === selectedId ? "var(--color-accent-subtle)" : "transparent")}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
                   <span style={{ fontWeight: "var(--font-weight-medium)" }}>{item.primary}</span>

@@ -8,6 +8,8 @@ import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
 import { formatDate, buildSlug } from "@/lib/helpers";
 import { Modal } from "@/components/Modal";
+import styles from "@/styles/dashboard.module.css";
+import { safeStr, safeArray } from "@/lib/safeParse";
 import type { Folder, Visibility } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -83,7 +85,7 @@ export function DashboardSubfolders() {
         .select("id, title, slug")
         .eq("owner_id", user.id)
         .is("parent_id", null);
-      setRootFolders(roots as Folder[] || []);
+      setRootFolders(safeArray<Folder>(roots));
 
       // Count subfolders matching search
       let countQuery = supabase
@@ -124,15 +126,25 @@ export function DashboardSubfolders() {
         });
       }
 
-      const mapped: SubfolderRow[] = (subfoldersRaw || []).map((sf: Record<string, unknown>) => {
-        const parent = Array.isArray(sf.parent) && (sf.parent as Array<Record<string, unknown>>).length > 0
-          ? (sf.parent as Array<Record<string, unknown>>)[0] as { title?: string; slug?: string }
+      const safeRaw = safeArray<Record<string, unknown>>(subfoldersRaw);
+      const mapped: SubfolderRow[] = safeRaw.map((sf) => {
+        const parent = safeArray<Record<string, unknown>>(sf.parent).length > 0
+          ? safeArray<Record<string, unknown>>(sf.parent)[0]
           : null;
+        const sfId = safeStr(sf.id);
         return {
-          ...sf as unknown as Folder,
-          parentTitle: parent?.title ?? "Unknown Parent",
-          parentSlug: parent?.slug ?? "",
-          derivedNoteCount: noteCounts[(sf.id as string)] || 0,
+          id: sfId,
+          owner_id: safeStr(sf.owner_id),
+          title: safeStr(sf.title),
+          description: safeStr(sf.description) || null,
+          slug: safeStr(sf.slug),
+          visibility: safeStr(sf.visibility) as Visibility,
+          parent_id: safeStr(sf.parent_id) || null,
+          created_at: safeStr(sf.created_at),
+          updated_at: safeStr(sf.updated_at),
+          parentTitle: parent ? safeStr(parent.title, "Unknown Parent") : "Unknown Parent",
+          parentSlug: parent ? safeStr(parent.slug) : "",
+          derivedNoteCount: noteCounts[sfId] || 0,
         };
       });
 
@@ -200,9 +212,9 @@ export function DashboardSubfolders() {
       resetAndClose();
     } catch (err: unknown) {
       console.error("Error creating subfolder:", err);
-      const pgErr = err as { code?: string } | null;
+      const pgErr = err && typeof err === "object" ? (err as Record<string, unknown>) : null;
       const msg =
-        pgErr?.code === "23505"
+        safeStr(pgErr?.code) === "23505"
           ? "A subfolder with this title already exists. Please choose a different name."
           : "Failed to create subfolder. Please try again.";
       setError(msg);
@@ -238,13 +250,7 @@ export function DashboardSubfolders() {
         }
         variant="user"
       >
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading subfolders…
         </div>
       </DashboardLayout>
@@ -294,34 +300,12 @@ export function DashboardSubfolders() {
       )}
 
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: "var(--space-6)",
-          flexWrap: "wrap",
-          gap: "var(--space-4)",
-        }}
-      >
+      <div className={styles.pageHeader}>
         <div>
-          <h1
-            style={{
-              fontSize: "var(--font-size-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              letterSpacing: "var(--letter-spacing-tight)",
-              marginBottom: "var(--space-1)",
-            }}
-          >
+          <h1 className={styles.headerTitle}>
             Subfolders
           </h1>
-          <p
-            style={{
-              margin: 0,
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-            }}
-          >
+          <p className={styles.headerSubtitle}>
             {totalCount} subfolder
             {totalCount !== 1 ? "s" : ""} across all folders
           </p>
@@ -337,58 +321,22 @@ export function DashboardSubfolders() {
       </div>
 
       {/* Search */}
-      <div style={{ marginBottom: "var(--space-6)" }}>
+      <div className={styles.filterRow}>
         <input
           type="search"
-          id="subfolder-search"
-          name="subfolder-search"
           placeholder="Search subfolders or parent folder…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{
-            width: "100%",
-            maxWidth: "400px",
-            fontFamily: "var(--font-sans)",
-            fontSize: "var(--font-size-sm)",
-            color: "var(--color-text-primary)",
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-md)",
-            padding: "var(--space-2) var(--space-3)",
-            outline: "none",
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-accent)";
-            e.currentTarget.style.boxShadow =
-              "0 0 0 3px var(--color-accent-subtle)";
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-border)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
+          className={styles.searchInput}
+          style={{ maxWidth: "400px" }}
+          aria-label="Search subfolders"
         />
       </div>
 
       {/* Table */}
       {paginated.length > 0 ? (
-        <div
-          style={{
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-xl)",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 180px 80px 100px 120px 140px",
-              gap: "var(--space-4)",
-              padding: "var(--space-3) var(--space-5)",
-              borderBottom: "1px solid var(--color-border)",
-              background: "var(--color-bg-subtle)",
-            }}
-          >
+        <div className={styles.tableCard}>
+          <div className={`${styles.tableHeader} ${styles.cols6_Subfolders}`}>
             {[
               "Subfolder",
               "Parent folder",
@@ -397,63 +345,16 @@ export function DashboardSubfolders() {
               "Updated",
               "Actions",
             ].map((h) => (
-              <span
-                key={h}
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "var(--font-weight-semibold)",
-                  letterSpacing: "0.07em",
-                  textTransform: "uppercase",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                {h}
-              </span>
+              <span className={styles.tableHeaderCell}>{h}</span>
             ))}
-          </div>          {paginated.map((sf, i) => (
+          </div>
+          {paginated.map((sf) => (
               <div
                 key={sf.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 180px 80px 100px 120px 140px",
-                  gap: "var(--space-4)",
-                  alignItems: "center",
-                  padding: "var(--space-4) var(--space-5)",
-                  borderBottom:
-                    i < paginated.length - 1
-                      ? "1px solid var(--color-border-subtle)"
-                      : "none",
-                transition: "background var(--duration-fast)",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "var(--color-bg-subtle)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "transparent")
-              }
-            >
+                className={`${styles.tableRow} ${styles.cols6_Subfolders}`}>
               {/* Title + description */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--space-3)",
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{
-                    width: "34px",
-                    height: "34px",
-                    borderRadius: "var(--radius-lg)",
-                    background: "var(--color-bg-muted)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--color-text-secondary)",
-                    flexShrink: 0,
-                  }}
-                >
+              <div className={styles.cellFlex}>
+                <div className={styles.iconBadge} style={{ background: "var(--color-bg-muted)", color: "var(--color-text-secondary)" }}>
                   <Icon d={IC.subfolder} size={16} />
                 </div>
                 <div style={{ minWidth: 0 }}>
@@ -582,7 +483,7 @@ export function DashboardSubfolders() {
               </span>
 
               {/* Actions */}
-              <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <div className={styles.cellActions}>
                 {/* Share is shown for PRIVATE folders (to invite collaborators) */}
                 {sf.visibility === "private" && (
                   <Button
@@ -624,51 +525,23 @@ export function DashboardSubfolders() {
 
       {/* Pagination */}
       {totalFiltered > PAGE_SIZE && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "var(--space-3)",
-            marginTop: "var(--space-6)",
-          }}
-        >
+        <div className={styles.paginationRow}>
           <button
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-medium)",
-              padding: "var(--space-2) var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-elevated)",
-              color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)",
-              cursor: page <= 1 ? "not-allowed" : "pointer",
-              opacity: page <= 1 ? 0.5 : 1,
-            }}
+            className={styles.paginationBtn}
+            aria-label="Previous page"
           >
             ← Prev
           </button>
-          <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+          <span className={styles.paginationInfo}>
             Page {page} of {Math.ceil(totalFiltered / PAGE_SIZE)}
           </span>
           <button
             disabled={page >= Math.ceil(totalFiltered / PAGE_SIZE)}
             onClick={() => setPage((p) => p + 1)}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-medium)",
-              padding: "var(--space-2) var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-elevated)",
-              color: page >= Math.ceil(totalFiltered / PAGE_SIZE) ? "var(--color-text-muted)" : "var(--color-text-primary)",
-              cursor: page >= Math.ceil(totalFiltered / PAGE_SIZE) ? "not-allowed" : "pointer",
-              opacity: page >= Math.ceil(totalFiltered / PAGE_SIZE) ? 0.5 : 1,
-            }}
+            className={styles.paginationBtn}
+            aria-label="Next page"
           >
             Next →
           </button>

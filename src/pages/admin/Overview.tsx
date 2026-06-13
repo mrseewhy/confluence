@@ -7,6 +7,7 @@ import { Badge, Button } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
+import styles from "@/styles/admin.module.css";
 import type { Profile } from "@/types";
 
 function StatCard({
@@ -21,68 +22,20 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div
-      style={{
-        background: "var(--color-bg-elevated)",
-        border: "1px solid var(--color-border)",
-        borderRadius: "var(--radius-xl)",
-        padding: "var(--space-5)",
-        boxShadow: "var(--shadow-xs)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "var(--space-4)",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "var(--font-size-sm)",
-            fontWeight: "var(--font-weight-medium)",
-            color: "var(--color-text-secondary)",
-          }}
-        >
+    <div className={styles.statCard}>
+      <div className={styles.statCardTop}>
+        <span className={styles.statCardLabel}>
           {label}
         </span>
-        <div
-          style={{
-            width: "34px",
-            height: "34px",
-            borderRadius: "var(--radius-lg)",
-            background: "var(--color-warning-subtle)",
-            border: "1px solid var(--color-warning)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--color-warning)",
-          }}
-        >
+        <div className={styles.statIconWrap}>
           <Icon d={icon} size={15} />
         </div>
       </div>
-      <p
-        style={{
-          margin: 0,
-          fontSize: "var(--font-size-3xl)",
-          fontWeight: "var(--font-weight-bold)",
-          letterSpacing: "var(--letter-spacing-tight)",
-          color: "var(--color-text-primary)",
-        }}
-      >
+      <p className={styles.statValue}>
         {value}
       </p>
       {sub && (
-        <p
-          style={{
-            margin: 0,
-            fontSize: "var(--font-size-xs)",
-            color: "var(--color-text-muted)",
-            marginTop: "var(--space-1)",
-          }}
-        >
+        <p className={styles.statSub}>
           {sub}
         </p>
       )}
@@ -206,13 +159,7 @@ export function AdminOverview() {
         }
         variant="admin"
       >
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading admin dashboard…
         </div>
       </DashboardLayout>
@@ -222,59 +169,20 @@ export function AdminOverview() {
   return (
     <DashboardLayout user={user} variant="admin">
       <div style={{ marginBottom: "var(--space-8)" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--space-3)",
-            marginBottom: "var(--space-1)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "28px",
-              height: "28px",
-              borderRadius: "var(--radius-md)",
-              background: "var(--color-warning-subtle)",
-              border: "1px solid var(--color-warning)",
-              color: "var(--color-warning)",
-            }}
-          >
+        <div className={styles.headerTitleRow}>
+          <div className={styles.headerIcon} style={{ background: "var(--color-warning-subtle)", border: "1px solid var(--color-warning)", color: "var(--color-warning)" }}>
             <Icon d={IC.shield} size={14} />
           </div>
-          <h1
-            style={{
-              fontSize: "var(--font-size-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              letterSpacing: "var(--letter-spacing-tight)",
-              margin: 0,
-            }}
-          >
+          <h1 className={styles.headerTitle}>
             Admin overview
           </h1>
         </div>
-        <p
-          style={{
-            margin: 0,
-            color: "var(--color-text-muted)",
-            fontSize: "var(--font-size-sm)",
-          }}
-        >
+        <p className={styles.headerSubtitle}>
           Platform-wide stats and recent activity.
         </p>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: "var(--space-4)",
-          marginBottom: "var(--space-8)",
-        }}
-      >
+      <div className={styles.statsGrid}>
         <StatCard
           label="Total users"
           value={stats.users}
@@ -313,31 +221,11 @@ export function AdminOverview() {
         />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "var(--space-6)",
-        }}
-        className="admin-grid"
-      >
+      <div className={styles.recentGrid}>
         {/* Recent users */}
         <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "var(--space-4)",
-            }}
-          >
-            <h3
-              style={{
-                fontSize: "var(--font-size-md)",
-                fontWeight: "var(--font-weight-semibold)",
-                margin: 0,
-              }}
-            >
+          <div className={styles.recentHeaderRow}>
+            <h3 className={styles.cardTitle}>
               Recent users
             </h3>
             <Link to="/admin/dashboard/users">
@@ -357,17 +245,7 @@ export function AdminOverview() {
             {recentUsers.map((u, i) => (
               <div
                 key={u.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "var(--space-3) var(--space-4)",
-                  gap: "var(--space-3)",
-                  borderBottom:
-                    i < recentUsers.length - 1
-                      ? "1px solid var(--color-border-subtle)"
-                      : "none",
-                }}
+                className={`${styles.recentItem}${i < recentUsers.length - 1 ? ` ${styles.recentItemBordered}` : ""}`}
               >
                 <div
                   style={{
@@ -434,21 +312,8 @@ export function AdminOverview() {
 
         {/* Recent notes */}
         <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "var(--space-4)",
-            }}
-          >
-            <h3
-              style={{
-                fontSize: "var(--font-size-md)",
-                fontWeight: "var(--font-weight-semibold)",
-                margin: 0,
-              }}
-            >
+          <div className={styles.recentHeaderRow}>
+            <h3 className={styles.cardTitle}>
               Recent notes
             </h3>
             <Link to="/admin/dashboard/notes">
@@ -457,28 +322,11 @@ export function AdminOverview() {
               </Button>
             </Link>
           </div>
-          <div
-            style={{
-              background: "var(--color-bg-elevated)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-xl)",
-              overflow: "hidden",
-            }}
-          >
+          <div className={styles.recentCard}>
             {recentNotes.map((note, i) => (
               <div
                 key={note.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "var(--space-3) var(--space-4)",
-                  gap: "var(--space-3)",
-                  borderBottom:
-                    i < recentNotes.length - 1
-                      ? "1px solid var(--color-border-subtle)"
-                      : "none",
-                }}
+                className={`${styles.recentItem}${i < recentNotes.length - 1 ? ` ${styles.recentItemBordered}` : ""}`}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p
@@ -515,7 +363,7 @@ export function AdminOverview() {
         </div>
       </div>
 
-      <style>{`@media (max-width: 768px) { .admin-grid { grid-template-columns: 1fr !important; } }`}</style>
+
     </DashboardLayout>
   );
 }

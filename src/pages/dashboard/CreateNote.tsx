@@ -4,6 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui";
 import { NoteEditor, SaveIndicator } from "@/components/editor/NoteEditor";
 import { useNoteEditor } from "@/hooks/useNoteEditor";
+import styles from "@/styles/dashboard.module.css";
 import { useAuth, fallbackProfile } from "@/context/auth";
 
 const AUTO_SAVE_DELAY_MS = 5000;
@@ -65,13 +66,7 @@ export function CreateNote() {
   return (
     <DashboardLayout user={user || fallbackProfile()} variant="user" defaultCollapsed>
       {!user ? (
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading editor…
         </div>
       ) : (

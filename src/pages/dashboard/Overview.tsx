@@ -6,6 +6,7 @@ import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import styles from "@/styles/dashboard.module.css";
 import { formatDate } from "@/lib/helpers";
 
 const PAGE_SIZE = 10;
@@ -28,51 +29,24 @@ function Pagination({
   if (totalPages <= 1) return null;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginTop: "var(--space-3)",
-        fontSize: "var(--font-size-xs)",
-        color: "var(--color-text-muted)",
-      }}
-    >
-      <span>
+    <div className={styles.paginationRow} style={{ marginTop: "var(--space-3)" }}>
+      <span className={styles.paginationInfo}>
         Page {currentPage} of {totalPages} ({totalItems} total)
       </span>
-      <div style={{ display: "flex", gap: "var(--space-2)" }}>
+      <div className={styles.paginationBtnGroup}>
         <button
           disabled={currentPage <= 1}
           onClick={() => onPageChange(currentPage - 1)}
-          style={{
-            padding: "4px 10px",
-            borderRadius: "var(--radius-md)",
-            border: "1px solid var(--color-border)",
-            background: currentPage <= 1 ? "var(--color-bg-muted)" : "var(--color-bg-elevated)",
-            color: currentPage <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)",
-            cursor: currentPage <= 1 ? "default" : "pointer",
-            fontSize: "11px",
-            fontFamily: "var(--font-sans)",
-            fontWeight: 500,
-          }}
+          className={styles.paginationBtn}
+          aria-label="Previous page"
         >
           ← Prev
         </button>
         <button
           disabled={currentPage >= totalPages}
           onClick={() => onPageChange(currentPage + 1)}
-          style={{
-            padding: "4px 10px",
-            borderRadius: "var(--radius-md)",
-            border: "1px solid var(--color-border)",
-            background: currentPage >= totalPages ? "var(--color-bg-muted)" : "var(--color-bg-elevated)",
-            color: currentPage >= totalPages ? "var(--color-text-muted)" : "var(--color-text-primary)",
-            cursor: currentPage >= totalPages ? "default" : "pointer",
-            fontSize: "11px",
-            fontFamily: "var(--font-sans)",
-            fontWeight: 500,
-          }}
+          className={styles.paginationBtn}
+          aria-label="Next page"
         >
           Next →
         </button>
@@ -96,63 +70,17 @@ function StatCard({
 }) {
   return (
     <Link to={href} style={{ textDecoration: "none" }}>
-      <div
-        style={{
-          background: "var(--color-bg-elevated)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-xl)",
-          padding: "var(--space-5)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-4)",
-          boxShadow: "var(--shadow-xs)",
-          transition: "all 0.15s ease",
-          cursor: "pointer",
-        }}
-        className="stat-card-hover"
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-medium)",
-              color: "var(--color-text-secondary)",
-            }}
-          >
+      <div className={styles.statCard}>
+        <div className={styles.statCardTop}>
+          <span className={styles.statLabel}>
             {label}
           </span>
-          <div
-            style={{
-              width: "34px",
-              height: "34px",
-              borderRadius: "var(--radius-lg)",
-              background: "var(--color-accent-subtle)",
-              border: "1px solid var(--color-accent-muted)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--color-accent)",
-            }}
-          >
+          <div className={styles.statIconWrap}>
             <Icon d={icon} size={15} />
           </div>
         </div>
         <div>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "var(--font-size-3xl)",
-              fontWeight: "var(--font-weight-bold)",
-              letterSpacing: "var(--letter-spacing-tight)",
-              color: "var(--color-text-primary)",
-            }}
-          >
+          <p className={styles.statValue}>
             {value}
           </p>
         </div>
@@ -300,13 +228,7 @@ export function DashboardOverview() {
         }
         variant="user"
       >
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading workspace summary…
         </div>
       </DashboardLayout>
@@ -344,14 +266,7 @@ export function DashboardOverview() {
       </div>
 
       {/* Stats cards — clickable */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: "var(--space-4)",
-          marginBottom: "var(--space-6)",
-        }}
-      >
+      <div className={styles.statsGrid}>
         <StatCard label="Folders" value={stats.rootFolders} icon={IC.folder} href="/dashboard/folders" />
         <StatCard label="Subfolders" value={stats.subfolders} icon={IC.subfolder} href="/dashboard/subfolders" />
         <StatCard label="Notes" value={stats.notes} icon={IC.notes} href="/dashboard/notes" />
@@ -361,42 +276,16 @@ export function DashboardOverview() {
       </div>
 
       {/* Ready to create something */}
-      <div
-        style={{
-          marginBottom: "var(--space-8)",
-          padding: "var(--space-6)",
-          background: "var(--color-bg-elevated)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-xl)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "var(--space-4)",
-        }}
-      >
+      <div className={styles.createBanner}>
         <div>
-          <h4
-            style={{
-              margin: 0,
-              marginBottom: "var(--space-1)",
-              color: "var(--color-text-primary)",
-              fontSize: "var(--font-size-md)",
-            }}
-          >
+          <h4 className={styles.sectionTitle} style={{ marginBottom: "var(--space-1)" }}>
             Ready to create something?
           </h4>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "var(--font-size-sm)",
-              color: "var(--color-text-muted)",
-            }}
-          >
+          <p className={styles.headerSubtitle}>
             Start with a folder, subfolder, then add notes inside.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap" }}>
+        <div className={styles.createBannerCta}>
           <Link to="/dashboard/folders">
             <Button variant="secondary" size="sm" leftIcon={<Icon d={IC.folder} size={14} />}>
               New folder
@@ -416,32 +305,11 @@ export function DashboardOverview() {
       </div>
 
       {/* Three-column sections */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: "var(--space-6)",
-        }}
-        className="dash-grid-3"
-      >
+      <div className={styles.grid3Col}>
         {/* ── Recent Notes ── */}
         <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "var(--space-4)",
-            }}
-          >
-            <h3
-              style={{
-                fontSize: "var(--font-size-md)",
-                fontWeight: "var(--font-weight-semibold)",
-                color: "var(--color-text-primary)",
-                margin: 0,
-              }}
-            >
+          <div className={styles.sectionHeader}>
+            <h3 className={styles.sectionTitle}>
               Recent notes
             </h3>
             <Link to="/dashboard/notes">
@@ -464,20 +332,7 @@ export function DashboardOverview() {
                   to={`/dashboard/notes`}
                   style={{ textDecoration: "none" }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "var(--space-3) var(--space-4)",
-                      background: "var(--color-bg-elevated)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: "var(--radius-lg)",
-                      gap: "var(--space-3)",
-                      transition: "all 0.15s ease",
-                    }}
-                    className="list-item-hover"
-                  >
+                  <div className={styles.listItemRow}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p
                         style={{
@@ -510,16 +365,7 @@ export function DashboardOverview() {
                 </Link>
               ))
             ) : (
-              <div
-                style={{
-                  padding: "var(--space-6)",
-                  textAlign: "center",
-                  border: "1px dashed var(--color-border)",
-                  borderRadius: "var(--radius-lg)",
-                  color: "var(--color-text-muted)",
-                  fontSize: "var(--font-size-sm)",
-                }}
-              >
+              <div className={styles.emptyDash}>
                 No notes created yet.
               </div>
             )}
@@ -534,22 +380,8 @@ export function DashboardOverview() {
 
         {/* ── Your Subfolders ── */}
         <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "var(--space-4)",
-            }}
-          >
-            <h3
-              style={{
-                fontSize: "var(--font-size-md)",
-                fontWeight: "var(--font-weight-semibold)",
-                color: "var(--color-text-primary)",
-                margin: 0,
-              }}
-            >
+          <div className={styles.sectionHeader}>
+            <h3 className={styles.sectionTitle}>
               Your Subfolders
             </h3>
             <Link to="/dashboard/subfolders">
@@ -572,19 +404,7 @@ export function DashboardOverview() {
                   to={`/dashboard/subfolders`}
                   style={{ textDecoration: "none" }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--space-3)",
-                      padding: "var(--space-3) var(--space-4)",
-                      background: "var(--color-bg-elevated)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: "var(--radius-lg)",
-                      transition: "all 0.15s ease",
-                    }}
-                    className="list-item-hover"
-                  >
+                  <div className={styles.listItem}>
                     <span style={{ color: "var(--color-accent)", flexShrink: 0 }}>
                       <Icon d={IC.subfolder} size={15} />
                     </span>
@@ -620,16 +440,7 @@ export function DashboardOverview() {
                 </Link>
               ))
             ) : (
-              <div
-                style={{
-                  padding: "var(--space-6)",
-                  textAlign: "center",
-                  border: "1px dashed var(--color-border)",
-                  borderRadius: "var(--radius-lg)",
-                  color: "var(--color-text-muted)",
-                  fontSize: "var(--font-size-sm)",
-                }}
-              >
+              <div className={styles.emptyDash}>
                 No subfolders yet.
               </div>
             )}
@@ -644,22 +455,8 @@ export function DashboardOverview() {
 
         {/* ── Your Folders ── */}
         <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "var(--space-4)",
-            }}
-          >
-            <h3
-              style={{
-                fontSize: "var(--font-size-md)",
-                fontWeight: "var(--font-weight-semibold)",
-                color: "var(--color-text-primary)",
-                margin: 0,
-              }}
-            >
+          <div className={styles.sectionHeader}>
+            <h3 className={styles.sectionTitle}>
               Your Folders
             </h3>
             <Link to="/dashboard/folders">
@@ -682,19 +479,7 @@ export function DashboardOverview() {
                   to={`/dashboard/folders`}
                   style={{ textDecoration: "none" }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--space-3)",
-                      padding: "var(--space-3) var(--space-4)",
-                      background: "var(--color-bg-elevated)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: "var(--radius-lg)",
-                      transition: "all 0.15s ease",
-                    }}
-                    className="list-item-hover"
-                  >
+                  <div className={styles.listItem}>
                     <span style={{ color: "var(--color-accent)", flexShrink: 0 }}>
                       <Icon d={IC.folder} size={15} />
                     </span>
@@ -731,16 +516,7 @@ export function DashboardOverview() {
                 </Link>
               ))
             ) : (
-              <div
-                style={{
-                  padding: "var(--space-6)",
-                  textAlign: "center",
-                  border: "1px dashed var(--color-border)",
-                  borderRadius: "var(--radius-lg)",
-                  color: "var(--color-text-muted)",
-                  fontSize: "var(--font-size-sm)",
-                }}
-              >
+              <div className={styles.emptyDash}>
                 No folders created yet.
               </div>
             )}
@@ -754,20 +530,6 @@ export function DashboardOverview() {
         </div>
       </div>
 
-      <style>{`
-        @media (max-width: 1024px) {
-          .dash-grid-3 { grid-template-columns: 1fr; }
-        }
-        .stat-card-hover:hover {
-          transform: translateY(-2px);
-          box-shadow: var(--shadow-md) !important;
-          border-color: var(--color-accent-muted) !important;
-        }
-        .list-item-hover:hover {
-          border-color: var(--color-accent-muted) !important;
-          background: var(--color-bg-subtle) !important;
-        }
-      `}</style>
     </DashboardLayout>
   );
 }

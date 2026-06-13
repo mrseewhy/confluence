@@ -6,6 +6,8 @@ import { IC } from "@/components/layout/dashboardIconPaths";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDate, timeAgo } from "@/lib/helpers";
+import { safeStr, safeArray, safeJoin } from "@/lib/safeParse";
+import styles from "@/styles/admin.module.css";
 
 const PAGE_SIZE = 30;
 
@@ -25,19 +27,6 @@ const DATE_PRESETS = [
 ] as const;
 
 type DatePreset = (typeof DATE_PRESETS)[number]["value"];
-
-interface LogRow {
-  id: string;
-  inviter_id: string;
-  invitee_email: string;
-  action: string;
-  item_type: string;
-  item_title: string;
-  access_level: string | null;
-  details: string | null;
-  created_at: string;
-  inviter: { full_name: string } | null;
-}
 
 interface ActivityEntry {
   id: string;
@@ -78,18 +67,21 @@ export function AdminActivityLog() {
           .order("created_at", { ascending: false })
           .limit(500);
 
-        const rows = (logs || []) as unknown as LogRow[];
-        const mapped: ActivityEntry[] = rows.map((row) => ({
-          id: row.id,
-          inviter_name: row.inviter?.full_name || row.inviter_id?.slice(0, 8) || "Unknown",
-          invitee_email: row.invitee_email,
-          action: row.action,
-          item_type: row.item_type,
-          item_title: row.item_title,
-          access_level: row.access_level,
-          details: row.details,
-          created_at: row.created_at,
-        }));
+        const rows = safeArray<Record<string, unknown>>(logs);
+        const mapped: ActivityEntry[] = rows.map((row) => {
+          const inviter = safeJoin<{ full_name?: string }>(row.inviter);
+          return {
+            id: safeStr(row.id),
+            inviter_name: inviter?.full_name || safeStr(row.inviter_id).slice(0, 8) || "Unknown",
+            invitee_email: safeStr(row.invitee_email),
+            action: safeStr(row.action),
+            item_type: safeStr(row.item_type),
+            item_title: safeStr(row.item_title),
+            access_level: safeStr(row.access_level) || null,
+            details: safeStr(row.details) || null,
+            created_at: safeStr(row.created_at),
+          };
+        });
 
         setEntries(mapped);
       } catch (err) {
@@ -203,7 +195,7 @@ export function AdminActivityLog() {
   if (!user || loading) {
     return (
       <DashboardLayout user={user || fallbackProfile({ user_type: "admin" })} variant="admin">
-        <div style={{ padding: "var(--space-20)", textAlign: "center", color: "var(--color-text-muted)" }}>
+        <div className={styles.loadingState}>
           Loading activity log…
         </div>
       </DashboardLayout>
@@ -212,12 +204,12 @@ export function AdminActivityLog() {
 
   return (
     <DashboardLayout user={user} variant="admin">
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "var(--space-6)", flexWrap: "wrap", gap: "var(--space-4)" }}>
+      <div className={styles.pageHeader}>
         <div>
-          <h1 style={{ fontSize: "var(--font-size-2xl)", fontWeight: "var(--font-weight-bold)", letterSpacing: "var(--letter-spacing-tight)", marginBottom: "var(--space-1)" }}>
+          <h1 className={styles.headerTitle} style={{ marginBottom: "var(--space-1)" }}>
             Activity Log
           </h1>
-          <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+          <p className={styles.headerSubtitle}>
             Chronological history of all platform activity across every user
           </p>
         </div>
@@ -242,9 +234,7 @@ export function AdminActivityLog() {
       {/* Filters */}
       <div style={{ display: "flex", gap: "var(--space-3)", marginBottom: "var(--space-4)", flexWrap: "wrap" }}>
         <input type="search" placeholder="Search by email, item, or details…" value={search} onChange={(e) => setSearch(e.target.value)}
-          style={{ flex: "1 1 220px", fontFamily: "var(--font-sans)", fontSize: "var(--font-size-sm)", color: "var(--color-text-primary)", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "var(--space-2) var(--space-3)", outline: "none" }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-accent)"; e.currentTarget.style.boxShadow = "0 0 0 3px var(--color-accent-subtle)"; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.boxShadow = "none"; }} />
+          className={styles.searchInput} style={{ flex: "1 1 220px" }} aria-label="Search activity log" />
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
           <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}
             style={{ fontFamily: "var(--font-sans)", fontSize: "var(--font-size-xs)", color: "var(--color-text-primary)", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "var(--space-1) var(--space-2)", outline: "none", cursor: "pointer" }}>
@@ -340,13 +330,11 @@ export function AdminActivityLog() {
       )}
 
       {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "var(--space-4)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+        <div className={styles.paginationBar} style={{ marginTop: "var(--space-4)" }}>
           <span>Page {page} of {totalPages} ({filtered.length} total)</span>
-          <div style={{ display: "flex", gap: "var(--space-2)" }}>
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
-              style={{ padding: "4px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: page <= 1 ? "var(--color-bg-muted)" : "var(--color-bg-elevated)", color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)", cursor: page <= 1 ? "default" : "pointer", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>← Prev</button>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
-              style={{ padding: "4px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: page >= totalPages ? "var(--color-bg-muted)" : "var(--color-bg-elevated)", color: page >= totalPages ? "var(--color-text-muted)" : "var(--color-text-primary)", cursor: page >= totalPages ? "default" : "pointer", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>Next →</button>
+          <div className={styles.paginationBtnGroup}>
+            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className={styles.paginationBtn} aria-label="Previous page">← Prev</button>
+            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className={styles.paginationBtn} aria-label="Next page">Next →</button>
           </div>
         </div>
       )}

@@ -8,6 +8,7 @@ import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
 import { formatDate, buildSlug } from "@/lib/helpers";
 import { Modal } from "@/components/Modal";
+import styles from "@/styles/dashboard.module.css";
 import type { Folder, Visibility } from "@/types";
 
 // (formatDate imported from @/lib/helpers)
@@ -171,13 +172,7 @@ useEffect(() => {
         }
         variant="user"
       >
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading folders…
         </div>
       </DashboardLayout>
@@ -187,34 +182,12 @@ useEffect(() => {
   return (
     <DashboardLayout user={user} variant="user">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: "var(--space-6)",
-          flexWrap: "wrap",
-          gap: "var(--space-4)",
-        }}
-      >
+      <div className={styles.pageHeader}>
         <div>
-          <h1
-            style={{
-              fontSize: "var(--font-size-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              letterSpacing: "var(--letter-spacing-tight)",
-              marginBottom: "var(--space-1)",
-            }}
-          >
+          <h1 className={styles.headerTitle}>
             Folders
           </h1>
-          <p
-            style={{
-              margin: 0,
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-            }}
-          >
+          <p className={styles.headerSubtitle}>
             {rootFolders.length} folder{rootFolders.length !== 1 ? "s" : ""} in
             your workspace
           </p>
@@ -230,51 +203,24 @@ useEffect(() => {
       </div>
 
       {/* Controls */}
-      <div
-        style={{
-          display: "flex",
-          gap: "var(--space-3)",
-          marginBottom: "var(--space-6)",
-          flexWrap: "wrap",
-        }}
-      >
+      <div className={styles.filterRow}>
         <input
           type="search"
-          id="folder-search"
-          name="folder-search"
           placeholder="Search folders…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{
-            flex: "1 1 220px",
-            fontFamily: "var(--font-sans)",
-            fontSize: "var(--font-size-sm)",
-            color: "var(--color-text-primary)",
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-md)",
-            padding: "var(--space-2) var(--space-3)",
-            outline: "none",
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-accent)";
-            e.currentTarget.style.boxShadow =
-              "0 0 0 3px var(--color-accent-subtle)";
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-border)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
+          className={styles.searchInput}
+          aria-label="Search folders"
         />
-        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-          {(["all", "public", "private"] as const).map((v) => (
-            <Button
-              key={v}
-              variant={vis === v ? "accent-ghost" : "secondary"}
-              size="sm"
-              onClick={() => setVis(v)}
-              style={{ textTransform: "capitalize" }}
-            >
+        <div className={styles.filterBtnGroup}>
+          {(["all", "public", "private"] as const).map((v) => (              <Button
+                key={v}
+                variant={vis === v ? "accent-ghost" : "secondary"}
+                size="sm"
+                onClick={() => setVis(v)}
+                style={{ textTransform: "capitalize" }}
+                aria-pressed={vis === v}
+              >
               {v}
             </Button>
           ))}
@@ -283,87 +229,22 @@ useEffect(() => {
 
       {/* Table */}
       {enrichedFolders.length > 0 ? (
-        <div
-          style={{
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-xl)",
-            overflow: "hidden",
-          }}
-        >
-          {/* Table head */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 80px 100px 120px 140px",
-              gap: "var(--space-4)",
-              padding: "var(--space-3) var(--space-5)",
-              borderBottom: "1px solid var(--color-border)",
-              background: "var(--color-bg-subtle)",
-            }}
-          >
-            {["Folder", "Notes", "Visibility", "Updated", "Actions"].map(
-              (h) => (
-                <span
-                  key={h}
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "var(--font-weight-semibold)",
-                    letterSpacing: "0.07em",
-                    textTransform: "uppercase",
-                    color: "var(--color-text-muted)",
-                  }}
-                >
-                  {h}
-                </span>
-              ),
-            )}
+        <div className={styles.tableCard}>
+          <div className={styles.tableHeader} style={{ gridTemplateColumns: "1fr 80px 100px 120px 140px" }}>
+            {["Folder", "Notes", "Visibility", "Updated", "Actions"].map((h) => (
+              <span className={styles.tableHeaderCell}>{h}</span>
+            ))}
           </div>
 
-          {enrichedFolders.map((folder, i) => (
+          {enrichedFolders.map((folder) => (
             <div
               key={folder.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 80px 100px 120px 140px",
-                gap: "var(--space-4)",
-                alignItems: "center",
-                padding: "var(--space-4) var(--space-5)",
-                borderBottom:
-                  i < enrichedFolders.length - 1
-                    ? "1px solid var(--color-border-subtle)"
-                    : "none",
-                transition: "background var(--duration-fast)",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "var(--color-bg-subtle)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "transparent")
-              }
+              className={styles.tableRow}
+              style={{ gridTemplateColumns: "1fr 80px 100px 120px 140px" }}
             >
               {/* Title + sub */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--space-3)",
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{
-                    width: "34px",
-                    height: "34px",
-                    borderRadius: "var(--radius-lg)",
-                    background: "var(--color-accent-subtle)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--color-accent)",
-                    flexShrink: 0,
-                  }}
-                >
+              <div className={styles.cellFlex}>
+                <div className={styles.iconBadge} style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)" }}>
                   <Icon d={IC.folder} size={16} />
                 </div>
                 <div style={{ minWidth: 0 }}>
@@ -443,7 +324,7 @@ useEffect(() => {
               >
                 {formatDate(folder.updated_at)}
               </span>
-              <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <div className={styles.cellActions}>
                 {folder.visibility === "private" && (
                   <Button
                     variant="accent-ghost"
@@ -484,52 +365,23 @@ useEffect(() => {
 
       {/* Pagination */}
       {totalRootCount > PAGE_SIZE && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "var(--space-3)",
-            marginTop: "var(--space-6)",
-            marginBottom: "var(--space-6)",
-          }}
-        >
+        <div className={styles.paginationRow}>
           <button
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-medium)",
-              padding: "var(--space-2) var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-elevated)",
-              color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)",
-              cursor: page <= 1 ? "not-allowed" : "pointer",
-              opacity: page <= 1 ? 0.5 : 1,
-            }}
+            className={styles.paginationBtn}
+            aria-label="Previous page"
           >
             ← Prev
           </button>
-          <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+          <span className={styles.paginationInfo}>
             Page {page} of {Math.ceil(totalRootCount / PAGE_SIZE)}
           </span>
           <button
             disabled={page >= Math.ceil(totalRootCount / PAGE_SIZE)}
             onClick={() => setPage((p) => p + 1)}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-medium)",
-              padding: "var(--space-2) var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-elevated)",
-              color: page >= Math.ceil(totalRootCount / PAGE_SIZE) ? "var(--color-text-muted)" : "var(--color-text-primary)",
-              cursor: page >= Math.ceil(totalRootCount / PAGE_SIZE) ? "not-allowed" : "pointer",
-              opacity: page >= Math.ceil(totalRootCount / PAGE_SIZE) ? 0.5 : 1,
-            }}
+            className={styles.paginationBtn}
+            aria-label="Next page"
           >
             Next →
           </button>

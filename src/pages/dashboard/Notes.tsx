@@ -9,6 +9,8 @@ import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
 import { Modal } from "@/components/Modal";
 import { formatDate } from "@/lib/helpers";
+import styles from "@/styles/dashboard.module.css";
+import { safeStr, safeArray } from "@/lib/safeParse";
 import type { Note } from "@/types";
 
 // (formatDate imported from @/lib/helpers)
@@ -50,8 +52,9 @@ export function DashboardNotes() {
         .eq("owner_id", user.id);
 
       const folderMap = new Map<string, { id: string; title: string; slug: string; parent_id: string | null }>();
-      for (const f of allFolders || []) {
-        folderMap.set(f.id, f as { id: string; title: string; slug: string; parent_id: string | null });
+      const safeFolders = safeArray<Record<string, unknown>>(allFolders);
+      for (const f of safeFolders) {
+        folderMap.set(safeStr(f.id), { id: safeStr(f.id), title: safeStr(f.title), slug: safeStr(f.slug), parent_id: safeStr(f.parent_id) || null });
       }
 
       const from = (page - 1) * PAGE_SIZE;
@@ -67,11 +70,12 @@ export function DashboardNotes() {
 
       // Build parent folder lookup by checking which folders have parents
       const pfMap = new Map<string, { title: string; slug: string }>();
-      for (const f of (allFolders || []) as Array<{ id: string; title: string; slug: string; parent_id: string | null }>) {
-        if (f.parent_id) {
-          const parent = folderMap.get(f.parent_id);
+      for (const f of safeFolders) {
+        const fParentId = safeStr(f.parent_id) || null;
+        if (fParentId) {
+          const parent = folderMap.get(fParentId);
           if (parent) {
-            pfMap.set(f.id, { title: parent.title, slug: parent.slug });
+            pfMap.set(safeStr(f.id), { title: parent.title, slug: parent.slug });
           }
         }
       }
@@ -135,13 +139,7 @@ export function DashboardNotes() {
         }
         variant="user"
       >
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading notes…
         </div>
       </DashboardLayout>
@@ -150,34 +148,12 @@ export function DashboardNotes() {
 
   return (
     <DashboardLayout user={user} variant="user">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: "var(--space-6)",
-          flexWrap: "wrap",
-          gap: "var(--space-4)",
-        }}
-      >
+      <div className={styles.pageHeader}>
         <div>
-          <h1
-            style={{
-              fontSize: "var(--font-size-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              letterSpacing: "var(--letter-spacing-tight)",
-              marginBottom: "var(--space-1)",
-            }}
-          >
+          <h1 className={styles.headerTitle}>
             Notes
           </h1>
-          <p
-            style={{
-              margin: 0,
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-            }}
-          >
+          <p className={styles.headerSubtitle}>
             {notesList.length} note{notesList.length !== 1 ? "s" : ""} in your
             workspace
           </p>
@@ -193,133 +169,43 @@ export function DashboardNotes() {
         </Link>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "var(--space-3)",
-          marginBottom: "var(--space-6)",
-          flexWrap: "wrap",
-        }}
-      >
+      <div className={styles.filterRow}>
         <input
           type="search"
           placeholder="Search notes…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{
-            flex: "1 1 220px",
-            fontFamily: "var(--font-sans)",
-            fontSize: "var(--font-size-sm)",
-            color: "var(--color-text-primary)",
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-md)",
-            padding: "var(--space-2) var(--space-3)",
-            outline: "none",
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-accent)";
-            e.currentTarget.style.boxShadow =
-              "0 0 0 3px var(--color-accent-subtle)";
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-border)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
+          className={styles.searchInput}
+          aria-label="Search notes"
         />
-        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-          {(["all", "public", "private"] as const).map((v) => (
-            <Button
-              key={v}
-              variant={vis === v ? "accent-ghost" : "secondary"}
-              size="sm"
-              onClick={() => setVis(v)}
-              style={{ textTransform: "capitalize" }}
-            >
-              {v}
-            </Button>
+        <div className={styles.filterBtnGroup}>
+          {(["all", "public", "private"] as const).map((v) => (              <Button
+                key={v}
+                variant={vis === v ? "accent-ghost" : "secondary"}
+                size="sm"
+                onClick={() => setVis(v)}
+                style={{ textTransform: "capitalize" }}
+                aria-pressed={vis === v}
+              >
+                {v}
+              </Button>
           ))}
         </div>
       </div>
 
-      {filtered.length > 0 ? (
-        <div
-          style={{
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-xl)",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 160px 90px 120px 140px",
-              gap: "var(--space-4)",
-              padding: "var(--space-3) var(--space-5)",
-              borderBottom: "1px solid var(--color-border)",
-              background: "var(--color-bg-subtle)",
-            }}
-          >
+      {filtered.length > 0 ? (        <div className={styles.tableCard}>
+          <div className={`${styles.tableHeader} ${styles.cols5_Notes}`}>
             {["Note", "Folder", "Visibility", "Updated", "Actions"].map((h) => (
-              <span
-                key={h}
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "var(--font-weight-semibold)",
-                  letterSpacing: "0.07em",
-                  textTransform: "uppercase",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                {h}
-              </span>
+              <span className={styles.tableHeaderCell}>{h}</span>
             ))}
           </div>
 
-          {filtered.map((note, i) => (
+          {filtered.map((note) => (
             <div
               key={note.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 160px 90px 120px 140px",
-                gap: "var(--space-4)",
-                alignItems: "center",
-                padding: "var(--space-4) var(--space-5)",
-                borderBottom:
-                  i < filtered.length - 1
-                    ? "1px solid var(--color-border-subtle)"
-                    : "none",
-                transition: "background var(--duration-fast)",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "var(--color-bg-subtle)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "transparent")
-              }
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--space-3)",
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{
-                    width: "34px",
-                    height: "34px",
-                    borderRadius: "var(--radius-lg)",
-                    background: "var(--color-accent-subtle)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "var(--color-accent)",
-                    flexShrink: 0,
-                  }}
-                >
+              className={`${styles.tableRow} ${styles.cols5_Notes}`}>
+              <div className={styles.cellFlex}>
+                <div className={styles.iconBadge} style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)" }}>
                   <Icon d={IC.notes} size={15} />
                 </div>
                 <div style={{ minWidth: 0 }}>
@@ -488,7 +374,7 @@ export function DashboardNotes() {
               >
                 {formatDate(note.updated_at)}
               </span>
-              <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <div className={styles.cellActions}>
                 <Link to={`/dashboard/notes/${note.slug}/edit`}>
                   <Button variant="accent-ghost" size="xs">
                     Edit
@@ -535,51 +421,23 @@ export function DashboardNotes() {
 
       {/* Pagination */}
       {totalCount > PAGE_SIZE && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "var(--space-3)",
-            marginTop: "var(--space-6)",
-          }}
-        >
+        <div className={styles.paginationRow}>
           <button
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-medium)",
-              padding: "var(--space-2) var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-elevated)",
-              color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)",
-              cursor: page <= 1 ? "not-allowed" : "pointer",
-              opacity: page <= 1 ? 0.5 : 1,
-            }}
+            className={styles.paginationBtn}
+            aria-label="Previous page"
           >
             ← Prev
           </button>
-          <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+          <span className={styles.paginationInfo}>
             Page {page} of {Math.ceil(totalCount / PAGE_SIZE)}
           </span>
           <button
             disabled={page >= Math.ceil(totalCount / PAGE_SIZE)}
             onClick={() => setPage((p) => p + 1)}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-medium)",
-              padding: "var(--space-2) var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-elevated)",
-              color: page >= Math.ceil(totalCount / PAGE_SIZE) ? "var(--color-text-muted)" : "var(--color-text-primary)",
-              cursor: page >= Math.ceil(totalCount / PAGE_SIZE) ? "not-allowed" : "pointer",
-              opacity: page >= Math.ceil(totalCount / PAGE_SIZE) ? 0.5 : 1,
-            }}
+            className={styles.paginationBtn}
+            aria-label="Next page"
           >
             Next →
           </button>

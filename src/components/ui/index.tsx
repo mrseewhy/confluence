@@ -237,11 +237,12 @@ export function Input({ label, hint, error, leftIcon, rightIcon, style, id, ...p
 interface CardProps {
   children: React.ReactNode
   style?: React.CSSProperties
+  className?: string
   onClick?: () => void
   hoverable?: boolean
 }
 
-export function Card({ children, style, onClick, hoverable = false }: CardProps) {
+export function Card({ children, style, className, onClick, hoverable = false }: CardProps) {
   const [hovered, setHovered] = React.useState(false)
 
   return (
@@ -249,6 +250,7 @@ export function Card({ children, style, onClick, hoverable = false }: CardProps)
       onClick={onClick}
       onMouseEnter={() => hoverable && setHovered(true)}
       onMouseLeave={() => hoverable && setHovered(false)}
+      className={className}
       style={{
         background: 'var(--color-bg-elevated)',
         border: `1px solid ${hovered ? 'var(--color-border-strong)' : 'var(--color-border)'}`,

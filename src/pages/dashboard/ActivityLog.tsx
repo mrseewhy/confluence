@@ -4,6 +4,8 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import styles from "@/styles/dashboard.module.css";
+import { safeStr, safeArray } from "@/lib/safeParse";
 import { formatDate, timeAgo } from "@/lib/helpers";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -74,16 +76,17 @@ export function DashboardActivityLog() {
 
       if (error) throw error;
 
-      const mapped: ActivityEntry[] = (logs ?? []).map((log: Record<string, unknown>) => ({
-        id: log.id as string,
-        inviteeEmail: log.invitee_email as string,
-        itemTitle: (log.item_title as string) || "Unknown",
-        itemSlug: (log.item_slug as string) || "",
-        itemType: (log.item_type as "folder" | "note") || "note",
-        accessLevel: (log.access_level as string | null) || null,
-        createdAt: log.created_at as string,
+      const safeLogs = safeArray<Record<string, unknown>>(logs);
+      const mapped: ActivityEntry[] = safeLogs.map((log) => ({
+        id: safeStr(log.id),
+        inviteeEmail: safeStr(log.invitee_email),
+        itemTitle: safeStr(log.item_title, "Unknown"),
+        itemSlug: safeStr(log.item_slug),
+        itemType: (safeStr(log.item_type) as "folder" | "note") || "note",
+        accessLevel: safeStr(log.access_level) || null,
+        createdAt: safeStr(log.created_at),
         inviterName: user.full_name,
-        action: (log.action as "invited" | "revoked") || "invited",
+        action: (safeStr(log.action) as "invited" | "revoked") || "invited",
       }));
 
       setEntries(mapped);
@@ -234,13 +237,7 @@ export function DashboardActivityLog() {
   if (!user || loading) {
     return (
       <DashboardLayout user={user || fallbackProfile()} variant="user">
-        <div
-          style={{
-            padding: "var(--space-20)",
-            textAlign: "center",
-            color: "var(--color-text-muted)",
-          }}
-        >
+        <div className={styles.loadingState}>
           Loading activity log…
         </div>
       </DashboardLayout>
@@ -252,34 +249,12 @@ export function DashboardActivityLog() {
   return (
     <DashboardLayout user={user} variant="user">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: "var(--space-6)",
-          flexWrap: "wrap",
-          gap: "var(--space-4)",
-        }}
-      >
+      <div className={styles.pageHeader}>
         <div>
-          <h1
-            style={{
-              fontSize: "var(--font-size-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              letterSpacing: "var(--letter-spacing-tight)",
-              marginBottom: "var(--space-1)",
-            }}
-          >
+          <h1 className={styles.headerTitle}>
             Activity Log
           </h1>
-          <p
-            style={{
-              margin: 0,
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-            }}
-          >
+          <p className={styles.headerSubtitle}>
             Chronological history of collaborator invites and revocations
           </p>
         </div>
