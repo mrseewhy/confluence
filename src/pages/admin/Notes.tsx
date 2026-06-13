@@ -19,6 +19,7 @@ export function AdminNotes() {
   const [notesList, setNotesList] = useState<
     Array<Note & { folder: { id: string; title: string; slug: string } | null; owner: { full_name: string } | null }>
   >([]);
+  const [collaboratorMap, setCollaboratorMap] = useState<Record<string, { email: string; access_level: string }[]>>({});
   const [search, setSearch] = useState("");
   const [vis, setVis] = useState<"all" | "public" | "private">("all");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -31,7 +32,24 @@ export function AdminNotes() {
         .select("*, folder:folders(id, title, slug), owner:profiles!owner_id(full_name)")
         .order("updated_at", { ascending: false });
       if (!data) return;
-      setNotesList(data as typeof notesList);
+      const notes = data as typeof notesList;
+      setNotesList(notes);
+
+      // Load collaborators for all notes
+      const noteIds = notes.map((n: { id: string }) => n.id);
+      if (noteIds.length > 0) {
+        const { data: collabs } = await supabase
+          .from("collaborators")
+          .select("note_id, invitee_email, access_level")
+          .in("note_id", noteIds);
+        const map: Record<string, { email: string; access_level: string }[]> = {};
+        (collabs || []).forEach((c: Record<string, unknown>) => {
+          const nid = c.note_id as string;
+          if (!map[nid]) map[nid] = [];
+          map[nid].push({ email: c.invitee_email as string, access_level: c.access_level as string });
+        });
+        setCollaboratorMap(map);
+      }
     } catch (err) {
       console.error("Error loading notes:", err);
     } finally {
@@ -74,7 +92,7 @@ export function AdminNotes() {
     setPendingDeleteId(null);
   };
 
-  const handleToggleVisibility = async (note: Note & { folder: { id: string; title: string; slug: string } | null; owner: { full_name: string } | null }) => {
+  const handleToggleVisibility = async (note: typeof notesList[number]) => {
     const newVis = note.visibility === "public" ? "private" : "public";
     try {
       const supabase = requireSupabase();
@@ -133,36 +151,46 @@ export function AdminNotes() {
 
       {filtered.length > 0 ? (
         <div style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 80px 90px 120px 200px", gap: "var(--space-4)", padding: "var(--space-3) var(--space-5)", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-subtle)" }}>
-            {["Note", "Folder", "Visibility", "Updated", "Owner", "Actions"].map((h) => (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 60px 60px 80px 100px 170px", gap: "var(--space-3)", padding: "var(--space-3) var(--space-5)", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-subtle)" }}>
+            {["Note", "Folder", "Vis.", "Collabs", "Updated", "Owner", "Actions"].map((h) => (
               <span key={h} style={{ fontSize: "11px", fontWeight: "var(--font-weight-semibold)", letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--color-text-muted)" }}>{h}</span>
             ))}
           </div>
-          {filtered.map((note, i) => (
-            <div key={note.id} style={{ display: "grid", gridTemplateColumns: "1fr 140px 80px 90px 120px 200px", gap: "var(--space-4)", alignItems: "center", padding: "var(--space-4) var(--space-5)", borderBottom: i < filtered.length - 1 ? "1px solid var(--color-border-subtle)" : "none", transition: "background var(--duration-fast)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-subtle)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", minWidth: 0 }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-lg)", background: "var(--color-accent-subtle)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-accent)", flexShrink: 0 }}>
-                  <Icon d={IC.notes} size={15} />
+          {filtered.map((note, i) => {
+            const collabs = collaboratorMap[note.id] || [];
+            return (
+              <div key={note.id} style={{ display: "grid", gridTemplateColumns: "1fr 120px 60px 60px 80px 100px 170px", gap: "var(--space-3)", alignItems: "center", padding: "var(--space-4) var(--space-5)", borderBottom: i < filtered.length - 1 ? "1px solid var(--color-border-subtle)" : "none", transition: "background var(--duration-fast)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-subtle)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", minWidth: 0 }}>
+                  <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-lg)", background: "var(--color-accent-subtle)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-accent)", flexShrink: 0 }}>
+                    <Icon d={IC.notes} size={15} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.title}</p>
+                    {note.description && <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.description}</p>}
+                  </div>
                 </div>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.title}</p>
-                  {note.description && <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.description}</p>}
+                <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.folder?.title ?? "—"}</span>
+                <Badge variant={note.visibility === "public" ? "accent" : "muted"}>{note.visibility === "public" ? "Pub" : "Priv"}</Badge>
+                <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-secondary)", textAlign: "center" }}>
+                  {collabs.length > 0 ? (
+                    <span title={collabs.map((c) => `${c.email} (${c.access_level})`).join("\n")} style={{ cursor: "help", borderBottom: "1px dashed var(--color-border)", paddingBottom: "1px" }}>
+                      {collabs.length}
+                    </span>
+                  ) : <span style={{ color: "var(--color-text-muted)" }}>—</span>}
+                </div>
+                <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>{formatDate(note.updated_at)}</span>
+                <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.owner?.full_name || "—"}</span>
+                <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                  <Button variant="accent-ghost" size="xs" onClick={() => handleToggleVisibility(note)}>
+                    {note.visibility === "public" ? "Make private" : "Make public"}
+                  </Button>
+                  <Button variant="danger" size="xs" onClick={() => setPendingDeleteId(note.id)}>Delete</Button>
                 </div>
               </div>
-              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.folder?.title ?? "—"}</span>
-              <Badge variant={note.visibility === "public" ? "accent" : "muted"}>{note.visibility}</Badge>
-              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>{formatDate(note.updated_at)}</span>
-              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.owner?.full_name || "—"}</span>
-              <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                <Button variant="accent-ghost" size="xs" onClick={() => handleToggleVisibility(note)}>
-                  {note.visibility === "public" ? "Make private" : "Make public"}
-                </Button>
-                <Button variant="danger" size="xs" onClick={() => setPendingDeleteId(note.id)}>Delete</Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <EmptyState icon="📝" title="No notes found" description="Try adjusting your search or filters." />

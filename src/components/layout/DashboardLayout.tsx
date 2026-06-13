@@ -29,7 +29,9 @@ const adminNav: NavItem[] = [
   { label: "Overview", href: "/admin/dashboard", icon: IC.overview },
   { label: "Users", href: "/admin/dashboard/users", icon: IC.users },
   { label: "Folders", href: "/admin/dashboard/folders", icon: IC.folder },
+  { label: "Subfolders", href: "/admin/dashboard/subfolders", icon: IC.subfolder },
   { label: "Notes", href: "/admin/dashboard/notes", icon: IC.notes },
+  { label: "Activity Log", href: "/admin/dashboard/activity", icon: IC.bell },
 ];
 
 // ── DashboardLayout ───────────────────────────────────────────
@@ -145,7 +147,7 @@ function SidebarInner({
               textTransform: "uppercase",
             }}
           >
-            {variant === "admin" ? "Admin panel" : "My workspace"}
+            {variant === "admin" ? "Admin Dashboard" : "Personal Dashboard"}
           </span>
         </div>
       )}
@@ -172,7 +174,7 @@ function SidebarInner({
               padding: "var(--space-2) var(--space-3) var(--space-1)",
             }}
           >
-            {variant === "admin" ? "Admin" : "Workspace"}
+            {variant === "admin" ? "Admin" : "Personal"}
           </p>
         )}
 
@@ -769,7 +771,7 @@ export function DashboardLayout({
                       // Only show admin/user switch for admin users
                       ...(user.user_type === "admin"
                         ? [{
-                            label: variant === "admin" ? "User dashboard" : "Admin panel",
+                            label: variant === "admin" ? "Personal Dashboard" : "Admin Dashboard",
                             href: variant === "admin" ? "/dashboard" : "/admin/dashboard",
                             icon: IC.shield,
                           }]

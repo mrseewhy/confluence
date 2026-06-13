@@ -96,7 +96,7 @@ alter table public.note_blocks enable row level security;
 drop policy if exists "Users can select their own note blocks" on public.note_blocks;
 create policy "Users can select their own note blocks"
   on public.note_blocks for select to authenticated
-  using (note_id in (select id from public.notes where owner_id = auth.uid()));
+  using (exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid()))))));
 
 drop policy if exists "Users can insert their own note blocks" on public.note_blocks;
 create policy "Users can insert their own note blocks"
@@ -109,7 +109,7 @@ create policy "Users can insert their own note blocks"
 drop policy if exists "Users can update their own note blocks" on public.note_blocks;
 create policy "Users can update their own note blocks"
   on public.note_blocks for update to authenticated
-  using (note_id in (select id from public.notes where owner_id = auth.uid()))
+  using (exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid()))))))
   with check (
     note_id in (select id from public.notes where owner_id = auth.uid()) AND
     not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
@@ -118,7 +118,7 @@ create policy "Users can update their own note blocks"
 drop policy if exists "Users can delete their own note blocks" on public.note_blocks;
 create policy "Users can delete their own note blocks"
   on public.note_blocks for delete to authenticated
-  using (note_id in (select id from public.notes where owner_id = auth.uid()));
+  using (exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid()))))));
 
 -- COLLABORATORS / INVITATIONS
 create table if not exists public.collaborators (
@@ -207,6 +207,17 @@ drop policy if exists "Users can insert their own profile" on public.profiles;
 create policy "Users can insert their own profile"
   on public.profiles for insert to authenticated with check (auth.uid() = id);
 
+-- Clean up auto-generated Supabase dashboard policies (if they exist)
+drop policy if exists "Allow profile insertion" on public.profiles;
+drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
+drop policy if exists "Users can update own profile" on public.profiles;
+drop policy if exists "Public folders are viewable by everyone" on public.folders;
+drop policy if exists "Users can manage their own folders" on public.folders;
+drop policy if exists "Public notes are viewable by everyone" on public.notes;
+drop policy if exists "Users can manage their own notes" on public.notes;
+drop policy if exists "Public blocks are viewable by everyone" on public.note_blocks;
+drop policy if exists "Users can manage their own note blocks" on public.note_blocks;
+
 drop policy if exists "Users can delete their own profile" on public.profiles;
 create policy "Users can delete their own profile"
   on public.profiles for delete to authenticated
@@ -266,7 +277,7 @@ begin
 
   return false;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- PL/pgSQL Recursive access helper for Notes
 create or replace function public.has_access_to_note(note_uuid uuid, user_uuid uuid)
@@ -317,7 +328,7 @@ begin
 
   return false;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- ── Anonymous (public) read policies ──
 drop policy if exists "Public folders are readable by everyone" on public.folders;
@@ -510,6 +521,18 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- Revoke EXECUTE from anon for SECURITY DEFINER functions exposed via REST API.
+-- These functions should only be callable internally or by authenticated users.
+-- handle_new_user is a trigger-only function — nobody should call it via /rpc/.
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM anon, authenticated;
+-- has_access_to_folder and has_access_to_note are helpers called from RLS policies.
+-- They need EXECUTE from authenticated but NOT from anon (anon policies don't use them).
+REVOKE EXECUTE ON FUNCTION public.has_access_to_folder(uuid, uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.has_access_to_note(uuid, uuid) FROM anon;
+-- replace_note_blocks and is_slug_available require authentication — revoke from anon.
+REVOKE EXECUTE ON FUNCTION public.replace_note_blocks(uuid, jsonb) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.is_slug_available(text, uuid, uuid) FROM anon;
+
 -- ═════════════════════════════════════════════════════════════
 -- ACTIVITY LOG (invite/revoke history)
 -- ═════════════════════════════════════════════════════════════
@@ -559,6 +582,11 @@ grant select, insert on public.activity_log to authenticated;
 -- Deletes all existing blocks for a note and inserts new ones
 -- in one atomic transaction. If the insert fails, the delete
 -- is rolled back, preventing data loss.
+--
+-- SECURITY: Includes an explicit ownership check to prevent
+-- any authenticated user from overwriting blocks they don't own.
+-- Though the client-side Supabase client passes the user's JWT,
+-- SECURITY DEFINER bypasses RLS, so the check is done in-code.
 
 create or replace function public.replace_note_blocks(
   p_note_id uuid,
@@ -567,8 +595,34 @@ create or replace function public.replace_note_blocks(
 returns void
 language plpgsql
 security definer
+set search_path = public
 as $$
+declare
+  caller_id uuid;
+  note_owner_id uuid;
 begin
+  -- Get the calling user's ID from the JWT
+  caller_id := auth.uid();
+  if caller_id is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  -- Check that the note exists and the caller owns it
+  select owner_id into note_owner_id from public.notes where id = p_note_id;
+  if note_owner_id is null then
+    raise exception 'Note not found';
+  end if;
+
+  if note_owner_id != caller_id then
+    raise exception 'Not authorized: you do not own this note';
+  end if;
+
+  -- Defense-in-depth: also check that the caller is not banned
+  if exists (select 1 from public.profiles where id = caller_id and is_banned = true) then
+    raise exception 'Account is banned';
+  end if;
+
+  -- Proceed with atomic block replacement
   delete from public.note_blocks where note_id = p_note_id;
 
   if jsonb_array_length(p_blocks) > 0 then
@@ -590,6 +644,9 @@ $$;
 -- Returns true if the given slug is not already taken by another
 -- note owned by the same user. Pass p_exclude_note_id when
 -- editing an existing note to exclude itself from the check.
+--
+-- SECURITY: Validates p_owner_id against the calling user's JWT
+-- to prevent one user from enumerating slugs for another user.
 
 create or replace function public.is_slug_available(
   p_slug text,
@@ -599,8 +656,25 @@ create or replace function public.is_slug_available(
 returns boolean
 language plpgsql
 security definer
+set search_path = public
 as $$
+declare
+  caller_id uuid;
 begin
+  -- Get the calling user's ID from the JWT
+  caller_id := auth.uid();
+
+  -- Reject unauthenticated calls
+  if caller_id is null then
+    return false;
+  end if;
+
+  -- Ensure the caller can only check slug availability for their own notes.
+  -- This prevents one user from enumerating slugs owned by another user.
+  if p_owner_id != caller_id then
+    return false;
+  end if;
+
   if p_exclude_note_id is not null then
     return not exists (
       select 1 from public.notes

@@ -34,6 +34,8 @@ const AdminOverview        = lazy(() => import('@/pages/admin/Overview').then(m 
 const AdminUsers           = lazy(() => import('@/pages/admin/Users').then(m => ({ default: m.AdminUsers })))
 const AdminFolders         = lazy(() => import('@/pages/admin/Folders').then(m => ({ default: m.AdminFolders })))
 const AdminNotes           = lazy(() => import('@/pages/admin/Notes').then(m => ({ default: m.AdminNotes })))
+const AdminSubfolders      = lazy(() => import('@/pages/admin/Subfolders').then(m => ({ default: m.AdminSubfolders })))
+const AdminActivityLog     = lazy(() => import('@/pages/admin/ActivityLog').then(m => ({ default: m.AdminActivityLog })))
 
 function PageSkeleton() {
   return (
@@ -96,6 +98,8 @@ export default function App() {
           <Route path="/admin/dashboard/users"   element={<RequireAuth userType="admin"><AdminUsers /></RequireAuth>} />
           <Route path="/admin/dashboard/folders" element={<RequireAuth userType="admin"><AdminFolders /></RequireAuth>} />
           <Route path="/admin/dashboard/notes"   element={<RequireAuth userType="admin"><AdminNotes /></RequireAuth>} />
+          <Route path="/admin/dashboard/subfolders" element={<RequireAuth userType="admin"><AdminSubfolders /></RequireAuth>} />
+          <Route path="/admin/dashboard/activity"   element={<RequireAuth userType="admin"><AdminActivityLog /></RequireAuth>} />
 
           </Routes>
           </Suspense>

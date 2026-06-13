@@ -47,7 +47,7 @@ DECLARE
 BEGIN
   -- Read JWT claims directly (more reliable than auth.uid() in SECURITY DEFINER context)
   BEGIN
-    caller_id := current_setting('request.jwt.claim.sub', true)::uuid;
+    caller_id := auth.uid();
   EXCEPTION WHEN OTHERS THEN
     caller_id := NULL;
   END;
@@ -110,7 +110,7 @@ DECLARE
 BEGIN
   -- Get caller ID from JWT claims
   BEGIN
-    caller_id := current_setting('request.jwt.claim.sub', true)::uuid;
+    caller_id := auth.uid();
   EXCEPTION WHEN OTHERS THEN
     caller_id := NULL;
   END;
@@ -153,7 +153,7 @@ DECLARE
 BEGIN
   -- Get caller ID from JWT claims
   BEGIN
-    caller_id := current_setting('request.jwt.claim.sub', true)::uuid;
+    caller_id := auth.uid();
   EXCEPTION WHEN OTHERS THEN
     caller_id := NULL;
   END;
