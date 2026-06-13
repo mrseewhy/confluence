@@ -101,6 +101,10 @@ export function EditNote() {
       return;
     }
     if (!user) return;
+    if (user.is_banned) {
+      console.error("Account is banned — cannot edit notes.");
+      return;
+    }
     setFolderError("");
     justManuallySaved.current = true;
     try {

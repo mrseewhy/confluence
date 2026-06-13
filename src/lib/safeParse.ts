@@ -3,6 +3,8 @@
  * Replaces dangerous `as` type assertions with runtime-safe accessors.
  */
 
+import type { Visibility, BlockType, BlockMetadata } from '@/types'
+
 /** Extract a string value safely from an unknown object */
 export function safeStr(val: unknown, fallback = ""): string {
   if (typeof val === "string") return val;
@@ -64,4 +66,35 @@ export function safeJoin<T>(val: unknown): T | null {
  */
 export function safeData<T>(data: unknown): T[] {
   return safeArray<T>(data);
+}
+
+/** Validates a Visibility union type */
+const VALID_VISIBILITIES = new Set(['public', 'private'] as const)
+export function safeVisibility(val: unknown): Visibility {
+  if (typeof val === 'string' && VALID_VISIBILITIES.has(val as Visibility)) {
+    return val as Visibility
+  }
+  return 'private'
+}
+
+/** Validates a BlockType union type */
+const VALID_BLOCK_TYPES = new Set(['text', 'code', 'image', 'video', 'heading'] as const)
+export function safeBlockType(val: unknown): BlockType {
+  if (typeof val === 'string' && VALID_BLOCK_TYPES.has(val as BlockType)) {
+    return val as BlockType
+  }
+  return 'text'
+}
+
+/** Safely extracts BlockMetadata from an unknown value */
+export function safeBlockMetadata(val: unknown): BlockMetadata {
+  if (!val || typeof val !== 'object') return {}
+  const obj = val as Record<string, unknown>
+  return {
+    language: safeStrNull(obj.language) ?? undefined,
+    alt:      safeStrNull(obj.alt) ?? undefined,
+    caption:  safeStrNull(obj.caption) ?? undefined,
+    filename: safeStrNull(obj.filename) ?? undefined,
+    level:    safeStrNull(obj.level) ?? undefined,
+  }
 }

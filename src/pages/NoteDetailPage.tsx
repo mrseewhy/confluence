@@ -51,13 +51,21 @@ export function NoteDetailPage() {
 
         setOwnerUsername(owner.username);
 
-        // Find note by slug AND owner_id — no visibility filter here
-        // For anon users, RLS will restrict; for owner, we bypass
+        // Find note by slug AND owner_id.
+        // Always filter by visibility for security: only the owner
+        // may see their private notes through this public endpoint.
         const query = supabase
           .from("notes")
           .select("*, owner_id, folder:folders(id, title, slug)")
           .eq("slug", slug)
           .eq("owner_id", owner.id);
+
+        // Non-owners can only see public notes — prevents the brief
+        // flash of private content before the fallback renders and
+        // provides defense-in-depth against RLS misconfiguration.
+        if (!authUser || authUser.id !== owner.id) {
+          query.eq("visibility", "public");
+        }
 
         const { data: noteData } = await query.single();
 

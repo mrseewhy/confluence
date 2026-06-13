@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { BlockType, BlockMetadata, Visibility } from '@/types'
 import { requireSupabase } from '@/lib/supabase'
+import { safeVisibility, safeBlockType, safeBlockMetadata } from '@/lib/safeParse'
 
 // ── EditorBlock (client-only, not a DB NoteBlock) ─────────────
 
@@ -313,6 +314,7 @@ export function useNoteEditor() {
             order_index: i,
           })),
         })
+        bumpVersion()
         return
       }
 
@@ -322,17 +324,21 @@ export function useNoteEditor() {
         description: note.description ?? '',
         slug:        note.slug,
         folder_id:   note.folder_id,
-        visibility:  note.visibility as Visibility,
+        visibility:  safeVisibility(note.visibility),
         blocks:      blocks.map((b, i) => ({
           id:          `existing-${b.id}`,
-          type:        b.type as BlockType,
+          type:        safeBlockType(b.type),
           content:     b.content,
-          metadata:    (b.metadata ?? {}) as BlockMetadata,
+          metadata:    safeBlockMetadata(b.metadata),
           order_index: i,
         })),
       })
+
+      // Bump version so auto-save / beforeunload effects fire
+      // even before the user makes their first edit.
+      bumpVersion()
     },
-    [],
+    [bumpVersion],
   )
 
   // ── Reset editor to blank state (with optional draft restore) ──

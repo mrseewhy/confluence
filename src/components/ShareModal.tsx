@@ -64,7 +64,9 @@ export function ShareModal({
     }
   }, [ownerId])
 
-  const itemShareUrl = `${window.location.origin}/${ownerUsername}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
+  const itemShareUrl = ownerUsername
+    ? `${window.location.origin}/${ownerUsername}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
+    : `${window.location.origin}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
 
   const loadCollaborators = useCallback(async () => {
     if (!isOpen) return
