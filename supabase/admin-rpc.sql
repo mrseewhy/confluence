@@ -23,12 +23,14 @@ CREATE POLICY "Admins can delete any profile"
     auth.uid() IN (SELECT id FROM public.profiles WHERE user_type = 'admin')
   );
 
--- RPC: admin_get_users — returns profiles joined with auth.users email, with pagination
--- Users table: returns 20 records at a time by default
-DROP FUNCTION IF EXISTS public.admin_get_users();
+-- RPC: admin_get_users — returns profiles joined with auth.users email, with pagination + search
+-- Users table: returns 20 records at a time by default; filters by name/email when p_search is provided
+DROP FUNCTION IF EXISTS public.admin_get_users;
 CREATE OR REPLACE FUNCTION public.admin_get_users(
   p_limit integer DEFAULT 20,
-  p_offset integer DEFAULT 0
+  p_offset integer DEFAULT 0,
+  p_search text DEFAULT NULL,
+  p_user_type text DEFAULT NULL
 )
 RETURNS TABLE (
   user_id uuid,
@@ -91,17 +93,22 @@ BEGIN
     FROM public.profiles p
     JOIN auth.users u ON u.id = p.id
   ) v
+  WHERE (p_search IS NULL OR v._email ILIKE '%' || p_search || '%' OR v._name ILIKE '%' || p_search || '%')
+    AND (p_user_type IS NULL OR v._type = p_user_type)
   ORDER BY v._created DESC
   LIMIT p_limit
   OFFSET p_offset;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.admin_get_users(integer, integer) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_get_users(integer, integer, text, text) TO authenticated;
 
--- RPC: admin_count_users — returns total number of users
-DROP FUNCTION IF EXISTS public.admin_count_users();
-CREATE OR REPLACE FUNCTION public.admin_count_users()
+-- RPC: admin_count_users — returns total number of users (optionally filtered by search + type)
+DROP FUNCTION IF EXISTS public.admin_count_users;
+CREATE OR REPLACE FUNCTION public.admin_count_users(
+  p_search text DEFAULT NULL,
+  p_user_type text DEFAULT NULL
+)
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -130,12 +137,17 @@ BEGIN
     RETURN 0;
   END IF;
 
-  SELECT COUNT(*)::integer INTO total_count FROM public.profiles;
+  SELECT COUNT(*)::integer INTO total_count
+  FROM public.profiles p
+  JOIN auth.users u ON u.id = p.id
+  WHERE (p_search IS NULL OR u.email::text ILIKE '%' || p_search || '%' OR p.full_name ILIKE '%' || p_search || '%')
+    AND (p_user_type IS NULL OR p.user_type::text = p_user_type);
+
   RETURN total_count;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.admin_count_users() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_count_users(text, text) TO authenticated;
 
 -- RPC: admin_change_password — updates a user's auth password
 DROP FUNCTION IF EXISTS public.admin_change_password(uuid, text);

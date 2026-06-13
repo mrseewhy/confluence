@@ -143,7 +143,7 @@ export function AdminOverview() {
         const { data: folders } = await supabase
           .from("folders")
           .select(
-            "id, parent_id, title, description, visibility, updated_at, note_count",
+            "id, parent_id, title, description, visibility, updated_at",
           );
 
         // All notes

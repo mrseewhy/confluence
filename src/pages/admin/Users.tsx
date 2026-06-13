@@ -73,14 +73,16 @@ export function AdminUsers() {
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
 
-  const loadUsers = useCallback(async (currentPage: number, _currentSearch: string, _currentFilter: "all" | "admin" | "user") => {
+  const loadUsers = useCallback(async (currentPage: number, currentSearch: string, currentFilter: "all" | "admin" | "user") => {
     try {
       const supabase = requireSupabase();
       const offset = (currentPage - 1) * PAGE_SIZE;
-      const { data: usersWithEmail, error: rpcError } = await supabase.rpc("admin_get_users", { p_limit: PAGE_SIZE, p_offset: offset });
+      const searchParam = currentSearch || null;
+      const typeParam = currentFilter === "all" ? null : currentFilter;
+      const { data: usersWithEmail, error: rpcError } = await supabase.rpc("admin_get_users", { p_limit: PAGE_SIZE, p_offset: offset, p_search: searchParam, p_user_type: typeParam });
       if (rpcError) throw rpcError;
 
-      const { data: countData, error: countError } = await supabase.rpc("admin_count_users");
+      const { data: countData, error: countError } = await supabase.rpc("admin_count_users", { p_search: searchParam, p_user_type: typeParam });
       if (countError) throw countError;
 
       // Fetch notes/folders counts for the returned users
@@ -202,7 +204,7 @@ export function AdminUsers() {
             </h1>
           </div>
           <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
-            {usersList.length} registered user{usersList.length !== 1 ? "s" : ""} · Full control over accounts, roles, and access
+            {totalCount} registered user{totalCount !== 1 ? "s" : ""} · Full control over accounts, roles, and access
           </p>
         </div>
       </div>
