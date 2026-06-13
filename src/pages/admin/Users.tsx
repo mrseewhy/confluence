@@ -388,6 +388,13 @@ export function AdminUsers() {
     );
   });
 
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [search, filter]);
+
   // ── Loading state ──
 
   if (!user || loading) {
@@ -448,7 +455,7 @@ export function AdminUsers() {
                 All Users
               </h2>
               <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-                {filtered.length} of {usersList.length}
+                {filtered.length} of {usersList.length} · Page {page} of {totalPages}
               </span>
             </div>
             <div style={{ display: "flex", gap: "var(--space-2)" }}>
@@ -496,7 +503,7 @@ export function AdminUsers() {
             </div>
 
             {/* Table rows */}
-            {filtered.map((u, i) => (
+            {paginated.map((u, i) => (
               <div
                 key={u.id}
                 style={{
@@ -505,7 +512,7 @@ export function AdminUsers() {
                   gap: "var(--space-3)",
                   alignItems: "center",
                   padding: "var(--space-3) var(--space-5)",
-                  borderBottom: i < filtered.length - 1 ? "1px solid var(--color-border-subtle)" : "none",
+                  borderBottom: i < paginated.length - 1 ? "1px solid var(--color-border-subtle)" : "none",
                   background: u.is_banned ? "var(--color-danger-subtle)" : "transparent",
                   transition: "background var(--duration-fast)",
                 }}
@@ -584,6 +591,19 @@ export function AdminUsers() {
           <EmptyState icon="👥" title="No users found" description="Try adjusting your search or filters." action={
             <Button variant="secondary" size="sm" onClick={() => { setSearch(""); setFilter("all"); }}>Clear filters</Button>
           } />
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+            <span>{filtered.length} total · Page {page} of {totalPages}</span>
+            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
+                style={{ padding: "4px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: page <= 1 ? "var(--color-bg-muted)" : "var(--color-bg-elevated)", color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)", cursor: page <= 1 ? "default" : "pointer", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>← Prev</button>
+              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
+                style={{ padding: "4px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: page >= totalPages ? "var(--color-bg-muted)" : "var(--color-bg-elevated)", color: page >= totalPages ? "var(--color-text-muted)" : "var(--color-text-primary)", cursor: page >= totalPages ? "default" : "pointer", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>Next →</button>
+            </div>
+          </div>
         )}
       </Card>
 
