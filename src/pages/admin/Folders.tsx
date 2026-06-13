@@ -8,6 +8,7 @@ import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
 import { useToast } from "@/components/Toast";
+import { TransferOwnershipModal } from "@/components/TransferOwnershipModal";
 import type { Folder } from "@/types";
 
 export function AdminFolders() {
@@ -23,6 +24,7 @@ export function AdminFolders() {
   const [search, setSearch] = useState("");
   const [vis, setVis] = useState<"all" | "public" | "private">("all");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [transferItem, setTransferItem] = useState<{ id: string; title: string; ownerName: string | null } | null>(null);
 
   const loadFolders = async () => {
     try {
@@ -184,6 +186,7 @@ export function AdminFolders() {
                   <Button variant="accent-ghost" size="xs" onClick={() => handleToggleVisibility(folder)}>
                     {folder.visibility === "public" ? "Make private" : "Make public"}
                   </Button>
+                  <Button variant="accent-ghost" size="xs" onClick={() => setTransferItem({ id: folder.id, title: folder.title, ownerName: folder.owner?.full_name || null })}>Transfer</Button>
                   <Button variant="danger" size="xs" onClick={() => setPendingDeleteId(folder.id)}>Delete</Button>
                 </div>
               </div>
@@ -204,6 +207,36 @@ export function AdminFolders() {
           <Button variant="danger" size="sm" onClick={() => pendingDeleteId && handleDelete(pendingDeleteId)}>Delete</Button>
         </div>
       </Modal>
+
+      {/* Transfer ownership modal */}
+      <TransferOwnershipModal
+        isOpen={!!transferItem}
+        onClose={() => setTransferItem(null)}
+        itemTitle={transferItem?.title || ""}
+        currentOwnerName={transferItem?.ownerName || null}
+        onTransfer={async (newOwnerId, newOwnerName, newOwnerEmail) => {
+          if (!transferItem) return;
+          try {
+            const supabase = requireSupabase();
+            await supabase.from("folders").update({ owner_id: newOwnerId }).eq("id", transferItem.id);
+            await loadFolders();
+            addToast(`"${transferItem.title}" transferred to ${newOwnerName}`, "success");
+            void (async () => {
+              try { await supabase.from("activity_log").insert({
+                inviter_id: user!.id,
+                invitee_email: newOwnerEmail,
+                action: "ownership_transferred",
+                item_type: "folder",
+                item_title: transferItem.title,
+                details: `Admin ${user?.full_name} transferred folder "${transferItem.title}" to ${newOwnerName}`,
+              }); } catch {}
+            })();
+          } catch {
+            addToast("Failed to transfer ownership. Try again.", "error");
+          }
+          setTransferItem(null);
+        }}
+      />
     </DashboardLayout>
   );
 }

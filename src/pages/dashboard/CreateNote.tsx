@@ -101,19 +101,6 @@ export function CreateNote() {
             </Button>
           </>
         }
-        bottomActions={
-          <>
-            <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
-            <Button
-                variant="primary"
-                size="sm"
-                disabled={!editor.isValid || editor.saveStatus === "saving"}
-                onClick={handleSave}
-              >
-                Create note
-              </Button>
-            </>
-          }
         />
       )}
     </DashboardLayout>

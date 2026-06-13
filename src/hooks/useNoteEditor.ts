@@ -448,7 +448,10 @@ export function useNoteEditor() {
         if (!noteData) throw new Error('Note was not created.')
 
         // Set noteId in state so subsequent saves (including auto-save) UPDATE instead of INSERT
+        // Also update the ref synchronously to prevent race conditions: if auto-save fires
+        // before React re-renders, it reads from stateRef which is now up-to-date.
         setState(prev => ({ ...prev, noteId: noteData.id }))
+        stateRef.current = { ...stateRef.current, noteId: noteData.id }
 
         // 2. Insert blocks (if any)
         if (s.blocks.length > 0) {
@@ -478,8 +481,12 @@ export function useNoteEditor() {
       // Detect PostgreSQL unique constraint violation (code 23505)
       const pgErr = err as { code?: string; message?: string; details?: string } | null
       if (pgErr?.code === '23505') {
+        // Suggest an alternative slug by appending a number
+        const suggestion = slug.replace(/-\d+$/, '') + '-' + Date.now().toString(36)
+        setState(prev => ({ ...prev, slug: suggestion }))
+        setSlugManuallyEdited(true)
         setSaveError(
-          `A note with the slug "${slug}" already exists. Please edit the slug to make it unique.`
+          `A note with the slug "${slug}" already exists. We've suggested "${suggestion}" — edit or save again to use it.`
         )
       } else {
         setSaveError(pgErr?.message ?? 'An unexpected error occurred while saving.')

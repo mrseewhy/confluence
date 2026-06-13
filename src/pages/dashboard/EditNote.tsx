@@ -25,6 +25,7 @@ export function EditNote() {
   const [folderError, setFolderError] = useState("");
 
   // Load existing note data
+  const { loadFromExisting } = editor;
   useEffect(() => {
     if (!slug || !user) return;
 
@@ -59,7 +60,7 @@ export function EditNote() {
           .order("order_index", { ascending: true });
 
         // Pre-populate the editor
-        editor.loadFromExisting(noteData, blocksData || []);
+        loadFromExisting(noteData, blocksData || []);
       } catch (err) {
         console.error("Error loading note for editing:", err);
         setNotFound(true);
@@ -69,10 +70,7 @@ export function EditNote() {
     };
 
     void loadNote();
-    // Intentionally omit `editor` from deps — loadNote only runs once per slug/user change.
-    // Including `editor` would cause an infinite loop since loadFromExisting modifies editor state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, user]);
+  }, [slug, user, loadFromExisting]);
 
   // ── Auto-save with debounce (only after initial load) ──
   // Only depends on contentVersion + stable save() + loading,
@@ -206,19 +204,6 @@ export function EditNote() {
             </Button>
           </>
         }
-        bottomActions={
-          <>
-            <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
-            <Button
-                variant="primary"
-                size="sm"
-                disabled={!editor.isValid || editor.saveStatus === "saving"}
-                onClick={handleSave}
-              >
-                {editor.saveStatus === "saving" ? "Saving\u2026" : "Save changes"}
-              </Button>
-            </>
-          }
         />
       )}
     </DashboardLayout>

@@ -11,7 +11,8 @@ const PAGE_SIZE = 30;
 
 const ACTIONS = [
   "invited", "revoked", "note_deleted", "folder_deleted",
-  "visibility_changed", "user_banned", "user_unbanned",
+  "visibility_changed", "ownership_transferred",
+  "user_banned", "user_unbanned",
   "tier_changed", "user_promoted", "user_deleted",
 ] as const;
 
@@ -175,6 +176,7 @@ export function AdminActivityLog() {
     if (action === "user_unbanned") return "accent";
     if (action === "user_promoted" || action === "tier_changed") return "warning";
     if (action === "visibility_changed") return "accent";
+    if (action === "ownership_transferred") return "accent";
     return "default";
   };
 
@@ -184,6 +186,7 @@ export function AdminActivityLog() {
     if (action === "user_banned" || action === "user_unbanned") return <Icon d={IC.shield} size={14} />;
     if (action === "note_deleted" || action === "folder_deleted") return <Icon d={IC.notes} size={14} />;
     if (action === "visibility_changed") return <Icon d={IC.globe} size={14} />;
+    if (action === "ownership_transferred") return <Icon d={IC.users} size={14} />;
     if (action === "user_promoted" || action === "tier_changed") return <Icon d={IC.users} size={14} />;
     return <span style={{ color: "var(--color-text-muted)" }}>•</span>;
   };
