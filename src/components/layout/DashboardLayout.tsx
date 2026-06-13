@@ -507,10 +507,10 @@ export function DashboardLayout({
           width: collapsed ? "64px" : "220px",
           background: "var(--color-bg-subtle)",
           borderRight: "1px solid var(--color-border)",
-          position: "sticky",
+          position: "fixed",
           top: 0,
+          left: 0,
           height: "100vh",
-          flexShrink: 0,
           transition: "width var(--duration-normal) var(--ease-default)",
           overflow: "hidden",
           zIndex: 10,
@@ -562,11 +562,14 @@ export function DashboardLayout({
 
       {/* Main area */}
       <div
+        className="dash-main-area"
         style={{
           flex: 1,
           display: "flex",
           flexDirection: "column",
           minWidth: 0,
+          marginLeft: collapsed ? "64px" : "220px",
+          transition: "margin-left var(--duration-normal) var(--ease-default)",
         }}
       >
         {/* Topbar */}
@@ -884,6 +887,7 @@ export function DashboardLayout({
         @media (max-width: 768px) {
           .dash-sidebar { display: none !important; }
           .dash-mobile-btn { display: flex !important; }
+          .dash-main-area { margin-left: 0 !important; }
         }
       `}</style>
     </div>

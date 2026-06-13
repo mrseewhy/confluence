@@ -38,22 +38,47 @@ export function DashboardCollaborators() {
 
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<CollaboratorRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "folder" | "note">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
 
-  // ─── Load data ────────────────────────────────────────────
+  // Pagination
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
-  const loadData = useCallback(async () => {
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // ─── Load data with server-side pagination ───────────────
+
+  const loadData = useCallback(async (_currentSearch: string, currentType: "all" | "folder" | "note", currentPage: number) => {
     if (!user) return;
     setLoading(true);
     try {
       const supabase = requireSupabase();
 
-      // Fetch all collaborators where current user is the inviter
-      const { data: collaborators, error } = await supabase
+      // Count matching collaborators
+      let countQuery = supabase
+        .from("collaborators")
+        .select("*", { count: "exact", head: true })
+        .eq("inviter_id", user.id);
+      
+      if (currentType === "folder") countQuery = countQuery.not("folder_id", "is", null);
+      if (currentType === "note") countQuery = countQuery.not("note_id", "is", null);
+
+      const { count } = await countQuery;
+      setTotalCount(count ?? 0);
+
+      // Fetch paginated collaborators
+      const from = (currentPage - 1) * PAGE_SIZE;
+      let dataQuery = supabase
         .from("collaborators")
         .select(`
           *,
@@ -61,14 +86,23 @@ export function DashboardCollaborators() {
           note:notes(title, slug, visibility)
         `)
         .eq("inviter_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
 
+      if (currentType === "folder") dataQuery = dataQuery.not("folder_id", "is", null);
+      if (currentType === "note") dataQuery = dataQuery.not("note_id", "is", null);
+
+      const { data: collaborators, error } = await dataQuery;
       if (error) throw error;
 
       // Map the joined data into flat rows
       const mapped: CollaboratorRow[] = (collaborators ?? []).map((c: Record<string, unknown>) => {
-        const folder = c.folder as { title?: string; slug?: string; visibility?: string } | null;
-        const note = c.note as { title?: string; slug?: string; visibility?: string } | null;
+        const folder = Array.isArray(c.folder) && (c.folder as Array<Record<string, unknown>>).length > 0
+          ? (c.folder as Array<Record<string, unknown>>)[0] as { title?: string; slug?: string; visibility?: string }
+          : (c.folder as { title?: string; slug?: string; visibility?: string } | null);
+        const note = Array.isArray(c.note) && (c.note as Array<Record<string, unknown>>).length > 0
+          ? (c.note as Array<Record<string, unknown>>)[0] as { title?: string; slug?: string; visibility?: string }
+          : (c.note as { title?: string; slug?: string; visibility?: string } | null);
 
         return {
           id: c.id as string,
@@ -86,6 +120,7 @@ export function DashboardCollaborators() {
       });
 
       setRows(mapped);
+      setSelected(new Set()); // Clear selection on page change
     } catch (err) {
       console.error("Error loading collaborators:", err);
       setRows([]);
@@ -94,25 +129,21 @@ export function DashboardCollaborators() {
     }
   }, [user]);
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter]);
+  useEffect(() => { void loadData(debouncedSearch, typeFilter, page); }, [page, debouncedSearch, typeFilter, loadData]);
 
   // ─── Derived ──────────────────────────────────────────────
 
+  // Client-side search filter on current page (lightweight)
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return rows.filter((r) => {
-      const matchesSearch =
-        !q ||
-        r.invitee_email.toLowerCase().includes(q) ||
-        r.item_title.toLowerCase().includes(q);
-
-      const matchesType = typeFilter === "all" || (typeFilter === "folder" ? r.folder_id : r.note_id);
-
-      return matchesSearch && matchesType;
-    });
-  }, [rows, search, typeFilter]);
+    const q = debouncedSearch.toLowerCase().trim();
+    if (!q) return rows;
+    return rows.filter((r) =>
+      r.invitee_email.toLowerCase().includes(q) ||
+      r.item_title.toLowerCase().includes(q)
+    );
+  }, [rows, debouncedSearch]);
 
   const allSelected = filtered.length > 0 && selected.size === filtered.length;
 
@@ -281,7 +312,7 @@ export function DashboardCollaborators() {
               fontSize: "var(--font-size-sm)",
             }}
           >
-            {rows.length} collaborator{rows.length !== 1 ? "s" : ""} invited to your
+            {totalCount} collaborator{totalCount !== 1 ? "s" : ""} invited to your
             workspace
           </p>
         </div>

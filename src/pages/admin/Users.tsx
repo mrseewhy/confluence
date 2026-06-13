@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button, EmptyState, Card } from "@/components/ui";
+import { ActionPanel, ItemSelect, type SelectItem } from "@/components/admin";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { useAuth, fallbackProfile } from "@/context/auth";
@@ -24,273 +25,13 @@ interface UserRow {
   folders_count: number;
 }
 
-// ── User Selector (shared across action cards) ────────────────
-
-function UserSelect({
-  users,
-  selectedId,
-  onSelect,
-  placeholder,
-}: {
-  users: UserRow[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  placeholder?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  const selected = users.find((u) => u.id === selectedId);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  const filtered = query
-    ? users.filter(
-        (u) =>
-          u.full_name.toLowerCase().includes(query.toLowerCase()) ||
-          u.email.toLowerCase().includes(query.toLowerCase()),
-      )
-    : users;
-
-  return (
-    <div ref={ref} style={{ position: "relative", width: "100%" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((p) => !p)}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "var(--space-2)",
-          padding: "var(--space-2) var(--space-3)",
-          borderRadius: "var(--radius-md)",
-          border: "1px solid var(--color-border)",
-          background: "var(--color-bg-elevated)",
-          color: selected
-            ? "var(--color-text-primary)"
-            : "var(--color-text-muted)",
-          fontSize: "var(--font-size-sm)",
-          fontFamily: "var(--font-sans)",
-          cursor: "pointer",
-          textAlign: "left",
-          transition: "border-color var(--duration-fast)",
-        }}
-      >
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-          {selected ? `${selected.full_name} (${selected.email})` : placeholder || "Select a user…"}
-        </span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            zIndex: 100,
-            background: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-md)",
-            boxShadow: "var(--shadow-lg)",
-            maxHeight: "220px",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <input
-            type="text"
-            placeholder="Search…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            autoFocus
-            style={{
-              width: "100%",
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--font-size-sm)",
-              color: "var(--color-text-primary)",
-              background: "var(--color-bg-base)",
-              border: "none",
-              borderBottom: "1px solid var(--color-border)",
-              padding: "var(--space-2) var(--space-3)",
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-          <div style={{ overflowY: "auto", flex: 1 }}>
-            {filtered.length > 0 ? (
-              filtered.map((u) => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => {
-                    onSelect(u.id);
-                    setOpen(false);
-                    setQuery("");
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "var(--space-2) var(--space-3)",
-                    border: "none",
-                    background:
-                      u.id === selectedId
-                        ? "var(--color-accent-subtle)"
-                        : "transparent",
-                    color: "var(--color-text-primary)",
-                    fontSize: "var(--font-size-sm)",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontFamily: "var(--font-sans)",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background =
-                      "var(--color-bg-muted)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background =
-                      u.id === selectedId
-                        ? "var(--color-accent-subtle)"
-                        : "transparent")
-                  }
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-                    <span style={{ fontWeight: "var(--font-weight-medium)" }}>
-                      {u.full_name}
-                    </span>
-                    <Badge variant={u.user_type === "admin" ? "warning" : "muted"} style={{ fontSize: "9px" }}>
-                      {u.user_type}
-                    </Badge>
-                  </div>
-                  <span style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>
-                    {u.email}
-                  </span>
-                </button>
-              ))
-            ) : (
-              <p
-                style={{
-                  padding: "var(--space-4) var(--space-3)",
-                  fontSize: "var(--font-size-xs)",
-                  color: "var(--color-text-muted)",
-                  textAlign: "center",
-                  margin: 0,
-                }}
-              >
-                No users match "{query}"
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Action Panel wrapper ─────────────────────────────────────
-
-function ActionPanel({
-  title,
-  description,
-  icon,
-  accent,
-  children,
-}: {
-  title: string;
-  description: string;
-  icon: string;
-  accent: "warning" | "accent" | "danger" | "default";
-  children: React.ReactNode;
-}) {
-  const accentColors: Record<string, { border: string; bg: string; icon: string }> = {
-    warning: {
-      border: "var(--color-warning)",
-      bg: "var(--color-warning-subtle)",
-      icon: "var(--color-warning)",
-    },
-    accent: {
-      border: "var(--color-accent-muted)",
-      bg: "var(--color-accent-subtle)",
-      icon: "var(--color-accent)",
-    },
-    danger: {
-      border: "var(--color-danger)",
-      bg: "var(--color-danger-subtle)",
-      icon: "var(--color-danger)",
-    },
-    default: {
-      border: "var(--color-border)",
-      bg: "var(--color-bg-muted)",
-      icon: "var(--color-text-secondary)",
-    },
+function userToSelect(u: UserRow): SelectItem {
+  return {
+    id: u.id,
+    primary: u.full_name,
+    secondary: u.email,
+    badge: u.user_type === "admin" ? { label: "admin", variant: "warning" } : undefined,
   };
-  const c = accentColors[accent];
-
-  return (
-    <Card style={{ padding: "var(--space-5)" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--space-3)",
-          marginBottom: "var(--space-4)",
-        }}
-      >
-        <div
-          style={{
-            width: "34px",
-            height: "34px",
-            borderRadius: "var(--radius-lg)",
-            background: c.bg,
-            border: `1px solid ${c.border}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: c.icon,
-            flexShrink: 0,
-          }}
-        >
-          <Icon d={icon} size={15} />
-        </div>
-        <div>
-          <h3
-            style={{
-              margin: 0,
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-semibold)",
-              color: "var(--color-text-primary)",
-            }}
-          >
-            {title}
-          </h3>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "var(--font-size-xs)",
-              color: "var(--color-text-muted)",
-            }}
-          >
-            {description}
-          </p>
-        </div>
-      </div>
-      {children}
-    </Card>
-  );
 }
 
 // ===================================================================
@@ -304,8 +45,16 @@ export function AdminUsers() {
 
   const [loading, setLoading] = useState(true);
   const [usersList, setUsersList] = useState<UserRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "admin" | "user">("all");
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   // Modal states
   const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | null>(null);
@@ -321,34 +70,50 @@ export function AdminUsers() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
 
-  const loadUsers = useCallback(async () => {
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+
+  const loadUsers = useCallback(async (currentPage: number, _currentSearch: string, _currentFilter: "all" | "admin" | "user") => {
     try {
       const supabase = requireSupabase();
-      const { data: usersWithEmail, error: rpcError } = await supabase.rpc("admin_get_users");
+      const offset = (currentPage - 1) * PAGE_SIZE;
+      const { data: usersWithEmail, error: rpcError } = await supabase.rpc("admin_get_users", { p_limit: PAGE_SIZE, p_offset: offset });
       if (rpcError) throw rpcError;
 
-      const { data: notesData } = await supabase.from("notes").select("owner_id");
-      const { data: foldersData } = await supabase.from("folders").select("owner_id");
+      const { data: countData, error: countError } = await supabase.rpc("admin_count_users");
+      if (countError) throw countError;
 
-      const noteCounts: Record<string, number> = {};
-      const folderCounts: Record<string, number> = {};
-      (notesData || []).forEach((n) => { noteCounts[n.owner_id] = (noteCounts[n.owner_id] || 0) + 1; });
-      (foldersData || []).forEach((f) => { folderCounts[f.owner_id] = (folderCounts[f.owner_id] || 0) + 1; });
+      // Fetch notes/folders counts for the returned users
+      const ids = (usersWithEmail || []).map((p: Record<string, unknown>) => (p.user_id as string) || (p.id as string));
+      let noteCounts: Record<string, number> = {};
+      let folderCounts: Record<string, number> = {};
+      if (ids.length > 0) {
+        const [{ data: notesData }, { data: foldersData }] = await Promise.all([
+          supabase.from("notes").select("owner_id").in("owner_id", ids),
+          supabase.from("folders").select("owner_id").in("owner_id", ids),
+        ]);
+        (notesData || []).forEach((n) => { noteCounts[n.owner_id] = (noteCounts[n.owner_id] || 0) + 1; });
+        (foldersData || []).forEach((f) => { folderCounts[f.owner_id] = (folderCounts[f.owner_id] || 0) + 1; });
+      }
 
-      const rows: UserRow[] = (usersWithEmail || []).map((p: Record<string, unknown>) => ({
-        id: (p.user_id as string) || (p.id as string),
-        email: (p.user_email as string) || (p.email as string) || "",
-        full_name: (p.user_full_name as string) || (p.full_name as string),
-        avatar_url: (p.user_avatar_url as string) || (p.avatar_url as string) || null,
-        user_type: p.user_type as "user" | "admin",
-        subscription_tier: p.subscription_tier as string,
-        is_banned: p.is_banned as boolean,
-        created_at: p.created_at as string,
-        notes_count: noteCounts[(p.user_id as string) || (p.id as string)] || 0,
-        folders_count: folderCounts[(p.user_id as string) || (p.id as string)] || 0,
-      }));
+      const rows: UserRow[] = (usersWithEmail || []).map((p: Record<string, unknown>) => {
+        const uid = (p.user_id as string) || (p.id as string);
+        return {
+          id: uid,
+          email: (p.user_email as string) || (p.email as string) || "",
+          full_name: (p.user_full_name as string) || (p.full_name as string),
+          avatar_url: (p.user_avatar_url as string) || (p.avatar_url as string) || null,
+          user_type: p.user_type as "user" | "admin",
+          subscription_tier: p.subscription_tier as string,
+          is_banned: p.is_banned as boolean,
+          created_at: p.created_at as string,
+          notes_count: noteCounts[uid] || 0,
+          folders_count: folderCounts[uid] || 0,
+        };
+      });
 
       setUsersList(rows);
+      setTotalCount((countData as number) || 0);
     } catch (err) {
       console.error("Error loading users:", err);
       addToast("Failed to load users. Try again.", "error");
@@ -357,7 +122,7 @@ export function AdminUsers() {
     }
   }, [addToast]);
 
-  useEffect(() => { void loadUsers(); }, [loadUsers]);
+  useEffect(() => { void loadUsers(page, debouncedSearch, filter); }, [page, debouncedSearch, filter, loadUsers]);
 
   // ── Helpers ──
 
@@ -380,6 +145,7 @@ export function AdminUsers() {
     [user],
   );
 
+  // Client-side filter on the current page data (for search/filter display only)
   const filtered = usersList.filter((u) => {
     const q = search.toLowerCase();
     return (
@@ -388,12 +154,10 @@ export function AdminUsers() {
     );
   });
 
-  const PAGE_SIZE = 20;
-  const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const paginated = filtered;
 
-  useEffect(() => { setPage(1); }, [search, filter]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, filter]);
 
   // ── Loading state ──
 
@@ -455,7 +219,7 @@ export function AdminUsers() {
                 All Users
               </h2>
               <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-                {filtered.length} of {usersList.length} · Page {page} of {totalPages}
+                {paginated.length} on this page · Page {page} of {totalPages} ({totalCount} total)
               </span>
             </div>
             <div style={{ display: "flex", gap: "var(--space-2)" }}>
@@ -596,7 +360,7 @@ export function AdminUsers() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-            <span>{filtered.length} total · Page {page} of {totalPages}</span>
+            <span>{totalCount} total · Page {page} of {totalPages}</span>
             <div style={{ display: "flex", gap: "var(--space-2)" }}>
               <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
                 style={{ padding: "4px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: page <= 1 ? "var(--color-bg-muted)" : "var(--color-bg-elevated)", color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)", cursor: page <= 1 ? "default" : "pointer", fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500 }}>← Prev</button>
@@ -618,7 +382,7 @@ export function AdminUsers() {
       <div className="action-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-5)" }}>
         {/* ── Ban/Unban ── */}
         <ActionPanel title="Ban / Unban" description="Restore or restrict content creation" icon={IC.shield} accent="warning">
-          <UserSelect users={usersList} selectedId={banSelectedId} onSelect={setBanSelectedId} placeholder="Choose user to moderate…" />
+          <ItemSelect items={usersList.map(userToSelect)} selectedId={banSelectedId} onSelect={setBanSelectedId} placeholder="Choose user to moderate…" />
           {banSelectedId && (() => {
             const target = getUser(banSelectedId);
             if (!target) return null;
@@ -653,7 +417,7 @@ export function AdminUsers() {
 
         {/* ── Change Tier ── */}
         <ActionPanel title="Change Tier" description="Upgrade or downgrade subscription plan" icon={IC.folder} accent="accent">
-          <UserSelect users={usersList} selectedId={tierSelectedId} onSelect={setTierSelectedId} placeholder="Choose user to modify…" />
+          <ItemSelect items={usersList.map(userToSelect)} selectedId={tierSelectedId} onSelect={setTierSelectedId} placeholder="Choose user to modify…" />
           {tierSelectedId && (() => {
             const target = getUser(tierSelectedId);
             if (!target) return null;
@@ -691,7 +455,7 @@ export function AdminUsers() {
 
         {/* ── Promote / Demote ── */}
         <ActionPanel title="Role Management" description="Promote users to admin or demote to regular user" icon={IC.users} accent="accent">
-          <UserSelect users={usersList} selectedId={roleSelectedId} onSelect={setRoleSelectedId} placeholder="Choose user to promote/demote…" />
+          <ItemSelect items={usersList.map(userToSelect)} selectedId={roleSelectedId} onSelect={setRoleSelectedId} placeholder="Choose user to promote/demote…" />
           {roleSelectedId && (() => {
             const target = getUser(roleSelectedId);
             if (!target) return null;
@@ -745,7 +509,7 @@ export function AdminUsers() {
         </ActionPanel>
 
         {/* ── Reset Password ── */}
-        <ActionPanel title="Reset Password" description="Set a new password for any user account" icon={IC.settings} accent="danger">            <UserSelect users={usersList.filter((u) => u.id !== user.id)} selectedId={passwordSelectedId} onSelect={(id) => { setPasswordSelectedId(id); setNewPassword(""); setConfirmPassword(""); setPasswordError(""); }} placeholder="Choose user for password reset…" />
+        <ActionPanel title="Reset Password" description="Set a new password for any user account" icon={IC.settings} accent="danger">            <ItemSelect items={usersList.filter((u) => u.id !== user.id).map(userToSelect)} selectedId={passwordSelectedId} onSelect={(id) => { setPasswordSelectedId(id); setNewPassword(""); setConfirmPassword(""); setPasswordError(""); }} placeholder="Choose user for password reset…" />
           {passwordSelectedId && (() => {
             const target = getUser(passwordSelectedId);
             if (!target) return null;

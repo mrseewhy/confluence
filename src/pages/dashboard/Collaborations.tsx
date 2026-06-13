@@ -36,14 +36,22 @@ export function DashboardCollaborations() {
 
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<CollaborationRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "folder" | "note">("all");
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  // ─── Load data ────────────────────────────────────────────
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const loadData = useCallback(async () => {
+  // ─── Load data with server-side pagination ────────────────
+
+  const loadData = useCallback(async (_currentSearch: string, currentType: "all" | "folder" | "note", currentPage: number) => {
     if (!user) return;
     setLoading(true);
     setError(null);
@@ -59,21 +67,36 @@ export function DashboardCollaborations() {
       }
       const email = authData.user.email;
 
-      // Fetch collaborators where current user is the invitee
-      const { data: collaborators, error: collabError } = await supabase
+      // Count matching collaborations
+      let countQuery = supabase
+        .from("collaborators")
+        .select("*", { count: "exact", head: true })
+        .eq("invitee_email", email);
+      if (currentType === "folder") countQuery = countQuery.not("folder_id", "is", null);
+      if (currentType === "note") countQuery = countQuery.not("note_id", "is", null);
+      const { count } = await countQuery;
+      setTotalCount(count ?? 0);
+
+      // Fetch paginated collaborations
+      const from = (currentPage - 1) * PAGE_SIZE;
+      let dataQuery = supabase
         .from("collaborators")
         .select(`
           *,
-          folder:folders!folder_id(title, slug, visibility),
-          note:notes!note_id(title, slug, visibility),
+          folder:folders!folder_id(title, slug, visibility, owner_id),
+          note:notes!note_id(title, slug, visibility, owner_id),
           inviter:profiles!inviter_id(full_name, username, avatar_url)
         `)
         .eq("invitee_email", email)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+      if (currentType === "folder") dataQuery = dataQuery.not("folder_id", "is", null);
+      if (currentType === "note") dataQuery = dataQuery.not("note_id", "is", null);
 
+      const { data: collaborators, error: collabError } = await dataQuery;
       if (collabError) throw collabError;
 
-      // Collect unique owner IDs from folders and notes
+      // Collect unique owner IDs from returned items
       const ownerIds = new Set<string>();
       (collaborators ?? []).forEach((c: Record<string, unknown>) => {
         const folder = c.folder as { owner_id?: string } | null;
@@ -82,14 +105,13 @@ export function DashboardCollaborations() {
         if (note?.owner_id) ownerIds.add(note.owner_id);
       });
 
-      // Fetch owner names
+      // Fetch owner names for returned items only
       let ownerMap: Record<string, { full_name: string; username: string | null }> = {};
       if (ownerIds.size > 0) {
         const { data: ownerProfiles } = await supabase
           .from("profiles")
           .select("id, full_name, username")
           .in("id", Array.from(ownerIds));
-
         if (ownerProfiles) {
           for (const p of ownerProfiles) {
             ownerMap[p.id] = { full_name: p.full_name, username: p.username };
@@ -133,33 +155,24 @@ export function DashboardCollaborations() {
     }
   }, [user]);
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
-  // ─── Derived ──────────────────────────────────────────────
-
   // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [search, typeFilter]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter]);
+  useEffect(() => { void loadData(debouncedSearch, typeFilter, page); }, [page, debouncedSearch, typeFilter, loadData]);
+
+  // ─── Derived — client-side search on current page ─────────
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return rows.filter((r) => {
-      const matchesSearch =
-        !q ||
-        r.item_title.toLowerCase().includes(q) ||
-        r.inviter_name.toLowerCase().includes(q);
+    const q = debouncedSearch.toLowerCase().trim();
+    if (!q) return rows;
+    return rows.filter((r) =>
+      r.item_title.toLowerCase().includes(q) ||
+      r.inviter_name.toLowerCase().includes(q)
+    );
+  }, [rows, debouncedSearch]);
 
-      const matchesType = typeFilter === "all" || (typeFilter === "folder" ? r.folder_id : r.note_id);
-
-      return matchesSearch && matchesType;
-    });
-  }, [rows, search, typeFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Use totalCount from server for total pages, filtered for current page display
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const paginated = filtered;
 
   // ─── Render: loading / no user ────────────────────────────
 

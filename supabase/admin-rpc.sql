@@ -23,10 +23,13 @@ CREATE POLICY "Admins can delete any profile"
     auth.uid() IN (SELECT id FROM public.profiles WHERE user_type = 'admin')
   );
 
--- RPC: admin_get_users — returns profiles joined with auth.users email
--- Uses current_setting instead of auth.uid() for reliable JWT claims access
+-- RPC: admin_get_users — returns profiles joined with auth.users email, with pagination
+-- Users table: returns 20 records at a time by default
 DROP FUNCTION IF EXISTS public.admin_get_users();
-CREATE OR REPLACE FUNCTION public.admin_get_users()
+CREATE OR REPLACE FUNCTION public.admin_get_users(
+  p_limit integer DEFAULT 20,
+  p_offset integer DEFAULT 0
+)
 RETURNS TABLE (
   user_id uuid,
   user_email text,
@@ -45,7 +48,7 @@ AS $$
 DECLARE
   caller_id uuid;
 BEGIN
-  -- Read JWT claims directly (more reliable than auth.uid() in SECURITY DEFINER context)
+  -- Read JWT claims directly
   BEGIN
     caller_id := auth.uid();
   EXCEPTION WHEN OTHERS THEN
@@ -60,7 +63,7 @@ BEGIN
     END;
   END IF;
 
-  -- Return empty if not an admin (don't RAISE — that causes 400 errors)
+  -- Return empty if not an admin
   IF caller_id IS NULL OR NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = caller_id AND p.user_type = 'admin') THEN
     RETURN;
   END IF;
@@ -88,11 +91,51 @@ BEGIN
     FROM public.profiles p
     JOIN auth.users u ON u.id = p.id
   ) v
-  ORDER BY v._created DESC;
+  ORDER BY v._created DESC
+  LIMIT p_limit
+  OFFSET p_offset;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.admin_get_users() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_get_users(integer, integer) TO authenticated;
+
+-- RPC: admin_count_users — returns total number of users
+DROP FUNCTION IF EXISTS public.admin_count_users();
+CREATE OR REPLACE FUNCTION public.admin_count_users()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+DECLARE
+  caller_id uuid;
+  total_count integer;
+BEGIN
+  BEGIN
+    caller_id := auth.uid();
+  EXCEPTION WHEN OTHERS THEN
+    caller_id := NULL;
+  END;
+
+  IF caller_id IS NULL THEN
+    BEGIN
+      caller_id := (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid;
+    EXCEPTION WHEN OTHERS THEN
+      caller_id := NULL;
+    END;
+  END IF;
+
+  IF caller_id IS NULL OR NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = caller_id AND p.user_type = 'admin') THEN
+    RETURN 0;
+  END IF;
+
+  SELECT COUNT(*)::integer INTO total_count FROM public.profiles;
+  RETURN total_count;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.admin_count_users() TO authenticated;
 
 -- RPC: admin_change_password — updates a user's auth password
 DROP FUNCTION IF EXISTS public.admin_change_password(uuid, text);

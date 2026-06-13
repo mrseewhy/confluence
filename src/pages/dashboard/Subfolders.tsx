@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
@@ -38,12 +38,18 @@ export function DashboardSubfolders() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [foldersList, setFoldersList] = useState<Folder[]>([]);
-  const [notesList, setNotesList] = useState<
-    { id: string; folder_id: string }[]
-  >([]);
+  const [subfoldersData, setSubfoldersData] = useState<SubfolderRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [rootFolders, setRootFolders] = useState<Folder[]>([]);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [shareItem, setShareItem] = useState<Folder | null>(null);
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -57,90 +63,98 @@ export function DashboardSubfolders() {
   const [newVisibility, setNewVisibility] =
     useState<Visibility>(DEFAULT_VISIBILITY);
 
-  // Delete confirmation state (replaces blocking window.confirm)
+  // Delete confirmation state
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
-  // Data loading — wrapped in useCallback so it can be a stable dep
+  // Data loading — server-side pagination with range
   // ---------------------------------------------------------------------------
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (currentSearch: string, currentPage: number) => {
     if (!user) return;
     setError(null);
+    setLoading(true);
     try {
       const supabase = requireSupabase();
 
-      const [
-        { data: folders, error: foldersErr },
-        { data: notes, error: notesErr },
-      ] = await Promise.all([
-        supabase.from("folders").select("*").eq("owner_id", user.id).order("created_at", { ascending: false }),
-        supabase.from("notes").select("id, folder_id").eq("owner_id", user.id),
-      ]);
+      // Fetch root folders for the parent select dropdown (unpaginated — small dataset)
+      const { data: roots } = await supabase
+        .from("folders")
+        .select("id, title, slug")
+        .eq("owner_id", user.id)
+        .is("parent_id", null);
+      setRootFolders(roots as Folder[] || []);
 
-      if (foldersErr) throw foldersErr;
-      if (notesErr) throw notesErr;
+      // Count subfolders matching search
+      let countQuery = supabase
+        .from("folders")
+        .select("*", { count: "exact", head: true })
+        .eq("owner_id", user.id)
+        .not("parent_id", "is", null);
+      if (currentSearch) {
+        countQuery = countQuery.or(`title.ilike.%${currentSearch}%,description.ilike.%${currentSearch}%`);
+      }
+      const { count } = await countQuery;
+      setTotalCount(count ?? 0);
 
-      setFoldersList(folders ?? []);
-      setNotesList(notes ?? []);
+      // Fetch paginated subfolders with parent info
+      const from = (currentPage - 1) * PAGE_SIZE;
+      let query = supabase
+        .from("folders")
+        .select("*, parent:folders!parent_id(id, title, slug)")
+        .eq("owner_id", user.id)
+        .not("parent_id", "is", null)
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+      if (currentSearch) {
+        query = query.or(`title.ilike.%${currentSearch}%,description.ilike.%${currentSearch}%`);
+      }
+      const { data: subfoldersRaw } = await query;
+
+      // Fetch notes counts for the returned subfolders
+      const sfIds = (subfoldersRaw || []).map((sf: { id: string }) => sf.id);
+      let noteCounts: Record<string, number> = {};
+      if (sfIds.length > 0) {
+        const { data: notesData } = await supabase
+          .from("notes")
+          .select("folder_id")
+          .in("folder_id", sfIds);
+        (notesData || []).forEach((n: { folder_id: string }) => {
+          noteCounts[n.folder_id] = (noteCounts[n.folder_id] || 0) + 1;
+        });
+      }
+
+      const mapped: SubfolderRow[] = (subfoldersRaw || []).map((sf: Record<string, unknown>) => {
+        const parent = Array.isArray(sf.parent) && (sf.parent as Array<Record<string, unknown>>).length > 0
+          ? (sf.parent as Array<Record<string, unknown>>)[0] as { title?: string; slug?: string }
+          : null;
+        return {
+          ...sf as unknown as Folder,
+          parentTitle: parent?.title ?? "Unknown Parent",
+          parentSlug: parent?.slug ?? "",
+          derivedNoteCount: noteCounts[(sf.id as string)] || 0,
+        };
+      });
+
+      setSubfoldersData(mapped);
     } catch (err) {
-      console.error("Error fetching folders:", err);
+      console.error("Error fetching subfolders:", err);
       setError("Failed to load subfolders. Please try again.");
     } finally {
       setLoading(false);
     }
   }, [user]);
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  // Reset to page 1 when search changes
+  useEffect(() => { setPage(1); }, [debouncedSearch]);
+  useEffect(() => { void loadData(debouncedSearch, page); }, [page, debouncedSearch, loadData]);
 
   // ---------------------------------------------------------------------------
-  // Derived data — memoised to avoid re-computation every render
+  // No more client-side filtering — server handles it
   // ---------------------------------------------------------------------------
 
-  const rootFolders = useMemo(
-    () => foldersList.filter((f) => f.parent_id === null),
-    [foldersList],
-  );
-
-  // Reset page when search changes
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
-
-  const allSubfolders = useMemo<SubfolderRow[]>(() => {
-    const byId = new Map(foldersList.map((f) => [f.id, f]));
-
-    return foldersList
-      .filter((f) => f.parent_id !== null)
-      .map((sf) => {
-        const parent = sf.parent_id ? byId.get(sf.parent_id) : undefined;
-        const derivedNoteCount = notesList.filter(
-          (n) => n.folder_id === sf.id,
-        ).length;
-        return {
-          ...sf,
-          parentTitle: parent?.title ?? "Unknown Parent",
-          parentSlug: parent?.slug ?? "",
-          derivedNoteCount,
-        };
-      });
-  }, [foldersList, notesList]);
-
-  const filteredAll = useMemo(() => {
-    const q = search.toLowerCase();
-    if (!q) return allSubfolders;
-    return allSubfolders.filter(
-      (sf) =>
-        sf.title.toLowerCase().includes(q) ||
-        sf.parentTitle.toLowerCase().includes(q),
-    );
-  }, [allSubfolders, search]);
-
-  // Client-side pagination (all subfolders already fetched)
-  const totalFiltered = filteredAll.length;
-  const paginated = filteredAll.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalFiltered = totalCount;
+  const paginated = subfoldersData;
 
   // ---------------------------------------------------------------------------
   // Modal helpers
@@ -182,7 +196,7 @@ export function DashboardSubfolders() {
 
       if (insertErr) throw insertErr;
 
-      await loadData();
+      await loadData(debouncedSearch, page);
       resetAndClose();
     } catch (err: unknown) {
       console.error("Error creating subfolder:", err);
@@ -203,7 +217,7 @@ export function DashboardSubfolders() {
         .delete()
         .eq("id", id);
       if (deleteErr) throw deleteErr;
-      await loadData();
+      await loadData(debouncedSearch, page);
     } catch (err) {
       console.error("Error deleting subfolder:", err);
       setError("Failed to delete subfolder. Please try again.");
@@ -308,8 +322,8 @@ export function DashboardSubfolders() {
               fontSize: "var(--font-size-sm)",
             }}
           >
-            {allSubfolders.length} subfolder
-            {allSubfolders.length !== 1 ? "s" : ""} across all folders
+            {totalCount} subfolder
+            {totalCount !== 1 ? "s" : ""} across all folders
           </p>
         </div>
         <Button

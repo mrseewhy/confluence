@@ -102,7 +102,7 @@ drop policy if exists "Users can insert their own note blocks" on public.note_bl
 create policy "Users can insert their own note blocks"
   on public.note_blocks for insert to authenticated
   with check (
-    note_id in (select id from public.notes where owner_id = auth.uid()) AND
+    exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid())))) AND
     not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
   );
 
@@ -111,7 +111,7 @@ create policy "Users can update their own note blocks"
   on public.note_blocks for update to authenticated
   using (exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid()))))))
   with check (
-    note_id in (select id from public.notes where owner_id = auth.uid()) AND
+    exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid())))) AND
     not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
   );
 
