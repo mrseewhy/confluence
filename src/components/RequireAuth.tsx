@@ -32,7 +32,10 @@ export function RequireAuth({ children, userType }: RequireAuthProps) {
   }
 
   if (userType && profile.user_type !== userType) {
-    return <Navigate to={getDashboardPath(profile.user_type)} replace />
+    // Admins can access both admin and user routes (admin is additive)
+    if (!(userType === 'user' && profile.user_type === 'admin')) {
+      return <Navigate to={getDashboardPath(profile.user_type)} replace />
+    }
   }
 
   return children

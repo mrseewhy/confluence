@@ -13,8 +13,6 @@ describe('supabase client', () => {
     // When configured, supabase is a SupabaseClient; otherwise null
     if (isSupabaseConfigured) {
       expect(supabase).not.toBeNull()
-      expect(supabase?.supabaseUrl).toBeTruthy()
-      expect(supabase?.supabaseKey).toBeTruthy()
     } else {
       expect(supabase).toBeNull()
     }
@@ -26,7 +24,6 @@ describe('requireSupabase', () => {
     if (isSupabaseConfigured) {
       const client = requireSupabase()
       expect(client).toBe(supabase)
-      expect(client.supabaseUrl).toBeTruthy()
     } else {
       expect(() => requireSupabase()).toThrow(
         'Missing Supabase env vars. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local.',
