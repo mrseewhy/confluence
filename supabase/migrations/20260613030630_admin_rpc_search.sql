@@ -3,7 +3,8 @@
 -- ═════════════════════════════════════════════════════════════
 
 -- RPC: admin_get_users — returns profiles joined with auth.users email, with pagination + search + type filter
-DROP FUNCTION IF EXISTS public.admin_get_users;
+DROP FUNCTION IF EXISTS public.admin_get_users(integer, integer, text, text);
+DROP FUNCTION IF EXISTS public.admin_get_users(integer, integer);
 CREATE OR REPLACE FUNCTION public.admin_get_users(
   p_limit integer DEFAULT 20,
   p_offset integer DEFAULT 0,
@@ -79,8 +80,9 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.admin_get_users(integer, integer, text, text) TO authenticated;
 
--- RPC: admin_count_users — returns total number of users (optionally filtered by search + type)
-DROP FUNCTION IF EXISTS public.admin_count_users;
+-- RPC: admin_count_users — returns total number of users (optionally filtered by search)
+DROP FUNCTION IF EXISTS public.admin_count_users(text);
+DROP FUNCTION IF EXISTS public.admin_count_users();
 CREATE OR REPLACE FUNCTION public.admin_count_users(
   p_search text DEFAULT NULL,
   p_user_type text DEFAULT NULL

@@ -3,7 +3,17 @@
 -- ═════════════════════════════════════════════════════════════
 
 -- RPC: admin_get_users — added p_user_type param
-DROP FUNCTION IF EXISTS public.admin_get_users;
+-- Drop all overloads of admin_get_users before re-creating
+DO $$ BEGIN
+  PERFORM public.admin_get_users(20, 0, NULL, NULL);
+EXCEPTION WHEN OTHERS THEN
+  -- ignore
+END $$;
+
+DROP FUNCTION IF EXISTS public.admin_get_users(integer, integer, text, text);
+DROP FUNCTION IF EXISTS public.admin_get_users(integer, integer, text);
+DROP FUNCTION IF EXISTS public.admin_get_users(integer, integer);
+
 CREATE OR REPLACE FUNCTION public.admin_get_users(
   p_limit integer DEFAULT 20,
   p_offset integer DEFAULT 0,
@@ -80,7 +90,9 @@ $$;
 GRANT EXECUTE ON FUNCTION public.admin_get_users(integer, integer, text, text) TO authenticated;
 
 -- RPC: admin_count_users — added p_user_type param
-DROP FUNCTION IF EXISTS public.admin_count_users;
+DROP FUNCTION IF EXISTS public.admin_count_users(text, text);
+DROP FUNCTION IF EXISTS public.admin_count_users(text);
+DROP FUNCTION IF EXISTS public.admin_count_users();
 CREATE OR REPLACE FUNCTION public.admin_count_users(
   p_search text DEFAULT NULL,
   p_user_type text DEFAULT NULL
