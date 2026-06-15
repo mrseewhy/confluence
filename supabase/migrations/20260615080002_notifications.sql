@@ -1,12 +1,16 @@
 -- Notifications table: in-app bell/badge for collaboration invites and activity
-create type public.notification_type as enum (
-  'collaborator_invite',
-  'collaborator_revoked',
-  'note_shared',
-  'folder_shared',
-  'ownership_transferred',
-  'mention'
-);
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'notification_type') then
+    create type public.notification_type as enum (
+      'collaborator_invite',
+      'collaborator_revoked',
+      'note_shared',
+      'folder_shared',
+      'ownership_transferred',
+      'mention'
+    );
+  end if;
+end $$;
 
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
@@ -41,7 +45,10 @@ begin
   set read = true
   where user_id = p_user_id and not read;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function public.mark_notifications_read(uuid) from anon;
+grant execute on function public.mark_notifications_read(uuid) to authenticated;
 
 -- Get unread count
 create or replace function public.unread_notification_count(p_user_id uuid default auth.uid())
@@ -54,7 +61,10 @@ begin
   where user_id = p_user_id and not read;
   return v_count;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function public.unread_notification_count(uuid) from anon;
+grant execute on function public.unread_notification_count(uuid) to authenticated;
 
 -- Trigger: notify note owner when collaborator is added
 create or replace function public.notify_collaborator_invite()

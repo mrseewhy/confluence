@@ -45,4 +45,7 @@ begin
   limit p_limit
   offset p_offset;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function public.search_notes_by_content(uuid, text, text, int, int) from anon;
+grant execute on function public.search_notes_by_content(uuid, text, text, int, int) to authenticated;

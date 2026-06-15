@@ -61,7 +61,10 @@ begin
 
   return v_version_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function public.save_note_version(uuid, uuid) from anon;
+grant execute on function public.save_note_version(uuid, uuid) to authenticated;
 
 -- Get all versions for a note
 create or replace function public.get_note_versions(p_note_id uuid)
@@ -89,7 +92,10 @@ begin
   where nv.note_id = p_note_id
   order by nv.created_at desc;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function public.get_note_versions(uuid) from anon;
+grant execute on function public.get_note_versions(uuid) to authenticated;
 
 -- Restore a note to a previous version
 create or replace function public.restore_note_version(p_version_id uuid, p_user_id uuid default auth.uid())
@@ -128,17 +134,47 @@ begin
 
   perform public.save_note_version(v_note_id, p_user_id);
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function public.restore_note_version(uuid, uuid) from anon;
+grant execute on function public.restore_note_version(uuid, uuid) to authenticated;
 
 -- Get a single version's blocks for preview
 create or replace function public.get_note_version_blocks(p_version_id uuid)
 returns jsonb as $$
 declare
   v_blocks jsonb;
+  v_note_id uuid;
+  v_caller_id uuid;
 begin
-  select blocks into v_blocks
-  from public.note_versions where id = p_version_id;
+  v_caller_id := auth.uid();
+  if v_caller_id is null then
+    return null;
+  end if;
+
+  select nv.blocks, nv.note_id into v_blocks, v_note_id
+  from public.note_versions nv where nv.id = p_version_id;
+
+  if v_note_id is null then
+    return null;
+  end if;
+
+  if not exists (
+    select 1 from public.notes n
+    where n.id = v_note_id
+      and (n.owner_id = v_caller_id or exists (
+        select 1 from public.collaborators c
+        where c.note_id = n.id and c.invitee_id = v_caller_id
+      ))
+  ) and not exists (
+    select 1 from public.profiles where id = v_caller_id and user_type = 'admin'
+  ) then
+    return null;
+  end if;
 
   return v_blocks;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function public.get_note_version_blocks(uuid) from anon;
+grant execute on function public.get_note_version_blocks(uuid) to authenticated;
