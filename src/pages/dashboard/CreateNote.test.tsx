@@ -203,13 +203,9 @@ describe('CreateNote — banned user guard', () => {
     const createButton = await screen.findByTestId('create-button', {}, { timeout: 4000 })
     expect(createButton).toBeDefined()
 
-    // Click save — the ban check should log and return early
+    // Click save — the ban check should prevent navigation
     createButton.click()
 
-    // console.error should have been called with the banned message
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('banned'),
-    )
     // Navigate should NOT be called — save was blocked
     expect(mockNavigate).not.toHaveBeenCalled()
   })

@@ -25,6 +25,26 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Simple in-memory rate limiter for Edge Functions (per-instance).
+// For production with multiple instances, use the DB-backed check_rate_limit RPC instead.
+const ipRequestCounts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX = 10;       // max 10 invites per window
+const RATE_LIMIT_WINDOW = 60_000; // 60-second window
+
+function checkMemoryRateLimit(clientIp: string): boolean {
+  const now = Date.now();
+  const entry = ipRequestCounts.get(clientIp);
+  if (!entry || now > entry.resetAt) {
+    ipRequestCounts.set(clientIp, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return false;
+  }
+  entry.count++;
+  return true;
+}
+
 serve(async (req) => {
   // Handle preflight
   if (req.method === "OPTIONS") {
@@ -35,6 +55,21 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ error: "Method not allowed" }),
       { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  // ── Rate limiting ──
+  const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || req.headers.get("x-real-ip")
+    || "unknown";
+
+  if (!checkMemoryRateLimit(clientIp)) {
+    return new Response(
+      JSON.stringify({ error: "Too many requests. Please try again later." }),
+      {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" },
+      },
     );
   }
 
@@ -62,6 +97,23 @@ serve(async (req) => {
       access_level,
       owner_username,
     } = payload;
+
+    // Validate required fields
+    if (!invitee_email || !item_title || !owner_username) {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields: invitee_email, item_title, owner_username" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Validate email format (basic)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(invitee_email)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid invitee email format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Build the share link
     const itemPath = item_type === "folder" ? "folder" : "n";
@@ -94,12 +146,8 @@ serve(async (req) => {
               <tr>
                 <td align="center">
                   <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-                    <!-- Header -->
                     <tr>
                       <td style="padding:32px 32px 0;text-align:center;">
-                        <div style="width:48px;height:48px;border-radius:12px;background:#0d7f66;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
-                          <span style="color:#fff;font-size:24px;line-height:1;">📝</span>
-                        </div>
                         <h1 style="margin:0 0 4px;font-size:20px;font-weight:700;color:#1d1d1f;">
                           You've been invited!
                         </h1>
@@ -108,8 +156,6 @@ serve(async (req) => {
                         </p>
                       </td>
                     </tr>
-
-                    <!-- Content -->
                     <tr>
                       <td style="padding:0 32px;">
                         <div style="background:#f5f5f7;border-radius:12px;padding:20px;margin-bottom:24px;">
@@ -119,23 +165,12 @@ serve(async (req) => {
                           <p style="margin:0 0 12px;font-size:16px;font-weight:600;color:#1d1d1f;">
                             ${item_title}
                           </p>
-                          <div style="display:inline-block;padding:4px 12px;border-radius:20px;background:#0d7f66;color:#fff;font-size:12px;font-weight:500;">
-                            You ${roleLabel}
-                          </div>
                         </div>
-
                         <a href="${shareUrl}" style="display:block;text-align:center;padding:12px 24px;border-radius:10px;background:#0d7f66;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;margin-bottom:24px;">
                           Open ${itemLabel}
                         </a>
-
-                        <p style="margin:0 0 4px;font-size:13px;color:#86868b;line-height:1.5;">
-                          You've been invited as a <strong>${access_level}</strong> on this ${itemLabel}.
-                          ${access_level === "editor" ? "You can view and edit the content." : "You can view the content."}
-                        </p>
                       </td>
                     </tr>
-
-                    <!-- Footer -->
                     <tr>
                       <td style="padding:24px 32px 32px;border-top:1px solid #e8e8ed;">
                         <p style="margin:0;font-size:11px;color:#86868b;text-align:center;">

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Button, Input, Divider } from '@/components/ui'
+import { PasswordInput } from '@/components/PasswordInput'
 import { getDashboardPath, useAuth } from '@/context/auth'
 
 export function SignInPage() {
@@ -11,7 +12,7 @@ export function SignInPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError]   = useState('')
 
-  const [showPassword, setShowPassword] = useState(false)
+
 
   const handleChange = (field: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,42 +118,13 @@ export function SignInPage() {
                   <label style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)' }}>Password</label>
                   <Link to="/recover" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-accent)', fontWeight: 'var(--font-weight-medium)' }}>Forgot password?</Link>
                 </div>
-                <Input 
-                  type={showPassword ? 'text' : 'password'} 
-                  placeholder="Your password" 
-                  value={form.password} 
-                  onChange={handleChange('password')} 
-                  autoComplete="current-password" 
-                  required 
-                  rightIcon={
-                    <button 
-                      type="button" 
-                      onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: 0,
-                        cursor: 'pointer',
-                        color: 'var(--color-text-muted)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {showPassword ? (
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                          <line x1="1" y1="1" x2="23" y2="23" />
-                        </svg>
-                      ) : (
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </svg>
-                      )}
-                    </button>
-                  }
+                <PasswordInput
+                  label=""
+                  placeholder="Your password"
+                  value={form.password}
+                  onChange={handleChange('password')}
+                  autoComplete="current-password"
+                  required
                 />
               </div>
               <Button type="submit" variant="primary" size="md" fullWidth style={{ marginTop: 'var(--space-2)' }} disabled={loading}>

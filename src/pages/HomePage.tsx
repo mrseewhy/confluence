@@ -779,6 +779,7 @@ const styles: Record<string, React.CSSProperties> = {
   cardDesc: {
     fontSize: "var(--font-size-sm)",
     color: "var(--color-text-secondary)",
+
     margin: 0,
     lineHeight: 1.55,
     display: "-webkit-box",

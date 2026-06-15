@@ -7,6 +7,8 @@ import { formatDate } from "@/lib/helpers";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import styles from "@/styles/dashboard.module.css";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
+import { PaginationBar } from "@/components/PaginationBar";
 import { safeStr, safeArray } from "@/lib/safeParse";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -39,20 +41,10 @@ export function DashboardCollaborations() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<CollaborationRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { search, setSearch, debouncedSearch } = useDebouncedSearch({ onSearchChange: () => setPage(1) });
   const [typeFilter, setTypeFilter] = useState<"all" | "folder" | "note">("all");
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
 
   // ─── Load data with server-side pagination ────────────────
 
@@ -156,8 +148,7 @@ export function DashboardCollaborations() {
       });
 
       setRows(mapped);
-    } catch (err) {
-      console.error("Error loading collaborations:", err);
+    } catch {
       setError("Failed to load collaborations.");
       setRows([]);
     } finally {
@@ -497,65 +488,13 @@ export function DashboardCollaborations() {
         />
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "var(--space-3)",
-            marginTop: "var(--space-8)",
-          }}
-        >
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-medium)",
-              padding: "var(--space-2) var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-elevated)",
-              color: page <= 1 ? "var(--color-text-muted)" : "var(--color-text-primary)",
-              cursor: page <= 1 ? "not-allowed" : "pointer",
-              opacity: page <= 1 ? 0.5 : 1,
-              transition: "all var(--duration-fast)",
-            }}
-          >
-            ← Prev
-          </button>
-          <span
-            style={{
-              fontSize: "var(--font-size-sm)",
-              color: "var(--color-text-muted)",
-            }}
-          >
-            Page {page} of {totalPages}
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--font-size-sm)",
-              fontWeight: "var(--font-weight-medium)",
-              padding: "var(--space-2) var(--space-4)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-elevated)",
-              color: page >= totalPages ? "var(--color-text-muted)" : "var(--color-text-primary)",
-              cursor: page >= totalPages ? "not-allowed" : "pointer",
-              opacity: page >= totalPages ? 0.5 : 1,
-              transition: "all var(--duration-fast)",
-            }}
-          >
-            Next →
-          </button>
-        </div>
-      )}
+      <PaginationBar
+        currentPage={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        size="md"
+        style={{ marginTop: "var(--space-8)" }}
+      />
     </DashboardLayout>
   );
 }

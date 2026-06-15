@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useRealtimeCollaboration } from './useRealtimeCollaboration'
+import { useRealtimeCollaboration, type UseRealtimeCollaborationOptions } from './useRealtimeCollaboration'
 
 // ── Mocks ─────────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ const getMockClient = () => mockSupabaseClient
 // ── Tests ─────────────────────────────────────────────────────
 
 describe('useRealtimeCollaboration', () => {
-  const defaultOptions = {
+  const defaultOptions: UseRealtimeCollaborationOptions = {
     noteId: 'note-123',
     userId: 'user-1',
     username: 'alice',

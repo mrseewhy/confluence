@@ -197,7 +197,6 @@ export function DashboardSettings() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
-      console.error("Error updating profile:", err);
       setSaveError(
         err instanceof Error ? err.message : "Failed to save changes."
       );
@@ -769,8 +768,7 @@ export function DashboardSettings() {
                       );
                       setNotifSaved(true);
                       setTimeout(() => setNotifSaved(false), 2000);
-                    } catch (err) {
-                      console.error("Failed to save preference:", err);
+                    } catch {
                       setSendInviteEmails(!newVal);
                     }
                   }}

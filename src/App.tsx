@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react'
+import { lazy } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AuthProvider } from '@/context/AuthProvider'
 import { RequireAuth } from '@/components/RequireAuth'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { RouteErrorBoundary } from '@/components/RouteErrorBoundary'
 import { ToastProvider } from '@/components/Toast'
 
 // ── Critical routes (eager — always in the main chunk) ───────
@@ -28,6 +29,7 @@ const DashboardSettings    = lazy(() => import('@/pages/dashboard/Settings').the
 const DashboardCollaborators = lazy(() => import('@/pages/dashboard/Collaborators').then(m => ({ default: m.DashboardCollaborators })))
 const DashboardActivityLog  = lazy(() => import('@/pages/dashboard/ActivityLog').then(m => ({ default: m.DashboardActivityLog })))
 const DashboardCollaborations = lazy(() => import('@/pages/dashboard/Collaborations').then(m => ({ default: m.DashboardCollaborations })))
+const DashboardTrash         = lazy(() => import('@/pages/dashboard/Trash').then(m => ({ default: m.DashboardTrash })))
 const CreateNote           = lazy(() => import('@/pages/dashboard/CreateNote').then(m => ({ default: m.CreateNote })))
 const EditNote             = lazy(() => import('@/pages/dashboard/EditNote').then(m => ({ default: m.EditNote })))
 const AdminOverview        = lazy(() => import('@/pages/admin/Overview').then(m => ({ default: m.AdminOverview })))
@@ -37,27 +39,7 @@ const AdminNotes           = lazy(() => import('@/pages/admin/Notes').then(m => 
 const AdminSubfolders      = lazy(() => import('@/pages/admin/Subfolders').then(m => ({ default: m.AdminSubfolders })))
 const AdminActivityLog     = lazy(() => import('@/pages/admin/ActivityLog').then(m => ({ default: m.AdminActivityLog })))
 
-function PageSkeleton() {
-  return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--color-bg)',
-    }}>
-      <div style={{
-        width: 28,
-        height: 28,
-        border: '3px solid var(--color-border)',
-        borderTopColor: 'var(--color-accent)',
-        borderRadius: '50%',
-        animation: 'spin 0.7s linear infinite',
-      }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  )
-}
+
 
 export function EnvCheck() {
   const missing = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -93,45 +75,45 @@ export default function App() {
       <EnvCheck />
       <BrowserRouter>          <AuthProvider>
           <ToastProvider>
+          {/* Top-level ErrorBoundary catches crashes in ANY route, while per-route boundaries isolate individual lazy pages */}
           <ErrorBoundary>
-          <Suspense fallback={<PageSkeleton />}>
           <Routes>
 
           {/* ── Public ── */}
-          <Route path="/"        element={<HomePage />} />
-          <Route path="/folders" element={<FoldersPage />} />
-          <Route path="/notes"   element={<NotesPage />} />
-          <Route path="/:username/n/:slug" element={<NoteDetailPage />} />
-          <Route path="/:username/folder/:slug" element={<FolderDetailPage />} />
-          <Route path="/:username" element={<UserProfilePage />} />
-          <Route path="/signup"  element={<SignUpPage />} />
-          <Route path="/login"   element={<SignInPage />} />
-          <Route path="/recover" element={<PasswordRecoveryPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/auth/redirect" element={<AuthRedirectPage />} />
+          <Route path="/"        element={<RouteErrorBoundary><HomePage /></RouteErrorBoundary>} />
+          <Route path="/folders" element={<RouteErrorBoundary><FoldersPage /></RouteErrorBoundary>} />
+          <Route path="/notes"   element={<RouteErrorBoundary><NotesPage /></RouteErrorBoundary>} />
+          <Route path="/:username/n/:slug" element={<RouteErrorBoundary><NoteDetailPage /></RouteErrorBoundary>} />
+          <Route path="/:username/folder/:slug" element={<RouteErrorBoundary><FolderDetailPage /></RouteErrorBoundary>} />
+          <Route path="/:username" element={<RouteErrorBoundary><UserProfilePage /></RouteErrorBoundary>} />
+          <Route path="/signup"  element={<RouteErrorBoundary><SignUpPage /></RouteErrorBoundary>} />
+          <Route path="/login"   element={<RouteErrorBoundary><SignInPage /></RouteErrorBoundary>} />
+          <Route path="/recover" element={<RouteErrorBoundary><PasswordRecoveryPage /></RouteErrorBoundary>} />
+          <Route path="/reset-password" element={<RouteErrorBoundary><ResetPasswordPage /></RouteErrorBoundary>} />
+          <Route path="/auth/redirect" element={<RouteErrorBoundary><AuthRedirectPage /></RouteErrorBoundary>} />
 
           {/* ── User dashboard ── */}
-          <Route path="/dashboard"            element={<RequireAuth userType="user"><DashboardOverview /></RequireAuth>} />
-          <Route path="/dashboard/folders"    element={<RequireAuth userType="user"><DashboardFolders /></RequireAuth>} />
-          <Route path="/dashboard/subfolders" element={<RequireAuth userType="user"><DashboardSubfolders /></RequireAuth>} />
-          <Route path="/dashboard/notes"          element={<RequireAuth userType="user"><DashboardNotes /></RequireAuth>} />
-          <Route path="/dashboard/notes/new"      element={<RequireAuth userType="user"><CreateNote /></RequireAuth>} />
-          <Route path="/dashboard/notes/:slug/edit" element={<RequireAuth userType="user"><EditNote /></RequireAuth>} />
-          <Route path="/dashboard/collaborators"  element={<RequireAuth userType="user"><DashboardCollaborators /></RequireAuth>} />
-          <Route path="/dashboard/activity"        element={<RequireAuth userType="user"><DashboardActivityLog /></RequireAuth>} />
-          <Route path="/dashboard/collaborations"  element={<RequireAuth userType="user"><DashboardCollaborations /></RequireAuth>} />
-          <Route path="/dashboard/settings"       element={<RequireAuth userType="user"><DashboardSettings /></RequireAuth>} />
+          <Route path="/dashboard"            element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardOverview /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/folders"    element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardFolders /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/subfolders" element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardSubfolders /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/notes"          element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardNotes /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/notes/new"      element={<RequireAuth userType="user"><RouteErrorBoundary><CreateNote /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/notes/:slug/edit" element={<RequireAuth userType="user"><RouteErrorBoundary><EditNote /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/collaborators"  element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardCollaborators /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/activity"        element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardActivityLog /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/collaborations"  element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardCollaborations /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/trash"            element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardTrash /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/dashboard/settings"       element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardSettings /></RouteErrorBoundary></RequireAuth>} />
 
           {/* ── Admin dashboard ── */}
-          <Route path="/admin/dashboard"         element={<RequireAuth userType="admin"><AdminOverview /></RequireAuth>} />
-          <Route path="/admin/dashboard/users"   element={<RequireAuth userType="admin"><AdminUsers /></RequireAuth>} />
-          <Route path="/admin/dashboard/folders" element={<RequireAuth userType="admin"><AdminFolders /></RequireAuth>} />
-          <Route path="/admin/dashboard/notes"   element={<RequireAuth userType="admin"><AdminNotes /></RequireAuth>} />
-          <Route path="/admin/dashboard/subfolders" element={<RequireAuth userType="admin"><AdminSubfolders /></RequireAuth>} />
-          <Route path="/admin/dashboard/activity"   element={<RequireAuth userType="admin"><AdminActivityLog /></RequireAuth>} />
+          <Route path="/admin/dashboard"         element={<RequireAuth userType="admin"><RouteErrorBoundary><AdminOverview /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/admin/dashboard/users"   element={<RequireAuth userType="admin"><RouteErrorBoundary><AdminUsers /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/admin/dashboard/folders" element={<RequireAuth userType="admin"><RouteErrorBoundary><AdminFolders /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/admin/dashboard/notes"   element={<RequireAuth userType="admin"><RouteErrorBoundary><AdminNotes /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/admin/dashboard/subfolders" element={<RequireAuth userType="admin"><RouteErrorBoundary><AdminSubfolders /></RouteErrorBoundary></RequireAuth>} />
+          <Route path="/admin/dashboard/activity"   element={<RequireAuth userType="admin"><RouteErrorBoundary><AdminActivityLog /></RouteErrorBoundary></RequireAuth>} />
 
           </Routes>
-          </Suspense>
           </ErrorBoundary>
           </ToastProvider>
         </AuthProvider>

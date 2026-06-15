@@ -202,8 +202,8 @@ export function DashboardOverview() {
         setAllNotes([...allNotes].sort(sortByDate));
         setAllSubfolders([...computedSubfolders].sort(sortByDate));
         setAllFolders([...computedFolders].sort(sortByDate));
-      } catch (err) {
-        console.error("Error fetching dashboard stats:", err);
+      } catch {
+        // Error fetching dashboard stats — shown via empty state below
       } finally {
         setLoading(false);
       }

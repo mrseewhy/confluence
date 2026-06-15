@@ -142,8 +142,8 @@ export function AdminOverview() {
         });
         setRecentUsers(users || []);
         setRecentNotes(notes || []);
-      } catch (err) {
-        console.error("Error loading admin stats:", err);
+      } catch {
+        // Error loading admin stats — shown via empty state
       } finally {
         setLoading(false);
       }

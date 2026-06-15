@@ -11,7 +11,26 @@ import { formatDate, buildSlug } from "@/lib/helpers";
 import { Modal } from "@/components/Modal";
 import styles from "@/styles/dashboard.module.css";
 import { safeStr, safeArray } from "@/lib/safeParse";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
+import { PaginationBar } from "@/components/PaginationBar";
 import type { Folder, Visibility } from "@/types";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,14 +39,108 @@ import type { Folder, Visibility } from "@/types";
 interface SubfolderRow extends Folder {
   parentTitle: string;
   parentSlug: string;
-  derivedNoteCount: number; // renamed to avoid collision with any DB field
+  derivedNoteCount: number;
+}
+
+// ---------------------------------------------------------------------------
+// Sortable row wrapper
+// ---------------------------------------------------------------------------
+
+function SortableSubfolderRow({
+  subfolder,
+  isDragOverlay,
+  onKeyMove,
+  children,
+}: {
+  subfolder: { id: string; sort_order?: number };
+  isDragOverlay?: boolean;
+  onKeyMove?: (id: string, direction: 'up' | 'down') => void;
+  children: React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: subfolder.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+    position: "relative" as const,
+    zIndex: isDragging ? 100 : 1,
+    boxShadow: isDragOverlay
+      ? "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)"
+      : "none",
+    scale: isDragOverlay ? 1.03 : 1,
+    transformOrigin: "center" as const,
+    borderRadius: isDragOverlay ? "var(--radius-lg)" : undefined,
+    overflow: "hidden" as const,
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.altKey) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        onKeyMove?.(subfolder.id, 'up');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        onKeyMove?.(subfolder.id, 'down');
+      }
+    }
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`${styles.tableRow} ${styles.cols6_Subfolders}`}
+      tabIndex={isDragOverlay ? -1 : 0}
+      onKeyDown={isDragOverlay ? undefined : handleKeyDown}
+      role="listitem"
+      aria-label={`${isDragOverlay ? '' : 'Drag to reorder. Press Alt+ArrowUp or Alt+ArrowDown to move. '}${subfolder.title || ''}`}
+      {...attributes}
+      {...(isDragOverlay ? {} : listeners)}
+    >
+      {children}
+      {/* Drag handle */}
+      {!isDragOverlay && (
+        <div
+          {...listeners}
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: "24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "grab",
+            color: "var(--color-text-muted)",
+            fontSize: "14px",
+            userSelect: "none",
+            touchAction: "none",
+            transition: "color 0.15s ease",
+          }}
+          className="drag-handle"
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-accent)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-muted)")}
+          title="Drag to reorder · Alt+↑↓ to move"
+        >
+          ⠿
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// (formatDate, buildSlug imported from @/lib/helpers)
 
 const DEFAULT_VISIBILITY: Visibility = "public";
 
@@ -45,22 +158,14 @@ export function DashboardSubfolders() {
   const [subfoldersData, setSubfoldersData] = useState<SubfolderRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [rootFolders, setRootFolders] = useState<Folder[]>([]);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [shareItem, setShareItem] = useState<Folder | null>(null);
 
   // Pagination
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
 
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
+  // Debounce search — replaces manual useState + useEffect pattern
+  const { search, setSearch, debouncedSearch } = useDebouncedSearch({ onSearchChange: () => setPage(1) });
 
   // Creation state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -80,6 +185,32 @@ export function DashboardSubfolders() {
 
   // Delete confirmation state
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  // Drag overlay state
+  const [activeDragSubfolder, setActiveDragSubfolder] = useState<SubfolderRow | null>(null);
+  const [reorderAnnounce, setReorderAnnounce] = useState("");
+
+  // Clear ARIA announcement after 3 seconds
+  useEffect(() => {
+    if (!reorderAnnounce) return
+    const t = setTimeout(() => setReorderAnnounce(""), 3000)
+    return () => clearTimeout(t)
+  }, [reorderAnnounce])
+
+  // Sensors for drag detection
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
+  );
 
   // ---------------------------------------------------------------------------
   // Data loading — server-side pagination with range
@@ -119,6 +250,7 @@ export function DashboardSubfolders() {
         .select("*, parent:folders!parent_id(id, title, slug)")
         .eq("owner_id", user.id)
         .not("parent_id", "is", null)
+        .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
       if (currentSearch) {
@@ -162,8 +294,7 @@ export function DashboardSubfolders() {
       });
 
       setSubfoldersData(mapped);
-    } catch (err) {
-      console.error("Error fetching subfolders:", err);
+    } catch {
       setError("Failed to load subfolders. Please try again.");
     } finally {
       setLoading(false);
@@ -201,7 +332,7 @@ export function DashboardSubfolders() {
     if (!newTitle.trim() || !parentId || !user) return;
 
     if (user.is_banned) {
-      console.error("Account is banned — cannot create subfolders.");
+      addToast("Account is banned — cannot create subfolders.", "error");
       return;
     }
 
@@ -209,6 +340,16 @@ export function DashboardSubfolders() {
 
     try {
       const supabase = requireSupabase();
+      // Get the current max sort_order for this user's subfolders
+      const { data: maxOrder } = await supabase
+        .from("folders")
+        .select("sort_order")
+        .eq("owner_id", user.id)
+        .not("parent_id", "is", null)
+        .order("sort_order", { ascending: false })
+        .limit(1);
+      const nextOrder = (maxOrder?.[0]?.sort_order ?? -1) + 1;
+
       const { error: insertErr } = await supabase.from("folders").insert({
         owner_id: user.id,
         parent_id: parentId,
@@ -216,6 +357,7 @@ export function DashboardSubfolders() {
         description: newDesc.trim() || null,
         slug,
         visibility: newVisibility,
+        sort_order: nextOrder,
       });
 
       if (insertErr) throw insertErr;
@@ -224,7 +366,6 @@ export function DashboardSubfolders() {
       resetAndClose();
       addToast("Subfolder created successfully", "success");
     } catch (err: unknown) {
-      console.error("Error creating subfolder:", err);
       const pgErr = err && typeof err === "object" ? (err as Record<string, unknown>) : null;
       const msg =
         safeStr(pgErr?.code) === "23505"
@@ -265,7 +406,6 @@ export function DashboardSubfolders() {
       setEditFolder(null);
       addToast("Subfolder updated successfully", "success");
     } catch (err) {
-      console.error("Error updating subfolder:", err);
       setError("Failed to update subfolder. Please try again.");
     } finally {
       setEditing(false);
@@ -275,20 +415,191 @@ export function DashboardSubfolders() {
   const handleDeleteSubfolder = async (id: string) => {
     try {
       const supabase = requireSupabase();
+
+      // Save subfolder data before deleting for undo
+      const { data: sfToDelete, error: fetchErr } = await supabase
+        .from("folders")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (fetchErr) throw fetchErr;
+
       const { error: deleteErr } = await supabase
         .from("folders")
         .delete()
         .eq("id", id);
       if (deleteErr) throw deleteErr;
+
       await loadData(debouncedSearch, page);
-      addToast("Subfolder deleted", "success");
+      addToast("Subfolder deleted", "success", {
+        label: "Undo",
+        onClick: async () => {
+          if (!sfToDelete) return;
+          const undoData = { ...sfToDelete };
+          // If slug is taken, append timestamp to avoid conflicts
+          const { data: existing } = await supabase
+            .from("folders")
+            .select("id")
+            .eq("slug", undoData.slug)
+            .maybeSingle();
+          if (existing) {
+            undoData.slug = `${undoData.slug}-${Date.now()}`;
+          }
+          const { error: insertErr } = await supabase.from("folders").insert(undoData);
+          if (insertErr) {
+            addToast("Failed to undo deletion. Try again.", "error");
+            return;
+          }
+          await loadData(debouncedSearch, page);
+        },
+      });
     } catch (err) {
-      console.error("Error deleting subfolder:", err);
       setError("Failed to delete subfolder. Please try again.");
     } finally {
       setPendingDeleteId(null);
     }
   };
+
+  // ── Drag-to-reorder handler ────────────────────────────────
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const dragged = paginated.find((sf) => sf.id === event.active.id);
+    if (dragged) setActiveDragSubfolder(dragged);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveDragSubfolder(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    try {
+      const supabase = requireSupabase();
+
+      const sorted = [...paginated].map((f, i) => ({ ...f, _idx: i }));
+
+      const oldIndex = sorted.findIndex((f) => f.id === active.id);
+      const newIndex = sorted.findIndex((f) => f.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      // Save original order for undo
+      const originalOrders = sorted.map((item) => ({
+        id: item.id,
+        sort_order: item.sort_order,
+      }));
+
+      // Reorder the array
+      const reordered = [...sorted];
+      const [moved] = reordered.splice(oldIndex, 1);
+      reordered.splice(newIndex, 0, moved);
+
+      // Batch update sort_order for all affected items
+      const updates = reordered.map((item, i) => ({
+        id: item.id,
+        sort_order: i,
+      }));
+
+      await Promise.all(
+        updates.map((update) =>
+          supabase
+            .from("folders")
+            .update({ sort_order: update.sort_order })
+            .eq("id", update.id),
+        ),
+      );
+
+      await loadData(debouncedSearch, page);
+      setReorderAnnounce("Subfolders reordered")
+      addToast("Subfolders reordered", "success", {
+        label: "Undo",
+        onClick: async () => {
+          await Promise.all(
+            originalOrders.map((orig) =>
+              supabase.from("folders").update({ sort_order: orig.sort_order }).eq("id", orig.id),
+            ),
+          );
+          await loadData(debouncedSearch, page);
+        },
+      });
+    } catch {
+      addToast("Failed to reorder. Try again.", "error");
+    }
+  };
+
+  // ── Keyboard reorder handler ─────────────────────────────
+
+  const handleKeyboardMove = async (id: string, direction: 'up' | 'down') => {
+    try {
+      const supabase = requireSupabase();
+      const sorted = [...paginated];
+      const idx = sorted.findIndex((sf) => sf.id === id);
+      if (idx === -1) return;
+
+      if (direction === 'up' && idx > 0) {
+        const current = sorted[idx];
+        const above = sorted[idx - 1];
+        const origCurrent = { id: current.id, sort_order: current.sort_order };
+        const origAbove = { id: above.id, sort_order: above.sort_order };
+        await supabase.from("folders").update({ sort_order: above.sort_order }).eq("id", current.id);
+        await supabase.from("folders").update({ sort_order: current.sort_order }).eq("id", above.id);
+        await loadData(debouncedSearch, page);
+        setReorderAnnounce("Subfolder moved up")
+        addToast("Subfolder moved", "success", {
+          label: "Undo",
+          onClick: async () => {
+            await supabase.from("folders").update({ sort_order: origCurrent.sort_order }).eq("id", origCurrent.id);
+            await supabase.from("folders").update({ sort_order: origAbove.sort_order }).eq("id", origAbove.id);
+            await loadData(debouncedSearch, page);
+          },
+        });
+      } else if (direction === 'down' && idx < sorted.length - 1) {
+        const current = sorted[idx];
+        const below = sorted[idx + 1];
+        const origCurrent = { id: current.id, sort_order: current.sort_order };
+        const origBelow = { id: below.id, sort_order: below.sort_order };
+        await supabase.from("folders").update({ sort_order: below.sort_order }).eq("id", current.id);
+        await supabase.from("folders").update({ sort_order: current.sort_order }).eq("id", below.id);
+        await loadData(debouncedSearch, page);
+        setReorderAnnounce("Subfolder moved down")
+        addToast("Subfolder moved", "success", {
+          label: "Undo",
+          onClick: async () => {
+            await supabase.from("folders").update({ sort_order: origCurrent.sort_order }).eq("id", origCurrent.id);
+            await supabase.from("folders").update({ sort_order: origBelow.sort_order }).eq("id", origBelow.id);
+            await loadData(debouncedSearch, page);
+          },
+        });
+      }
+    } catch {
+      addToast("Failed to reorder. Try again.", "error");
+    }
+  };
+
+  // ── Drag overlay clone ────────────────────────────────────
+
+  function SubfolderDragOverlay({ subfolder }: { subfolder: SubfolderRow }) {
+    return (
+      <SortableSubfolderRow subfolder={subfolder} isDragOverlay>
+        <div style={{ gridColumn: "2 / -1", display: "contents" }}>
+          <div className={styles.cellFlex}>
+            <div className={styles.iconBadge} style={{ background: "var(--color-bg-muted)", color: "var(--color-text-secondary)" }}>
+              <Icon d={IC.subfolder} size={16} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)" }}>
+                {subfolder.title}
+              </span>
+              {subfolder.description && (
+                <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                  {subfolder.description}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </SortableSubfolderRow>
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Render — loading / auth guard
@@ -388,8 +699,9 @@ export function DashboardSubfolders() {
       {/* Table */}
       {paginated.length > 0 ? (
         <div className={styles.tableCard}>
-          <div className={`${styles.tableHeader} ${styles.cols6_Subfolders}`}>
+          <div className={styles.tableHeader} style={{ gridTemplateColumns: "24px 1fr 180px 80px 100px 120px 140px" }}>
             {[
+              "",
               "Subfolder",
               "Parent folder",
               "Notes",
@@ -400,169 +712,191 @@ export function DashboardSubfolders() {
               <span className={styles.tableHeaderCell}>{h}</span>
             ))}
           </div>
-          {paginated.map((sf) => (
-              <div
-                key={sf.id}
-                className={`${styles.tableRow} ${styles.cols6_Subfolders}`}>
-              {/* Title + description */}
-              <div className={styles.cellFlex}>
-                <div className={styles.iconBadge} style={{ background: "var(--color-bg-muted)", color: "var(--color-text-secondary)" }}>
-                  <Icon d={IC.subfolder} size={16} />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <a
-                    href={`/${user?.username || "u"}/folder/${sf.slug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                      margin: 0,
-                      fontSize: "var(--font-size-sm)",
-                      fontWeight: "var(--font-weight-semibold)",
-                      color: "var(--color-text-primary)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      textDecoration: "none",
-                      display: "block",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-accent)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
-                  >
-                    {sf.title}
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={paginated.map((sf) => sf.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {paginated.map((sf) => (
+                <SortableSubfolderRow key={sf.id} subfolder={sf} onKeyMove={handleKeyboardMove}>
+                  <div style={{ gridColumn: "2 / -1", display: "contents" }}>
+                    {/* Title + description */}
+                    <div className={styles.cellFlex}>
+                      <div className={styles.iconBadge} style={{ background: "var(--color-bg-muted)", color: "var(--color-text-secondary)" }}>
+                        <Icon d={IC.subfolder} size={16} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <a
+                          href={`/${user?.username || "u"}/folder/${sf.slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            margin: 0,
+                            fontSize: "var(--font-size-sm)",
+                            fontWeight: "var(--font-weight-semibold)",
+                            color: "var(--color-text-primary)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            textDecoration: "none",
+                            display: "block",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-accent)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
+                        >
+                          {sf.title}
+                          <svg
+                            width="11"
+                            height="11"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{
+                              marginLeft: "4px",
+                              opacity: 0.3,
+                              verticalAlign: "middle",
+                              display: "inline",
+                            }}
+                          >
+                            <path d="M7 17l9.2-9.2M17 17V7H7" />
+                          </svg>
+                        </a>
+                        {sf.description && (
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "var(--font-size-xs)",
+                              color: "var(--color-text-muted)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {sf.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Parent folder (clickable) */}
+                    <div
                       style={{
-                        marginLeft: "4px",
-                        opacity: 0.3,
-                        verticalAlign: "middle",
-                        display: "inline",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "var(--space-2)",
                       }}
                     >
-                      <path d="M7 17l9.2-9.2M17 17V7H7" />
-                    </svg>
-                  </a>
-                  {sf.description && (
-                    <p
+                      <Icon d={IC.folder} size={13} />
+                      {sf.parentSlug ? (
+                        <a
+                          href={`/${user?.username || "u"}/folder/${sf.parentSlug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            fontSize: "var(--font-size-xs)",
+                            color: "var(--color-accent)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            textDecoration: "none",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                          onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                        >
+                          {sf.parentTitle}
+                        </a>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: "var(--font-size-xs)",
+                            color: "var(--color-text-secondary)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {sf.parentTitle}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Note count */}
+                    <span
                       style={{
-                        margin: 0,
+                        fontSize: "var(--font-size-sm)",
+                        color: "var(--color-text-secondary)",
+                      }}
+                    >
+                      {sf.derivedNoteCount}
+                    </span>
+
+                    {/* Visibility */}
+                    <Badge variant={sf.visibility === "public" ? "accent" : "muted"}>
+                      {sf.visibility}
+                    </Badge>
+
+                    {/* Updated date */}
+                    <span
+                      style={{
                         fontSize: "var(--font-size-xs)",
                         color: "var(--color-text-muted)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
                       }}
                     >
-                      {sf.description}
-                    </p>
-                  )}
-                </div>
-              </div>
+                      {formatDate(sf.updated_at)}
+                    </span>
 
-              {/* Parent folder (clickable) */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--space-2)",
-                }}
-              >
-                <Icon d={IC.folder} size={13} />
-                {sf.parentSlug ? (
-                  <a
-                    href={`/${user?.username || "u"}/folder/${sf.parentSlug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                      fontSize: "var(--font-size-xs)",
-                      color: "var(--color-accent)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      textDecoration: "none",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                    onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                  >
-                    {sf.parentTitle}
-                  </a>
-                ) : (
-                  <span
-                    style={{
-                      fontSize: "var(--font-size-xs)",
-                      color: "var(--color-text-secondary)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {sf.parentTitle}
-                  </span>
-                )}
-              </div>
+                    {/* Actions */}
+                    <div className={styles.cellActions}>
+                      <Button
+                        variant="accent-ghost"
+                        size="xs"
+                        onClick={() => handleEditSubfolder(sf)}
+                      >
+                        Edit
+                      </Button>
+                      {/* Share is shown for PRIVATE folders (to invite collaborators) */}
+                      {sf.visibility === "private" && (
+                        <Button
+                          variant="accent-ghost"
+                          size="xs"
+                          onClick={() => setShareItem(sf as Folder)}
+                        >
+                          Share
+                        </Button>
+                      )}
+                      <Button
+                        variant="danger"
+                        size="xs"
+                        onClick={() => setPendingDeleteId(sf.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </SortableSubfolderRow>
+              ))}
+            </SortableContext>
 
-              {/* Note count */}
-              <span
-                style={{
-                  fontSize: "var(--font-size-sm)",
-                  color: "var(--color-text-secondary)",
-                }}
-              >
-                {sf.derivedNoteCount}
-              </span>
-
-              {/* Visibility */}
-              <Badge variant={sf.visibility === "public" ? "accent" : "muted"}>
-                {sf.visibility}
-              </Badge>
-
-              {/* Updated date */}
-              <span
-                style={{
-                  fontSize: "var(--font-size-xs)",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                {formatDate(sf.updated_at)}
-              </span>
-
-              {/* Actions */}
-              <div className={styles.cellActions}>
-                <Button
-                  variant="accent-ghost"
-                  size="xs"
-                  onClick={() => handleEditSubfolder(sf)}
-                >
-                  Edit
-                </Button>
-                {/* Share is shown for PRIVATE folders (to invite collaborators) */}
-                {sf.visibility === "private" && (
-                  <Button
-                    variant="accent-ghost"
-                    size="xs"
-                    onClick={() => setShareItem(sf as Folder)}
-                  >
-                    Share
-                  </Button>
-                )}
-                <Button
-                  variant="danger"
-                  size="xs"
-                  onClick={() => setPendingDeleteId(sf.id)}
-                >
-                  Delete
-                </Button>
-              </div>
+            {/* ARIA live region for reorder announcements */}
+            <div aria-live="polite" aria-atomic="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>
+              {reorderAnnounce}
             </div>
-          ))}
+
+            {/* Drag overlay — floating clone while dragging */}
+            <DragOverlay dropAnimation={null}>
+              {activeDragSubfolder ? <SubfolderDragOverlay subfolder={activeDragSubfolder} /> : null}
+            </DragOverlay>
+          </DndContext>
         </div>
       ) : (
         <EmptyState
@@ -587,30 +921,13 @@ export function DashboardSubfolders() {
         />
       )}
 
-      {/* Pagination */}
-      {totalFiltered > PAGE_SIZE && (
-        <div className={styles.paginationRow}>
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className={styles.paginationBtn}
-            aria-label="Previous page"
-          >
-            ← Prev
-          </button>
-          <span className={styles.paginationInfo}>
-            Page {page} of {Math.ceil(totalFiltered / PAGE_SIZE)}
-          </span>
-          <button
-            disabled={page >= Math.ceil(totalFiltered / PAGE_SIZE)}
-            onClick={() => setPage((p) => p + 1)}
-            className={styles.paginationBtn}
-            aria-label="Next page"
-          >
-            Next →
-          </button>
-        </div>
-      )}
+      <PaginationBar
+        currentPage={page}
+        totalPages={Math.ceil(totalFiltered / PAGE_SIZE)}
+        totalItems={totalFiltered}
+        onPageChange={setPage}
+        size="md"
+      />
 
       {/* ------------------------------------------------------------------ */}
       {/* Create modal                                                        */}

@@ -20,6 +20,7 @@ const userNav: NavItem[] = [
   { label: "Folders", href: "/dashboard/folders", icon: IC.folder },
   { label: "Subfolders", href: "/dashboard/subfolders", icon: IC.subfolder },
   { label: "Notes", href: "/dashboard/notes", icon: IC.notes },
+  { label: "Trash", href: "/dashboard/trash", icon: IC.notes },
   { label: "Collaborators", href: "/dashboard/collaborators", icon: IC.users },
   { label: "Activity Log", href: "/dashboard/activity", icon: IC.bell },
   { label: "Collaborations", href: "/dashboard/collaborations", icon: IC.share },

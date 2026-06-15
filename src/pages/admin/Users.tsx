@@ -10,6 +10,8 @@ import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
 import { safeStr, safeBool, safeNum } from "@/lib/safeParse";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
+import { PaginationBar } from "@/components/PaginationBar";
 import styles from "@/styles/admin.module.css";
 
 const TIERS = ["free", "bronze", "silver", "gold"] as const;
@@ -48,21 +50,11 @@ export function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [usersList, setUsersList] = useState<UserRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { search, setSearch, debouncedSearch } = useDebouncedSearch({ onSearchChange: () => setPage(1) });
   const [filter, setFilter] = useState<"all" | "admin" | "user">("all");
 
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
-
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -126,7 +118,6 @@ export function AdminUsers() {
       setUsersList(rows);
       setTotalCount(safeNum(countData));
     } catch (err) {
-      console.error("Error loading users:", err);
       addToast("Failed to load users. Try again.", "error");
     } finally {
       setLoading(false);
@@ -436,16 +427,12 @@ export function AdminUsers() {
           } />
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className={styles.paginationBar}>
-            <span>{totalCount} total · Page {page} of {totalPages}</span>
-            <div className={styles.paginationBtnGroup}>
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className={styles.paginationBtn} aria-label="Previous page">← Prev</button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className={styles.paginationBtn} aria-label="Next page">Next →</button>
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalCount}
+          onPageChange={setPage}
+        />
       </Card>
 
       {/* ========================================================= */}

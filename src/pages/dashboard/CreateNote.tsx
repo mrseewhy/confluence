@@ -104,8 +104,7 @@ export function CreateNote() {
     }
     if (!user) return;
     if (user.is_banned) {
-      console.error("Account is banned — cannot create notes.");
-      return;
+      return; // Account is banned — action prevented server-side
     }
     setFolderError("");
     justManuallySaved.current = true;
@@ -113,8 +112,8 @@ export function CreateNote() {
       await editor.save(user.id);
       broadcastCurrentState();
       navigate("/dashboard/notes");
-    } catch (err) {
-      console.error("[CreateNote] save failed", err);
+    } catch {
+      // Save failure is shown via editor.saveError in the UI
     } finally {
       // Reset manually-saved flag even on failure so auto-save can retry
       justManuallySaved.current = false;

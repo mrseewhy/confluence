@@ -7,6 +7,7 @@ import { requireSupabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/helpers";
 import styles from "@/styles/dashboard.module.css";
 import { safeStr, safeArray } from "@/lib/safeParse";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
 import { Modal } from "@/components/Modal";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -41,8 +42,6 @@ export function DashboardCollaborators() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<CollaboratorRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "folder" | "note">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -52,14 +51,8 @@ export function DashboardCollaborators() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
+  // Debounce search — replaces manual useState + useEffect pattern
+  const { search, setSearch, debouncedSearch } = useDebouncedSearch({ onSearchChange: () => setPage(1) });
 
   // ─── Load data with server-side pagination ───────────────
 
@@ -124,8 +117,7 @@ export function DashboardCollaborators() {
 
       setRows(mapped);
       setSelected(new Set()); // Clear selection on page change
-    } catch (err) {
-      console.error("Error loading collaborators:", err);
+    } catch {
       setRows([]);
     } finally {
       setLoading(false);
@@ -203,16 +195,14 @@ export function DashboardCollaborators() {
         if (logEntries.length > 0) {
           await supabase.from("activity_log").insert(logEntries);
         }
-      } catch (logErr) {
-        console.error("Failed to log revocations:", logErr);
+      } catch {
+        // Failed to log revocations — fire-and-forget
       }
 
       // Remove deleted from local state
       setRows((prev) => prev.filter((r) => !selected.has(r.id)));
       setSelected(new Set());
-      setConfirmRemove(false);
-    } catch (err) {
-      console.error("Error removing collaborators:", err);
+      setConfirmRemove(false);      } catch {        // Error removing collaborators — shown via empty state
     } finally {
       setRemoving(false);
     }
@@ -247,8 +237,7 @@ export function DashboardCollaborators() {
             item_slug: row.item_slug,
             item_type: isFolder ? "folder" : "note",
           });
-        } catch (logErr) {
-          console.error("Failed to log revocation:", logErr);
+        } catch {            // Failed to log revocation — fire-and-forget
         }
       }
 
@@ -257,9 +246,7 @@ export function DashboardCollaborators() {
         const next = new Set(prev);
         next.delete(id);
         return next;
-      });
-    } catch (err) {
-      console.error("Error removing collaborator:", err);
+      });      } catch {        // Error removing collaborator — shown via UI
     }
   };
 

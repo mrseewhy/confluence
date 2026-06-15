@@ -4,14 +4,20 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 
 type ToastType = 'success' | 'error' | 'info'
 
+export interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
 interface Toast {
   id: string
   message: string
   type: ToastType
+  action?: ToastAction
 }
 
 interface ToastContextValue {
-  addToast: (message: string, type?: ToastType) => void
+  addToast: (message: string, type?: ToastType, action?: ToastAction) => void
 }
 
 // ── Context ───────────────────────────────────────────────────
@@ -31,10 +37,11 @@ let toastCounter = 0
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [clickedActionId, setClickedActionId] = useState<string | null>(null)
 
-  const addToast = useCallback((message: string, type: ToastType = 'info') => {
+  const addToast = useCallback((message: string, type: ToastType = 'info', action?: ToastAction) => {
     const id = `toast-${++toastCounter}-${Date.now()}`
-    setToasts(prev => [...prev, { id, message, type }])
+    setToasts(prev => [...prev, { id, message, type, action }])
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id))
     }, 3500)
@@ -102,6 +109,36 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               }}
             >
               <span>{toast.message}</span>
+              {toast.action && (
+                <button
+                  onClick={() => {
+                    if (clickedActionId === toast.id) return
+                    setClickedActionId(toast.id)
+                    toast.action!.onClick()
+                    setTimeout(() => {
+                      removeToast(toast.id)
+                      setClickedActionId(null)
+                    }, 600)
+                  }}
+                  style={{
+                    background: clickedActionId === toast.id ? 'transparent' : 'transparent',
+                    border: clickedActionId === toast.id
+                      ? `1px solid ${toastColor(toast.type)}`
+                      : `1px solid ${toastColor(toast.type)}`,
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: clickedActionId === toast.id ? 'default' : 'pointer',
+                    color: 'inherit',
+                    fontSize: 'var(--font-size-xs)',
+                    fontWeight: 'var(--font-weight-semibold)',
+                    padding: '2px 8px',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.2s ease',
+                    transform: clickedActionId === toast.id ? 'scale(1.1)' : 'scale(1)',
+                  }}
+                >
+                  {clickedActionId === toast.id ? '✓' : toast.action.label}
+                </button>
+              )}
               <button
                 onClick={() => removeToast(toast.id)}
                 aria-label="Dismiss"

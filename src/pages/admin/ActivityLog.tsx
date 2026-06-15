@@ -7,6 +7,7 @@ import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDate, timeAgo } from "@/lib/helpers";
 import { safeStr, safeArray, safeJoin } from "@/lib/safeParse";
+import { PaginationBar } from "@/components/PaginationBar";
 import styles from "@/styles/admin.module.css";
 
 const PAGE_SIZE = 30;
@@ -84,8 +85,8 @@ export function AdminActivityLog() {
         });
 
         setEntries(mapped);
-      } catch (err) {
-        console.error("Error loading admin activity log:", err);
+      } catch {
+        // Error loading admin activity log — shown via empty state
       } finally {
         setLoading(false);
       }
@@ -328,15 +329,13 @@ export function AdminActivityLog() {
           description={search || actionFilter !== "all" ? "Try adjusting your search or filters." : "Platform activity will appear here as users interact with the system."} />
       )}
 
-      {totalPages > 1 && (
-        <div className={styles.paginationBar} style={{ marginTop: "var(--space-4)" }}>
-          <span>Page {page} of {totalPages} ({filtered.length} total)</span>
-          <div className={styles.paginationBtnGroup}>
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className={styles.paginationBtn} aria-label="Previous page">← Prev</button>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className={styles.paginationBtn} aria-label="Next page">Next →</button>
-          </div>
-        </div>
-      )}
+      <PaginationBar
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={filtered.length}
+        onPageChange={setPage}
+        style={{ marginTop: "var(--space-4)" }}
+      />
     </DashboardLayout>
   );
 }

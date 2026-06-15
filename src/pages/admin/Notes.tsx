@@ -11,6 +11,8 @@ import { formatDate } from "@/lib/helpers";
 import { useToast } from "@/components/Toast";
 import { TransferOwnershipModal } from "@/components/TransferOwnershipModal";
 import { safeStr, safeArray } from "@/lib/safeParse";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
+import { PaginationBar } from "@/components/PaginationBar";
 import styles from "@/styles/admin.module.css";
 import type { Visibility } from "@/types";
 
@@ -49,19 +51,9 @@ export function AdminNotes() {
   const [notesList, setNotesList] = useState<NoteRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [collaboratorMap, setCollaboratorMap] = useState<Record<string, number>>({});
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { search, setSearch, debouncedSearch } = useDebouncedSearch({ onSearchChange: () => setPage(1) });
   const [vis, setVis] = useState<"all" | "public" | "private">("all");
   const [page, setPage] = useState(1);
-
-  // Debounce search to avoid rapid API calls
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -113,7 +105,7 @@ export function AdminNotes() {
         }
       }
     } catch (err) {
-      console.error("Error loading notes:", err);
+      addToast("Failed to load notes", "error");
     } finally {
       setLoading(false);
     }
@@ -323,15 +315,12 @@ export function AdminNotes() {
           } />
         )}
 
-        {totalPages > 1 && (
-          <div className={styles.paginationBar}>
-            <span>{totalCount} total · Page {page} of {totalPages}</span>
-            <div className={styles.paginationBtnGroup}>
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className={styles.paginationBtn} aria-label="Previous page">← Prev</button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className={styles.paginationBtn} aria-label="Next page">Next →</button>
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalCount}
+          onPageChange={setPage}
+        />
       </Card>
 
       {/* ========================================================= */}

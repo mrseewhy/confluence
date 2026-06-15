@@ -42,7 +42,7 @@ export interface RemoteCursor {
   username: string
 }
 
-interface UseRealtimeCollaborationOptions {
+export interface UseRealtimeCollaborationOptions {
   noteId: string | null
   userId: string
   username: string

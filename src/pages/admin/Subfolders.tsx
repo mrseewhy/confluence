@@ -12,6 +12,8 @@ import { useToast } from "@/components/Toast";
 import { TransferOwnershipModal } from "@/components/TransferOwnershipModal";
 import styles from "@/styles/admin.module.css";
 import { safeStr } from "@/lib/safeParse";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
+import { PaginationBar } from "@/components/PaginationBar";
 import type { Folder } from "@/types";
 
 interface SubfolderRow extends Folder {
@@ -40,19 +42,9 @@ export function AdminSubfolders() {
   const [subfolders, setSubfolders] = useState<SubfolderRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [collaboratorMap, setCollaboratorMap] = useState<Record<string, number>>({});
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { search, setSearch, debouncedSearch } = useDebouncedSearch({ onSearchChange: () => setPage(1) });
   const [vis, setVis] = useState<"all" | "public" | "private">("all");
   const [page, setPage] = useState(1);
-
-  // Debounce search to avoid rapid API calls
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [visSelectedId, setVisSelectedId] = useState<string | null>(null);
@@ -100,7 +92,7 @@ export function AdminSubfolders() {
         }
       }
     } catch (err) {
-      console.error("Error loading subfolders:", err);
+      addToast("Failed to load subfolders", "error");
     } finally {
       setLoading(false);
     }
@@ -220,15 +212,12 @@ export function AdminSubfolders() {
           } />
         )}
 
-        {totalPages > 1 && (
-          <div className={styles.paginationBar}>
-            <span>{totalCount} total · Page {page} of {totalPages}</span>
-            <div className={styles.paginationBtnGroup}>
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className={styles.paginationBtn} aria-label="Previous page">← Prev</button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className={styles.paginationBtn} aria-label="Next page">Next →</button>
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalCount}
+          onPageChange={setPage}
+        />
       </Card>
 
       {/* ========================================================= */}

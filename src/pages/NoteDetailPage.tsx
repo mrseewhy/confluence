@@ -14,13 +14,14 @@ import type { Note, NoteBlock } from "@/types";
 
 export function NoteDetailPage() {
   const { username, slug } = useParams<{ username: string; slug: string }>();
-  const { user: authUser } = useAuth();
+  const { user: authUser, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState<Note | null>(null);
   const [blocks, setBlocks] = useState<NoteBlock[]>([]);
   const [ownerUsername, setOwnerUsername] = useState<string>("");
   const { addToast } = useToast();
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showInviteForm, setShowInviteForm] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [isCollaborator, setIsCollaborator] = useState(false);
   const [collaborators, setCollaborators] = useState<{ email: string; access_level: string }[]>([]);
@@ -561,8 +562,8 @@ export function NoteDetailPage() {
           />
         </div>
 
-        {/* Collaborators inline — owner sees who has access without opening modal */}
-        {isOwner && collaborators.length > 0 && (
+        {/* Collaborators inline — owner can add/remove without opening ShareModal */}
+        {isOwner && (
           <div
             style={{
               marginTop: "var(--space-5)",
@@ -572,18 +573,44 @@ export function NoteDetailPage() {
               borderRadius: "var(--radius-lg)",
             }}
           >
-            <p
-              style={{
-                margin: "0 0 var(--space-3)",
-                fontSize: "var(--font-size-xs)",
-                fontWeight: "var(--font-weight-semibold)",
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "var(--color-text-muted)",
-              }}
-            >
-              Collaborators ({collaborators.length})
-            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-3)" }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "var(--font-size-xs)",
+                  fontWeight: "var(--font-weight-semibold)",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                Collaborators ({collaborators.length})
+              </p>
+              <Button
+                variant={showInviteForm ? "primary" : "accent-ghost"}
+                size="xs"
+                onClick={() => setShowInviteForm((p) => !p)}
+              >
+                {showInviteForm ? "Close" : "+ Invite"}
+              </Button>
+            </div>
+
+            {/* Inline invite form */}
+            {showInviteForm && (
+              <InviteCollaboratorInline
+                noteId={note.id}
+                noteTitle={note.title}
+                noteSlug={note.slug}
+                ownerUsername={ownerUsername}
+                ownerId={authUser?.id}
+                onInvited={(newCollab: { email: string; accessLevel: string }) => {
+                  setCollaborators((prev) => [...prev, { email: newCollab.email, access_level: newCollab.accessLevel }]);
+                  setShowInviteForm(false);
+                }}
+              />
+            )}
+
+            {/* List with inline revoke */}
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
               {collaborators.map((c) => (
                 <div key={c.email} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
@@ -603,6 +630,35 @@ export function NoteDetailPage() {
                   <Badge variant={c.access_level === "editor" ? "success" : "default"} style={{ fontSize: "9px", textTransform: "capitalize" }}>
                     {c.access_level}
                   </Badge>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const supabase = requireSupabase();
+                        await supabase.from("collaborators")
+                          .delete()
+                          .eq("note_id", note.id)
+                          .eq("invitee_email", c.email);
+                        setCollaborators((prev) => prev.filter((x) => x.email !== c.email));
+                        addToast(`Revoked access for ${c.email}`, "success");
+                      } catch {
+                        addToast("Failed to revoke access", "error");
+                      }
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--color-danger)",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                      padding: "2px 6px",
+                      borderRadius: "var(--radius-sm)",
+                      marginLeft: "auto",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-danger-subtle)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    Revoke
+                  </button>
                 </div>
               ))}
             </div>
@@ -657,7 +713,7 @@ export function NoteDetailPage() {
         <TransferOwnershipModal
           isOpen={showTransferModal}
           onClose={() => setShowTransferModal(false)}
-          onTransfer={async (newOwnerId: string, _newOwnerName: string, _newOwnerEmail: string) => {
+          onTransfer={async (newOwnerId: string) => {
             try {
               const supabase = requireSupabase();
               const { error } = await supabase
@@ -675,7 +731,7 @@ export function NoteDetailPage() {
             }
           }}
           itemTitle={note.title}
-          currentOwnerName={authUser?.full_name || null}
+          currentOwnerName={profile?.full_name || null}
         />
       )}
     </>

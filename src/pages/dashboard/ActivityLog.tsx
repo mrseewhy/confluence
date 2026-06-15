@@ -6,6 +6,7 @@ import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import styles from "@/styles/dashboard.module.css";
 import { safeStr, safeArray } from "@/lib/safeParse";
+import { PaginationBar } from "@/components/PaginationBar";
 import { formatDate, timeAgo } from "@/lib/helpers";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -90,8 +91,7 @@ export function DashboardActivityLog() {
       }));
 
       setEntries(mapped);
-    } catch (err) {
-      console.error("Error loading activity log:", err);
+    } catch {
       setEntries([]);
     } finally {
       setLoading(false);
@@ -734,70 +734,13 @@ const msDay = 86400000;
         />
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginTop: "var(--space-4)",
-            fontSize: "var(--font-size-xs)",
-            color: "var(--color-text-muted)",
-          }}
-        >
-          <span>
-            Page {page} of {totalPages} ({filtered.length} total)
-          </span>
-          <div style={{ display: "flex", gap: "var(--space-2)" }}>
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              style={{
-                padding: "4px 10px",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--color-border)",
-                background:
-                  page <= 1 ? "var(--color-bg-muted)" : "var(--color-bg-elevated)",
-                color:
-                  page <= 1
-                    ? "var(--color-text-muted)"
-                    : "var(--color-text-primary)",
-                cursor: page <= 1 ? "default" : "pointer",
-                fontSize: "11px",
-                fontFamily: "var(--font-sans)",
-                fontWeight: 500,
-              }}
-            >
-              ← Prev
-            </button>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              style={{
-                padding: "4px 10px",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--color-border)",
-                background:
-                  page >= totalPages
-                    ? "var(--color-bg-muted)"
-                    : "var(--color-bg-elevated)",
-                color:
-                  page >= totalPages
-                    ? "var(--color-text-muted)"
-                    : "var(--color-text-primary)",
-                cursor: page >= totalPages ? "default" : "pointer",
-                fontSize: "11px",
-                fontFamily: "var(--font-sans)",
-
-                fontWeight: 500,
-              }}
-            >
-              Next →
-            </button>
-          </div>
-        </div>
-      )}
+      <PaginationBar
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={filtered.length}
+        onPageChange={setPage}
+        style={{ marginTop: "var(--space-4)" }}
+      />
     </DashboardLayout>
   );
 }

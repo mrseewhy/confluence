@@ -129,6 +129,33 @@ export function sanitizeImageUrl(url: string): string | null {
   return url
 }
 
+/**
+ * Validate a user-provided URL — returns null for unsafe protocols
+ * or malformed URLs. Use before rendering user-provided links.
+ */
+export function validateUrl(url: string): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    const allowed = ['http:', 'https:', 'mailto:']
+    if (!allowed.includes(parsed.protocol)) return null
+    return url
+  } catch {
+    return null
+  }
+}
+
+/**
+ * ⚠️  XSS WARNING  ⚠️
+ *
+ * All block content (text, code, headings) is rendered through
+ * React's default text rendering, which escapes HTML automatically.
+ *
+ * NEVER use `dangerouslySetInnerHTML` with user-supplied block content.
+ * If you need rich text rendering in the future, use a proper
+ * sanitization library like DOMPurify before setting inner HTML.
+ */
+
 // ── Owner query fragment ──────────────────────────────────────
 
 export const OWNER_QUERY = 'id, full_name, avatar_url, username'

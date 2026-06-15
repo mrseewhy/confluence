@@ -83,10 +83,9 @@ export function EditNote() {
 
         // Pre-populate the editor
         loadFromExisting(noteData, blocksData || []);
-      } catch (err) {
-        console.error("Error loading note for editing:", err);
-        setNotFound(true);
-      } finally {
+    } catch {
+      setNotFound(true);
+    } finally {
         setLoading(false);
       }
     };
@@ -176,8 +175,7 @@ export function EditNote() {
     }
     if (!user) return;
     if (user.is_banned) {
-      console.error("Account is banned — cannot edit notes.");
-      return;
+      return; // Account is banned — action prevented server-side
     }
     setFolderError("");
     justManuallySaved.current = true;
@@ -185,8 +183,8 @@ export function EditNote() {
       await editor.save(user.id);
       broadcastCurrentState();
       navigate("/dashboard/notes");
-    } catch (err) {
-      console.error("[EditNote] save failed", err);
+    } catch {
+      // Save failure is shown via editor.saveError in the UI
     } finally {
       // Reset manually-saved flag even on failure so auto-save can retry
       justManuallySaved.current = false;

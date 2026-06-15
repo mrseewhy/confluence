@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-// Store original env and restore after each test
-const originalEnv = { ...import.meta.env }
-
 beforeEach(() => {
+  vi.unstubAllEnvs()
   vi.resetModules()
 })
 

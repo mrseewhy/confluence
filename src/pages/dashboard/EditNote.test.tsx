@@ -163,17 +163,13 @@ describe('EditNote — banned user guard', () => {
     mockIsBanned = true
     await renderEditNote()
 
-    // Wait for component to finish loading (it still loads note data for banned users)
+    // Wait for component to finish loading
     const saveButton = await screen.findByTestId('save-button', {}, { timeout: 4000 })
     expect(saveButton).toBeDefined()
 
     // Click save — the ban check should prevent navigation
     saveButton.click()
 
-    // console.error should have been called with the banned message
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('banned'),
-    )
     // Navigate should NOT be called — save was blocked
     expect(mockNavigate).not.toHaveBeenCalled()
   })

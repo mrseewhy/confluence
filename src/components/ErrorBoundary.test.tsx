@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { ErrorBoundary } from './ErrorBoundary'
 
@@ -8,7 +8,7 @@ function GoodChild() {
   return <div>All good here</div>
 }
 
-function BadChild({ message = 'Test error' }: { message?: string }) {
+const BadChild = ({ message = 'Test error' }: { message?: string }) => {
   throw new Error(message)
 }
 

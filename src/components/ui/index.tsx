@@ -195,15 +195,17 @@ export function Input({ label, hint, error, leftIcon, rightIcon, style, id, ...p
             transition: 'border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default)',
             ...style,
           }}
+          {...props}
           onFocus={e => {
+            if (props.onFocus) props.onFocus(e)
             e.currentTarget.style.borderColor = 'var(--color-accent)'
             e.currentTarget.style.boxShadow = '0 0 0 3px var(--color-accent-subtle)'
           }}
           onBlur={e => {
+            if (props.onBlur) props.onBlur(e)
             e.currentTarget.style.borderColor = error ? 'var(--color-danger)' : 'var(--color-border)'
             e.currentTarget.style.boxShadow = 'none'
           }}
-          {...props}
         />
         {rightIcon && (
           <span style={{
