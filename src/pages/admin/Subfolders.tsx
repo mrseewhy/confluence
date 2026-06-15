@@ -91,7 +91,7 @@ export function AdminSubfolders() {
           setCollaboratorMap(map);
         }
       }
-    } catch (err) {
+    } catch {
       addToast("Failed to load subfolders", "error");
     } finally {
       setLoading(false);

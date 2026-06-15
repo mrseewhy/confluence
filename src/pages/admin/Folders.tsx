@@ -92,7 +92,7 @@ export function AdminFolders() {
           setCollaboratorMap(map);
         }
       }
-    } catch (err) {
+    } catch {
       addToast("Failed to load folders", "error");
     } finally {
       setLoading(false);

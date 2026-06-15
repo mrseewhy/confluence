@@ -117,7 +117,7 @@ export function AdminUsers() {
 
       setUsersList(rows);
       setTotalCount(safeNum(countData));
-    } catch (err) {
+    } catch {
       addToast("Failed to load users. Try again.", "error");
     } finally {
       setLoading(false);

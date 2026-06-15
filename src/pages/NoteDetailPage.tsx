@@ -6,6 +6,7 @@ import { useAuth } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
 import { TransferOwnershipModal } from "@/components/TransferOwnershipModal";
+import { InviteCollaboratorInline } from "@/components/InviteCollaboratorInline";
 import { formatDate, detectVideoProvider, getVideoEmbedUrl, sanitizeImageUrl } from "@/lib/helpers";
 import { ShareButtons } from "@/components/ShareButtons";
 import { useToast } from "@/components/Toast";

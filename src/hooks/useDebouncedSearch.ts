@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 
 interface UseDebouncedSearchOptions {
   /** Delay in ms before the debounced value updates (default: 300) */

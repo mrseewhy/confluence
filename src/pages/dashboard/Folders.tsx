@@ -39,7 +39,7 @@ function SortableFolderRow({
   onKeyMove,
   children,
 }: {
-  folder: { id: string; sort_order?: number };
+  folder: { id: string; sort_order?: number; title?: string };
   isDragOverlay?: boolean;
   onKeyMove?: (id: string, direction: 'up' | 'down') => void;
   children: React.ReactNode;
@@ -85,9 +85,7 @@ function SortableFolderRow({
       ref={setNodeRef}
       style={style}
       className={styles.tableRow}
-      tabIndex={isDragOverlay ? -1 : 0}
       onKeyDown={isDragOverlay ? undefined : handleKeyDown}
-      role="listitem"
       aria-label={`${isDragOverlay ? '' : 'Drag to reorder. Press Alt+ArrowUp or Alt+ArrowDown to move. '}${folder.title || ''}`}
       {...attributes}
       {...(isDragOverlay ? {} : listeners)}
@@ -122,6 +120,30 @@ function SortableFolderRow({
         </div>
       )}
     </div>
+  );
+}
+
+function FolderDragOverlay({ folder }: { folder: Folder }) {
+  return (
+    <SortableFolderRow folder={folder} isDragOverlay>
+      <div style={{ gridColumn: "2 / -1", display: "contents" }}>
+        <div className={styles.cellFlex}>
+          <div className={styles.iconBadge} style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)" }}>
+            <Icon d={IC.folder} size={16} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)" }}>
+              {folder.title}
+            </span>
+            {folder.description && (
+              <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                {folder.description}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </SortableFolderRow>
   );
 }
 
@@ -216,7 +238,7 @@ export function DashboardFolders() {
       const allSubs = subfolders || [];
       setFoldersList([...(folders || []), ...allSubs]);
       setNotesList(notes || []);
-    } catch (err) {
+    } catch {
       addToast("Failed to load folders", "error");
     } finally {
       setLoading(false);
@@ -288,7 +310,7 @@ useEffect(() => {
       setNewDesc("");
       setNewVisibility("public");
       addToast("Folder created successfully", "success");
-    } catch (err) {
+    } catch {
       addToast("Failed to create folder", "error");
     }
   };
@@ -321,7 +343,7 @@ useEffect(() => {
       await fetchData();
       setEditFolder(null);
       addToast("Folder updated successfully", "success");
-    } catch (err) {
+    } catch {
       addToast("Failed to update folder", "error");
     } finally {
       setEditing(false);
@@ -369,7 +391,7 @@ useEffect(() => {
           await fetchData();
         },
       });
-    } catch (err) {
+    } catch {
       addToast("Failed to delete folder", "error");
     }
   };
@@ -489,32 +511,6 @@ useEffect(() => {
       addToast("Failed to reorder. Try again.", "error");
     }
   };
-
-  // ── Drag overlay clone ────────────────────────────────────
-
-  function FolderDragOverlay({ folder }: { folder: Folder }) {
-    return (
-      <SortableFolderRow folder={folder} isDragOverlay>
-        <div style={{ gridColumn: "2 / -1", display: "contents" }}>
-          <div className={styles.cellFlex}>
-            <div className={styles.iconBadge} style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)" }}>
-              <Icon d={IC.folder} size={16} />
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)" }}>
-                {folder.title}
-              </span>
-              {folder.description && (
-                <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-                  {folder.description}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </SortableFolderRow>
-    );
-  }
 
   // Pre-calculate subfolders and notes count for rendering
   const enrichedFolders = rootFolders.map((folder) => {

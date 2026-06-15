@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
-import { Badge, Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { useToast } from "@/components/Toast";
@@ -24,7 +23,6 @@ export function DashboardTrash() {
   const [trashedNotes, setTrashedNotes] = useState<Note[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
-  const [restoreId, setRestoreId] = useState<string | null>(null);
   const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [cleaningUp, setCleaningUp] = useState(false);
@@ -71,6 +69,7 @@ export function DashboardTrash() {
   }, [user, page]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadTrash();
   }, [loadTrash]);
 
@@ -104,8 +103,6 @@ export function DashboardTrash() {
       });
     } catch {
       addToast("Failed to restore note", "error");
-    } finally {
-      setRestoreId(null);
     }
   };
 

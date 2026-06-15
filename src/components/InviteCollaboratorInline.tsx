@@ -15,7 +15,6 @@ export function InviteCollaboratorInline({
   noteId,
   noteTitle,
   noteSlug,
-  ownerUsername,
   ownerId,
   onInvited,
 }: InviteCollaboratorInlineProps) {

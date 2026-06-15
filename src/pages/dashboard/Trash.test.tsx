@@ -49,7 +49,7 @@ vi.mock('@/components/layout/DashboardIcon', () => ({
 
 vi.mock('@/components/ui', () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  Button: ({ children, onClick, ..._props }: {
+  Button: ({ children, onClick }: {
     children: React.ReactNode
     onClick?: () => void
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

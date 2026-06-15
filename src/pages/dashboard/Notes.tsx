@@ -87,9 +87,7 @@ function SortableNoteRow({
       ref={setNodeRef}
       style={style}
       className={`${styles.tableRow} ${styles.cols5_Notes}`}
-      tabIndex={isDragOverlay ? -1 : 0}
       onKeyDown={isDragOverlay ? undefined : handleKeyDown}
-      role="listitem"
       aria-label={`${isDragOverlay ? '' : 'Drag to reorder. Press Alt+ArrowUp or Alt+ArrowDown to move. '}${note.title || ''}`}
       {...attributes}
       {...(isDragOverlay ? {} : listeners)}
@@ -237,7 +235,7 @@ export function DashboardNotes() {
 
       setNotesList(data || []);
       setParentFolders(pfMap);
-    } catch (err) {
+    } catch {
       addToast("Failed to load notes", "error");
     } finally {
       setLoading(false);
@@ -304,7 +302,7 @@ export function DashboardNotes() {
           await fetchData();
         },
       });
-    } catch (err) {
+    } catch {
       addToast("Failed to delete note", "error");
     } finally {
       setDeleteConfirmId(null);

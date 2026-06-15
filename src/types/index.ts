@@ -41,6 +41,7 @@ export interface Folder {
   description: string | null
   slug: string
   visibility: Visibility
+  sort_order?: number
   created_at: string
   updated_at: string
   note_count?: number
@@ -57,6 +58,8 @@ export interface Note {
   description: string | null
   slug: string
   visibility: Visibility
+  sort_order?: number
+  deleted_at?: string | null
   created_at: string
   updated_at: string
   blocks?: NoteBlock[]

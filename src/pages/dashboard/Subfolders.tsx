@@ -52,7 +52,7 @@ function SortableSubfolderRow({
   onKeyMove,
   children,
 }: {
-  subfolder: { id: string; sort_order?: number };
+  subfolder: { id: string; sort_order?: number; title?: string };
   isDragOverlay?: boolean;
   onKeyMove?: (id: string, direction: 'up' | 'down') => void;
   children: React.ReactNode;
@@ -98,9 +98,7 @@ function SortableSubfolderRow({
       ref={setNodeRef}
       style={style}
       className={`${styles.tableRow} ${styles.cols6_Subfolders}`}
-      tabIndex={isDragOverlay ? -1 : 0}
       onKeyDown={isDragOverlay ? undefined : handleKeyDown}
-      role="listitem"
       aria-label={`${isDragOverlay ? '' : 'Drag to reorder. Press Alt+ArrowUp or Alt+ArrowDown to move. '}${subfolder.title || ''}`}
       {...attributes}
       {...(isDragOverlay ? {} : listeners)}
@@ -147,6 +145,30 @@ const DEFAULT_VISIBILITY: Visibility = "public";
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
+
+function SubfolderDragOverlay({ subfolder }: { subfolder: SubfolderRow }) {
+  return (
+    <SortableSubfolderRow subfolder={subfolder} isDragOverlay>
+      <div style={{ gridColumn: "2 / -1", display: "contents" }}>
+        <div className={styles.cellFlex}>
+          <div className={styles.iconBadge} style={{ background: "var(--color-bg-muted)", color: "var(--color-text-secondary)" }}>
+            <Icon d={IC.subfolder} size={16} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)" }}>
+              {subfolder.title}
+            </span>
+            {subfolder.description && (
+              <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                {subfolder.description}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </SortableSubfolderRow>
+  );
+}
 
 export function DashboardSubfolders() {
   const { profile } = useAuth();
@@ -405,7 +427,7 @@ export function DashboardSubfolders() {
       await loadData(debouncedSearch, page);
       setEditFolder(null);
       addToast("Subfolder updated successfully", "success");
-    } catch (err) {
+    } catch {
       setError("Failed to update subfolder. Please try again.");
     } finally {
       setEditing(false);
@@ -454,7 +476,7 @@ export function DashboardSubfolders() {
           await loadData(debouncedSearch, page);
         },
       });
-    } catch (err) {
+    } catch {
       setError("Failed to delete subfolder. Please try again.");
     } finally {
       setPendingDeleteId(null);
@@ -574,32 +596,6 @@ export function DashboardSubfolders() {
       addToast("Failed to reorder. Try again.", "error");
     }
   };
-
-  // ── Drag overlay clone ────────────────────────────────────
-
-  function SubfolderDragOverlay({ subfolder }: { subfolder: SubfolderRow }) {
-    return (
-      <SortableSubfolderRow subfolder={subfolder} isDragOverlay>
-        <div style={{ gridColumn: "2 / -1", display: "contents" }}>
-          <div className={styles.cellFlex}>
-            <div className={styles.iconBadge} style={{ background: "var(--color-bg-muted)", color: "var(--color-text-secondary)" }}>
-              <Icon d={IC.subfolder} size={16} />
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)" }}>
-                {subfolder.title}
-              </span>
-              {subfolder.description && (
-                <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-                  {subfolder.description}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </SortableSubfolderRow>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Render — loading / auth guard

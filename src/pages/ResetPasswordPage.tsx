@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout } from '@/components/layout/PageLayout'
-import { Button, Input } from '@/components/ui'
+import { Button } from '@/components/ui'
 import { PasswordInput } from '@/components/PasswordInput'
 import { requireSupabase } from '@/lib/supabase'
 

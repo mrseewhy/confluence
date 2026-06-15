@@ -48,8 +48,12 @@ export function DashboardCollaborations() {
 
   // ─── Load data with server-side pagination ────────────────
 
-  const loadData = useCallback(async (_currentSearch: string, currentType: "all" | "folder" | "note", currentPage: number) => {
-    if (!user) return;
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const loadData = useCallback(async (currentType: "all" | "folder" | "note", currentPage: number) => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -157,7 +161,7 @@ export function DashboardCollaborations() {
   }, [user]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadData(debouncedSearch, typeFilter, page); }, [page, debouncedSearch, typeFilter, loadData]);
+  useEffect(() => { void loadData(typeFilter, page); }, [page, typeFilter, loadData]);
 
   // ─── Derived — client-side search on current page ─────────
 

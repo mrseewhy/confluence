@@ -104,7 +104,7 @@ export function AdminNotes() {
           setCollaboratorMap(map);
         }
       }
-    } catch (err) {
+    } catch {
       addToast("Failed to load notes", "error");
     } finally {
       setLoading(false);
