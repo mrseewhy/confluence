@@ -405,18 +405,23 @@ export function DashboardNotes() {
       ) : (
         <EmptyState
           icon="📝"
-          title="No notes found"
-          description="Create your first note to get started."
+          title="Create your first note"
+          description="Notes are the building blocks of Confluence. Start writing — you can add headings, code snippets, images, and video embeds."
           action={
-            <Link to="/dashboard/notes/new">
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Icon d={IC.plus} size={14} />}
-              >
-                New note
-              </Button>
-            </Link>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-3)" }}>
+              <Link to="/dashboard/notes/new">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Icon d={IC.plus} size={14} />}
+                >
+                  New note
+                </Button>
+              </Link>
+              <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", maxWidth: 320, textAlign: "center" }}>
+                Tip: Create a folder first to organize your notes. Head to <a href="/dashboard/folders" style={{ color: "var(--color-accent)" }}>Folders</a> to get started.
+              </p>
+            </div>
           }
         />
       )}

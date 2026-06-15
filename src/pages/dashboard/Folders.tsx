@@ -31,6 +31,13 @@ export function DashboardFolders() {
   const [newDesc, setNewDesc] = useState("");
   const [newVisibility, setNewVisibility] = useState<Visibility>("public");
 
+  // Edit Folder State
+  const [editFolder, setEditFolder] = useState<Folder | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editVisibility, setEditVisibility] = useState<Visibility>("public");
+  const [editing, setEditing] = useState(false);
+
   // Pagination
   const [page, setPage] = useState(1);
   const [totalRootCount, setTotalRootCount] = useState(0);
@@ -132,6 +139,40 @@ useEffect(() => {
       setNewVisibility("public");
     } catch (err) {
       console.error("Error creating folder:", err);
+    }
+  };
+
+  const handleEditFolder = (folder: Folder) => {
+    setEditFolder(folder);
+    setEditTitle(folder.title);
+    setEditDesc(folder.description || "");
+    setEditVisibility(folder.visibility);
+  };
+
+  const handleUpdateFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTitle.trim() || !editFolder || !user) return;
+    setEditing(true);
+
+    try {
+      const supabase = requireSupabase();
+      const { error } = await supabase
+        .from("folders")
+        .update({
+          title: editTitle.trim(),
+          description: editDesc.trim() || null,
+          visibility: editVisibility,
+        })
+        .eq("id", editFolder.id);
+
+      if (error) throw error;
+
+      await fetchData();
+      setEditFolder(null);
+    } catch (err) {
+      console.error("Error updating folder:", err);
+    } finally {
+      setEditing(false);
     }
   };
 
@@ -323,6 +364,13 @@ useEffect(() => {
                 {formatDate(folder.updated_at)}
               </span>
               <div className={styles.cellActions}>
+                <Button
+                  variant="accent-ghost"
+                  size="xs"
+                  onClick={() => handleEditFolder(folder)}
+                >
+                  Edit
+                </Button>
                 {folder.visibility === "private" && (
                   <Button
                     variant="accent-ghost"
@@ -346,17 +394,22 @@ useEffect(() => {
       ) : (
         <EmptyState
           icon="📁"
-          title="No folders found"
-          description="Create your first folder to get started."
+          title="Organize your workspace"
+          description="Folders help you group related notes together. Create a folder, then add notes or subfolders inside it."
           action={
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsCreateOpen(true)}
-              leftIcon={<Icon d={IC.plus} size={14} />}
-            >
-              New folder
-            </Button>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-3)" }}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateOpen(true)}
+                leftIcon={<Icon d={IC.plus} size={14} />}
+              >
+                New folder
+              </Button>
+              <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", maxWidth: 320, textAlign: "center" }}>
+                Folders can be public (shareable link) or private (only visible to you and invited collaborators).
+              </p>
+            </div>
           }
         />
       )}
@@ -508,6 +561,52 @@ useEffect(() => {
                   Create Folder
                 </Button>
               </div>
+        </form>
+      </Modal>
+
+      {/* Edit Folder Modal */}
+      <Modal isOpen={!!editFolder} onClose={() => setEditFolder(null)} title="Edit Folder">
+        <form onSubmit={handleUpdateFolder} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <Input
+            label="Folder Title *"
+            placeholder="My folder"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            required
+          />
+          <Input
+            label="Description"
+            placeholder="A short description of this folder"
+            value={editDesc}
+            onChange={(e) => setEditDesc(e.target.value)}
+          />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <label style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>
+              Visibility
+            </label>
+            <div style={{ display: "flex", gap: "var(--space-3)", background: "var(--color-bg-subtle)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", padding: "4px", width: "fit-content" }}>
+              <button
+                type="button"
+                onClick={() => setEditVisibility("public")}
+                style={{ padding: "6px 12px", border: "none", background: editVisibility === "public" ? "var(--color-accent-subtle)" : "transparent", color: editVisibility === "public" ? "var(--color-accent)" : "var(--color-text-muted)", borderRadius: "var(--radius-md)", cursor: "pointer", fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}
+              >
+                🌎 Public
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditVisibility("private")}
+                style={{ padding: "6px 12px", border: "none", background: editVisibility === "private" ? "var(--color-accent-subtle)" : "transparent", color: editVisibility === "private" ? "var(--color-accent)" : "var(--color-text-muted)", borderRadius: "var(--radius-md)", cursor: "pointer", fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}
+              >
+                🔒 Private
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "flex-end", marginTop: "var(--space-4)" }}>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setEditFolder(null)}>Cancel</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={editing}>{editing ? "Saving…" : "Save changes"}</Button>
+          </div>
         </form>
       </Modal>
 

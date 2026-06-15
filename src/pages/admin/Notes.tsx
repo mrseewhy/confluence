@@ -63,6 +63,10 @@ export function AdminNotes() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [visSelectedId, setVisSelectedId] = useState<string | null>(null);
   const [transferSelectedId, setTransferSelectedId] = useState<string | null>(null);
@@ -194,13 +198,81 @@ export function AdminNotes() {
 
         {paginated.length > 0 ? (
           <div>
-            <div className={`${styles.tableHeader} ${styles.cols7_Wide}`}>
+            {/* Bulk action bar */}
+            {selectedIds.size > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", padding: "var(--space-3) var(--space-5)", background: "var(--color-accent-subtle)", borderBottom: "1px solid var(--color-border)" }}>
+                <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", color: "var(--color-accent)" }}>
+                  {selectedIds.size} selected
+                </span>
+                <Button size="xs" variant="accent-ghost" disabled={bulkProcessing} onClick={async () => {
+                  setBulkProcessing(true);
+                  try {
+                    const supabase = requireSupabase();
+                    for (const id of selectedIds) {
+                      await supabase.from("notes").update({ visibility: "public" }).eq("id", id);
+                    }
+                    setNotesList((prev) => prev.map((n) => selectedIds.has(n.id) ? { ...n, visibility: "public" } : n));
+                    addToast(`${selectedIds.size} note(s) set to public`, "success");
+                    setSelectedIds(new Set());
+                  } catch { addToast("Failed to update visibility", "error"); }
+                  setBulkProcessing(false);
+                }}>Make Public</Button>
+                <Button size="xs" variant="accent-ghost" disabled={bulkProcessing} onClick={async () => {
+                  setBulkProcessing(true);
+                  try {
+                    const supabase = requireSupabase();
+                    for (const id of selectedIds) {
+                      await supabase.from("notes").update({ visibility: "private" }).eq("id", id);
+                    }
+                    setNotesList((prev) => prev.map((n) => selectedIds.has(n.id) ? { ...n, visibility: "private" } : n));
+                    addToast(`${selectedIds.size} note(s) set to private`, "success");
+                    setSelectedIds(new Set());
+                  } catch { addToast("Failed to update visibility", "error"); }
+                  setBulkProcessing(false);
+                }}>Make Private</Button>
+                <div style={{ flex: 1 }} />
+                <Button size="xs" variant="danger" disabled={bulkProcessing} onClick={async () => {
+                  setBulkProcessing(true);
+                  try {
+                    const supabase = requireSupabase();
+                    for (const id of selectedIds) {
+                      await supabase.from("notes").delete().eq("id", id);
+                    }
+                    setNotesList((prev) => prev.filter((n) => !selectedIds.has(n.id)));
+                    addToast(`${selectedIds.size} note(s) deleted`, "success");
+                    setSelectedIds(new Set());
+                  } catch { addToast("Failed to delete notes", "error"); }
+                  setBulkProcessing(false);
+                }}>Delete selected</Button>
+                <Button size="xs" variant="secondary" onClick={() => setSelectedIds(new Set())} disabled={bulkProcessing}>Clear</Button>
+              </div>
+            )}
+
+            <div className={`${styles.tableHeader}`} style={{ display: "grid", gridTemplateColumns: "36px 1.5fr 1fr 60px 60px 100px 120px 120px", gap: "var(--space-3)", alignItems: "center", padding: "var(--space-3) var(--space-5)", borderBottom: "1px solid var(--color-border)" }}>
+              <span className={styles.tableHeaderCell}>
+                <input type="checkbox" checked={selectedIds.size === paginated.length && paginated.length > 0}
+                  onChange={() => {
+                    if (selectedIds.size === paginated.length) setSelectedIds(new Set());
+                    else setSelectedIds(new Set(paginated.map((n) => n.id)));
+                  }}
+                  style={{ cursor: "pointer", accentColor: "var(--color-accent)" }}
+                  aria-label="Select all notes on this page" />
+              </span>
               {["Note", "Folder", "Vis.", "Collabs", "Updated", "Owner", ""].map((h) => (
                 <span className={styles.tableHeaderCell}>{h}</span>
               ))}
             </div>
-            {paginated.map((note) => (
-              <div key={note.id} className={`${styles.tableRow} ${styles.cols7_Wide}`}>
+            {paginated.map((note, i) => (
+              <div key={note.id} className={`${styles.tableRow}`} style={{ display: "grid", gridTemplateColumns: "36px 1.5fr 1fr 60px 60px 100px 120px 120px", gap: "var(--space-3)", alignItems: "center", padding: "var(--space-3) var(--space-5)", borderBottom: i < paginated.length - 1 ? "1px solid var(--color-border-subtle)" : "none", background: selectedIds.has(note.id) ? "var(--color-accent-subtle)" : "transparent", transition: "background var(--duration-fast)" }}>
+                <input type="checkbox" checked={selectedIds.has(note.id)}
+                  onChange={() => {
+                    const next = new Set(selectedIds);
+                    if (next.has(note.id)) next.delete(note.id);
+                    else next.add(note.id);
+                    setSelectedIds(next);
+                  }}
+                  style={{ cursor: "pointer", accentColor: "var(--color-accent)" }}
+                  aria-label={`Select ${note.title}`} />
                 <div className={styles.cellFlex}>
                   <div className={styles.iconBadge} style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)" }}>
                     <Icon d={IC.notes} size={15} />
@@ -218,6 +290,28 @@ export function AdminNotes() {
                 <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>{formatDate(note.updated_at)}</span>
                 <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.owner?.full_name || "—"}</span>
                 <div className={styles.cellActions}>
+                  <Button
+                    variant={note.visibility === "public" ? "accent-ghost" : "secondary"}
+                    size="xs"
+                    onClick={async () => {
+                      const newVis = note.visibility === "public" ? "private" : "public";
+                      try {
+                        const supabase = requireSupabase();
+                        await supabase.from("notes").update({ visibility: newVis }).eq("id", note.id);
+                        setNotesList((prev) => prev.map((n) => n.id === note.id ? { ...n, visibility: newVis } : n));
+                        addToast(`"${note.title}" set to ${newVis}`, "success");
+                        void (async () => {
+                          try { await supabase.from("activity_log").insert({
+                            inviter_id: user!.id, invitee_email: "", action: "visibility_changed",
+                            item_type: "note", item_title: note.title,
+                            details: `Admin ${user?.full_name} toggled note "${note.title}" to ${newVis}`,
+                          }); } catch { /* best-effort */ }
+                        })();
+                      } catch { addToast("Failed to update visibility", "error"); }
+                    }}
+                  >
+                    {note.visibility === "public" ? "Make Priv" : "Make Pub"}
+                  </Button>
                   <Button variant="danger" size="xs" onClick={() => setPendingDeleteId(note.id)} aria-label={`Delete ${note.title}`}>Delete</Button>
                 </div>
               </div>

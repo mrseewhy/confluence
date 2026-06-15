@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
+import { TransferOwnershipModal } from "@/components/TransferOwnershipModal";
 import { formatDate, detectVideoProvider, getVideoEmbedUrl, sanitizeImageUrl } from "@/lib/helpers";
 import { ShareButtons } from "@/components/ShareButtons";
 import { useToast } from "@/components/Toast";
+import { Badge, Button } from "@/components/ui";
 import type { Note, NoteBlock } from "@/types";
 
 export function NoteDetailPage() {
@@ -20,7 +21,9 @@ export function NoteDetailPage() {
   const [ownerUsername, setOwnerUsername] = useState<string>("");
   const { addToast } = useToast();
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const [isCollaborator, setIsCollaborator] = useState(false);
+  const [collaborators, setCollaborators] = useState<{ email: string; access_level: string }[]>([]);
 
   // Listen for share-copy events
   useEffect(() => {
@@ -96,6 +99,15 @@ export function NoteDetailPage() {
         }
 
         setNote(noteData);
+
+        // Fetch collaborators for this note (owner sees them inline)
+        if (isOwner) {
+          const { data: collabs } = await supabase
+            .from("collaborators")
+            .select("invitee_email, access_level")
+            .eq("note_id", noteData.id);
+          setCollaborators((collabs || []).map((c: { invitee_email: string; access_level: string }) => ({ email: c.invitee_email, access_level: c.access_level })));
+        }
 
         // Get blocks
         const { data: blocksData } = await supabase
@@ -549,9 +561,57 @@ export function NoteDetailPage() {
           />
         </div>
 
+        {/* Collaborators inline — owner sees who has access without opening modal */}
+        {isOwner && collaborators.length > 0 && (
+          <div
+            style={{
+              marginTop: "var(--space-5)",
+              padding: "var(--space-4) var(--space-5)",
+              background: "var(--color-bg-subtle)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-lg)",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 var(--space-3)",
+                fontSize: "var(--font-size-xs)",
+                fontWeight: "var(--font-weight-semibold)",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "var(--color-text-muted)",
+              }}
+            >
+              Collaborators ({collaborators.length})
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+              {collaborators.map((c) => (
+                <div key={c.email} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                  <div
+                    style={{
+                      width: "24px", height: "24px", borderRadius: "var(--radius-full)",
+                      background: "var(--color-accent-subtle)", color: "var(--color-accent)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "10px", fontWeight: "var(--font-weight-bold)", flexShrink: 0,
+                    }}
+                  >
+                    {c.email.charAt(0).toUpperCase()}
+                  </div>
+                  <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-primary)" }}>
+                    {c.email}
+                  </span>
+                  <Badge variant={c.access_level === "editor" ? "success" : "default"} style={{ fontSize: "9px", textTransform: "capitalize" }}>
+                    {c.access_level}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Owner actions — only visible to the owner */}
         {isOwner && (
-          <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>
+          <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)", flexWrap: "wrap" }}>
             {!isPublic && (
               <Button
                 variant="secondary"
@@ -566,6 +626,13 @@ export function NoteDetailPage() {
                 Edit note
               </Button>
             </a>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowTransferModal(true)}
+            >
+              Transfer
+            </Button>
           </div>
         )}
       </div>
@@ -582,6 +649,33 @@ export function NoteDetailPage() {
           itemSlug={note.slug}
           ownerUsername={ownerUsername}
           ownerId={authUser?.id}
+        />
+      )}
+
+      {/* Transfer Ownership Modal */}
+      {showTransferModal && (
+        <TransferOwnershipModal
+          isOpen={showTransferModal}
+          onClose={() => setShowTransferModal(false)}
+          onTransfer={async (newOwnerId: string, _newOwnerName: string, _newOwnerEmail: string) => {
+            try {
+              const supabase = requireSupabase();
+              const { error } = await supabase
+                .from("notes")
+                .update({ owner_id: newOwnerId })
+                .eq("id", note.id);
+              if (error) throw error;
+              addToast("Ownership transferred successfully", "success");
+              setShowTransferModal(false);
+              // Redirect to dashboard — original owner no longer has access
+              window.location.href = "/dashboard/notes";
+            } catch (err) {
+              console.error("Error transferring ownership:", err);
+              addToast("Failed to transfer ownership", "error");
+            }
+          }}
+          itemTitle={note.title}
+          currentOwnerName={authUser?.full_name || null}
         />
       )}
     </>

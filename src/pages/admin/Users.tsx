@@ -64,6 +64,10 @@ export function AdminUsers() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   // Modal states
   const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | null>(null);
   const [deletingUser, setDeletingUser] = useState(false);
@@ -238,8 +242,73 @@ export function AdminUsers() {
 
         {filtered.length > 0 ? (
           <div>
+            {/* Bulk action bar */}
+            {selectedIds.size > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", padding: "var(--space-3) var(--space-5)", background: "var(--color-accent-subtle)", borderBottom: "1px solid var(--color-border)" }}>
+                <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", color: "var(--color-accent)" }}>
+                  {selectedIds.size} selected
+                </span>
+                <Button size="xs" variant="accent-ghost" disabled={bulkProcessing} onClick={async () => {
+                  setBulkProcessing(true);
+                  const targets = usersList.filter((u) => selectedIds.has(u.id) && u.user_type !== "admin");
+                  try {
+                    const supabase = requireSupabase();
+                    for (const t of targets) {
+                      await supabase.from("profiles").update({ is_banned: true }).eq("id", t.id);
+                    }
+                    setUsersList((prev) => prev.map((r) => selectedIds.has(r.id) && r.user_type !== "admin" ? { ...r, is_banned: true } : r));
+                    addToast(`${targets.length} user(s) banned`, "success");
+                    for (const t of targets) void logActivity(t.email, t.full_name, "user_banned", `Admin ${user.full_name} banned user ${t.full_name} (bulk)`);
+                    setSelectedIds(new Set());
+                  } catch { addToast("Failed to ban users", "error"); }
+                  setBulkProcessing(false);
+                }}>Ban selected</Button>
+                <Button size="xs" variant="accent-ghost" disabled={bulkProcessing} onClick={async () => {
+                  setBulkProcessing(true);
+                  try {
+                    const supabase = requireSupabase();
+                    for (const id of selectedIds) {
+                      await supabase.from("profiles").update({ is_banned: false }).eq("id", id);
+                    }
+                    setUsersList((prev) => prev.map((r) => selectedIds.has(r.id) ? { ...r, is_banned: false } : r));
+                    addToast(`${selectedIds.size} user(s) unbanned`, "success");
+                    for (const id of selectedIds) {
+                      const target = usersList.find((u) => u.id === id);
+                      if (target) void logActivity(target.email, target.full_name, "user_unbanned", `Admin ${user.full_name} unbanned user ${target.full_name} (bulk)`);
+                    }
+                    setSelectedIds(new Set());
+                  } catch { addToast("Failed to unban users", "error"); }
+                  setBulkProcessing(false);
+                }}>Unban selected</Button>
+                <div style={{ flex: 1 }} />
+                <Button size="xs" variant="danger" disabled={bulkProcessing} onClick={async () => {
+                  setBulkProcessing(true);
+                  try {
+                    const supabase = requireSupabase();
+                    for (const id of selectedIds) {
+                      await supabase.rpc("admin_delete_user", { target_user_id: id });
+                    }
+                    setUsersList((prev) => prev.filter((r) => !selectedIds.has(r.id)));
+                    addToast(`${selectedIds.size} user(s) deleted`, "success");
+                    setSelectedIds(new Set());
+                  } catch { addToast("Failed to delete users", "error"); }
+                  setBulkProcessing(false);
+                }}>Delete selected</Button>
+                <Button size="xs" variant="secondary" onClick={() => setSelectedIds(new Set())} disabled={bulkProcessing}>Clear</Button>
+              </div>
+            )}
+
             {/* Table header */}
-            <div className={styles.tableHeader} style={{ gridTemplateColumns: "1.5fr 1fr 80px 70px 60px 60px 110px 60px" }}>
+            <div className={styles.tableHeader} style={{ gridTemplateColumns: "36px 1.5fr 1fr 80px 70px 60px 60px 110px 60px" }}>
+              <span className={styles.tableHeaderCell}>
+                <input type="checkbox" checked={selectedIds.size === paginated.length && paginated.length > 0}
+                  onChange={() => {
+                    if (selectedIds.size === paginated.length) setSelectedIds(new Set());
+                    else setSelectedIds(new Set(paginated.map((u) => u.id)));
+                  }}
+                  style={{ cursor: "pointer", accentColor: "var(--color-accent)" }}
+                  aria-label="Select all users on this page" />
+              </span>
               {["User", "Email", "Plan", "Status", "Notes", "Folders", "Joined", ""].map((h) => (
                 <span className={styles.tableHeaderCell}>
                   {h}
@@ -253,15 +322,24 @@ export function AdminUsers() {
                 key={u.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.5fr 1fr 80px 70px 60px 60px 110px 60px",
+                  gridTemplateColumns: "36px 1.5fr 1fr 80px 70px 60px 60px 110px 60px",
                   gap: "var(--space-3)",
                   alignItems: "center",
                   padding: "var(--space-3) var(--space-5)",
                   borderBottom: i < paginated.length - 1 ? "1px solid var(--color-border-subtle)" : "none",
-                  background: u.is_banned ? "var(--color-danger-subtle)" : "transparent",
+                  background: selectedIds.has(u.id) ? "var(--color-accent-subtle)" : u.is_banned ? "var(--color-danger-subtle)" : "transparent",
                   transition: "background var(--duration-fast)",
                 }}
               >
+                <input type="checkbox" checked={selectedIds.has(u.id)}
+                  onChange={() => {
+                    const next = new Set(selectedIds);
+                    if (next.has(u.id)) next.delete(u.id);
+                    else next.add(u.id);
+                    setSelectedIds(next);
+                  }}
+                  style={{ cursor: "pointer", accentColor: "var(--color-accent)" }}
+                  aria-label={`Select ${u.full_name}`} />
                 <div className={styles.cellFlex}>
                   <div
                     style={{
@@ -311,16 +389,39 @@ export function AdminUsers() {
                 {/* Joined */}
                 <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>{formatDate(u.created_at)}</span>
 
-                {/* Delete (only for non-admin, non-self) */}
+                {/* Actions: Ban + Delete (only for non-admin, non-self) */}
                 <div className={styles.cellActions}>
                   {u.user_type !== "admin" && u.id !== user.id && (
-                    <Button
-                      variant="danger"
-                      size="xs"
-                      onClick={() => setConfirmDeleteUserId(u.id)}
-                    >
-                      Delete
-                    </Button>
+                    <>
+                      <Button
+                        variant={u.is_banned ? "accent-ghost" : "danger"}
+                        size="xs"
+                        onClick={async () => {
+                          const newBanned = !u.is_banned;
+                          // Optimistic update
+                          setUsersList((prev) => prev.map((r) => r.id === u.id ? { ...r, is_banned: newBanned } : r));
+                          try {
+                            const supabase = requireSupabase();
+                            await supabase.from("profiles").update({ is_banned: newBanned }).eq("id", u.id);
+                            addToast(`${u.full_name} ${newBanned ? "banned" : "unbanned"}`, "success");
+                            void logActivity(u.email, u.full_name, newBanned ? "user_banned" : "user_unbanned", `Admin ${user.full_name} ${newBanned ? "banned" : "unbanned"} user ${u.full_name}`);
+                          } catch {
+                            // Revert on failure
+                            setUsersList((prev) => prev.map((r) => r.id === u.id ? { ...r, is_banned: !newBanned } : r));
+                            addToast("Action failed. Try again.", "error");
+                          }
+                        }}
+                      >
+                        {u.is_banned ? "Unban" : "Ban"}
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="xs"
+                        onClick={() => setConfirmDeleteUserId(u.id)}
+                      >
+                        Delete
+                      </Button>
+                    </>
                   )}
                   {u.id === user.id && (
                     <span style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>—</span>

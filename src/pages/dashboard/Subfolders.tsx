@@ -5,6 +5,7 @@ import { IC } from "@/components/layout/dashboardIconPaths";
 import { Button, EmptyState, Input, Badge } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
+import { useToast } from "@/components/Toast";
 import { ShareModal } from "@/components/ShareModal";
 import { formatDate, buildSlug } from "@/lib/helpers";
 import { Modal } from "@/components/Modal";
@@ -37,6 +38,7 @@ const DEFAULT_VISIBILITY: Visibility = "public";
 export function DashboardSubfolders() {
   const { profile } = useAuth();
   const user = profile;
+  const { addToast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +69,14 @@ export function DashboardSubfolders() {
   const [parentId, setParentId] = useState("");
   const [newVisibility, setNewVisibility] =
     useState<Visibility>(DEFAULT_VISIBILITY);
+
+  // Edit state
+  const [editFolder, setEditFolder] = useState<Folder | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editParentId, setEditParentId] = useState("");
+  const [editVisibility, setEditVisibility] = useState<Visibility>(DEFAULT_VISIBILITY);
+  const [editing, setEditing] = useState(false);
 
   // Delete confirmation state
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -212,6 +222,7 @@ export function DashboardSubfolders() {
 
       await loadData(debouncedSearch, page);
       resetAndClose();
+      addToast("Subfolder created successfully", "success");
     } catch (err: unknown) {
       console.error("Error creating subfolder:", err);
       const pgErr = err && typeof err === "object" ? (err as Record<string, unknown>) : null;
@@ -220,6 +231,44 @@ export function DashboardSubfolders() {
           ? "A subfolder with this title already exists. Please choose a different name."
           : "Failed to create subfolder. Please try again.";
       setError(msg);
+    }
+  };
+
+  const handleEditSubfolder = (sf: SubfolderRow) => {
+    setEditFolder(sf as unknown as Folder);
+    setEditTitle(sf.title);
+    setEditDesc(sf.description || "");
+    setEditParentId(sf.parent_id || "");
+    setEditVisibility(sf.visibility);
+  };
+
+  const handleUpdateSubfolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTitle.trim() || !editFolder || !user) return;
+    setEditing(true);
+
+    try {
+      const supabase = requireSupabase();
+      const { error } = await supabase
+        .from("folders")
+        .update({
+          title: editTitle.trim(),
+          description: editDesc.trim() || null,
+          parent_id: editParentId || null,
+          visibility: editVisibility,
+        })
+        .eq("id", editFolder.id);
+
+      if (error) throw error;
+
+      await loadData(debouncedSearch, page);
+      setEditFolder(null);
+      addToast("Subfolder updated successfully", "success");
+    } catch (err) {
+      console.error("Error updating subfolder:", err);
+      setError("Failed to update subfolder. Please try again.");
+    } finally {
+      setEditing(false);
     }
   };
 
@@ -232,6 +281,7 @@ export function DashboardSubfolders() {
         .eq("id", id);
       if (deleteErr) throw deleteErr;
       await loadData(debouncedSearch, page);
+      addToast("Subfolder deleted", "success");
     } catch (err) {
       console.error("Error deleting subfolder:", err);
       setError("Failed to delete subfolder. Please try again.");
@@ -486,6 +536,13 @@ export function DashboardSubfolders() {
 
               {/* Actions */}
               <div className={styles.cellActions}>
+                <Button
+                  variant="accent-ghost"
+                  size="xs"
+                  onClick={() => handleEditSubfolder(sf)}
+                >
+                  Edit
+                </Button>
                 {/* Share is shown for PRIVATE folders (to invite collaborators) */}
                 {sf.visibility === "private" && (
                   <Button
@@ -510,17 +567,22 @@ export function DashboardSubfolders() {
       ) : (
         <EmptyState
           icon="📂"
-          title="No subfolders found"
-          description="Add subfolders inside your folders to organise notes further."
+          title="Nest notes in subfolders"
+          description="Subfolders let you add an extra level of organization inside your folders. Create one to group related notes together."
           action={
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsCreateOpen(true)}
-              leftIcon={<Icon d={IC.plus} size={14} />}
-            >
-              New subfolder
-            </Button>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-3)" }}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateOpen(true)}
+                leftIcon={<Icon d={IC.plus} size={14} />}
+              >
+                New subfolder
+              </Button>
+              <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", maxWidth: 320, textAlign: "center" }}>
+                Need a root folder first? Go to <a href="/dashboard/folders" style={{ color: "var(--color-accent)" }}>Folders</a> to create one.
+              </p>
+            </div>
           }
         />
       )}
@@ -697,6 +759,76 @@ export function DashboardSubfolders() {
                 </Button>
               </div>
           </form>
+      </Modal>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Edit modal                                                           */}
+      {/* ------------------------------------------------------------------ */}
+      <Modal isOpen={!!editFolder} onClose={() => setEditFolder(null)} title="Edit Subfolder">
+        <form onSubmit={handleUpdateSubfolder} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <Input label="Subfolder Title *" placeholder="My subfolder" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <label htmlFor="edit-parent-folder-select" style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>
+              Parent Folder *
+            </label>
+            <select
+              id="edit-parent-folder-select"
+              value={editParentId}
+              onChange={(e) => setEditParentId(e.target.value)}
+              required
+              style={{
+                width: "100%",
+                fontFamily: "var(--font-sans)",
+                fontSize: "var(--font-size-sm)",
+                color: "var(--color-text-primary)",
+                background: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-md)",
+                padding: "10px var(--space-3)",
+                outline: "none",
+                cursor: "pointer",
+              }}
+            >
+              <option value="" disabled>Select a root folder…</option>
+              {rootFolders.map((f) => (
+                <option key={f.id} value={f.id}>📁 {f.title}</option>
+              ))}
+            </select>
+          </div>
+
+          <Input label="Description" placeholder="A short description of this subfolder" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <label style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>Visibility</label>
+            <div style={{ display: "flex", gap: "var(--space-3)", background: "var(--color-bg-subtle)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", padding: "4px", width: "fit-content" }}>
+              {(["public", "private"] as Visibility[]).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setEditVisibility(v)}
+                  style={{
+                    padding: "6px 12px",
+                    border: "none",
+                    background: editVisibility === v ? "var(--color-accent-subtle)" : "transparent",
+                    color: editVisibility === v ? "var(--color-accent)" : "var(--color-text-muted)",
+                    borderRadius: "var(--radius-md)",
+                    cursor: "pointer",
+                    fontSize: "var(--font-size-sm)",
+                    fontWeight: "var(--font-weight-medium)",
+                  }}
+                >
+                  {v === "public" ? "🌎 Public" : "🔒 Private"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "flex-end", marginTop: "var(--space-4)" }}>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setEditFolder(null)}>Cancel</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={editing}>{editing ? "Saving…" : "Save changes"}</Button>
+          </div>
+        </form>
       </Modal>
 
       {/* ------------------------------------------------------------------ */}
