@@ -4,6 +4,7 @@ import { PageLayout } from '@/components/layout/PageLayout'
 import { Button, Input, Divider } from '@/components/ui'
 import { PasswordInput } from '@/components/PasswordInput'
 import { getDashboardPath, useAuth } from '@/context/auth'
+import { SeoHead } from '@/components/SeoHead'
 
 export function SignInPage() {
   const navigate = useNavigate()
@@ -49,6 +50,7 @@ export function SignInPage() {
 
   return (
     <PageLayout>
+      <SeoHead title="Sign In" description="Sign in to your Confluence account." />
       <div style={{
         minHeight: 'calc(100vh - 120px)',
         display: 'flex',

@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/helpers";
 import { ShareButtons } from "@/components/ShareButtons";
 import { useToast } from "@/components/Toast";
 import type { Folder, Note } from "@/types";
+import { SeoHead } from "@/components/SeoHead";
 
 export function FolderDetailPage() {
   const { username, slug } = useParams<{ username: string; slug: string }>();
@@ -148,6 +149,7 @@ export function FolderDetailPage() {
   if (loading) {
     return (
       <>
+        <SeoHead title="Loading\u2026" />
         <Navbar />
         <div
           style={{
@@ -169,6 +171,7 @@ export function FolderDetailPage() {
   if (!folder) {
     return (
       <>
+        <SeoHead title="Folder Not Found" />
         <Navbar />
         <div
           style={{
@@ -199,9 +202,10 @@ export function FolderDetailPage() {
   // Determine owner's dashboard link
   const editFolderLink = isOwner ? `/dashboard/folders` : null;
 
-  return (
-    <>
-      <Navbar />
+    return (
+      <>
+        <SeoHead title={folder.title} description={folder.description ?? undefined} />
+        <Navbar />
       <div
         style={{
           maxWidth: 1280,

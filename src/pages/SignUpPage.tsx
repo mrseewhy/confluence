@@ -5,6 +5,7 @@ import { Button, Input, Divider } from '@/components/ui'
 import { PasswordInput } from '@/components/PasswordInput'
 import { useAuth } from '@/context/auth'
 import { requireSupabase } from '@/lib/supabase'
+import { SeoHead } from '@/components/SeoHead'
 
 export function SignUpPage() {
   const { signInWithGoogle } = useAuth()
@@ -12,6 +13,21 @@ export function SignUpPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [message, setMessage] = useState('')
+
+  const passwordStrength = (pw: string): { score: number; label: string; color: string } => {
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[a-z]/.test(pw)) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^a-zA-Z0-9]/.test(pw)) score++;
+    if (score <= 2) return { score, label: 'Weak', color: 'var(--color-danger)' };
+    if (score <= 4) return { score, label: 'Medium', color: 'var(--color-warning)' };
+    return { score, label: 'Strong', color: 'var(--color-success)' };
+  };
+
+  const strength = passwordStrength(form.password);
 
 
 
@@ -27,6 +43,12 @@ export function SignUpPage() {
     setLoading(true)
     setError('')
     setMessage('')
+
+    if (strength.score < 3) {
+      setError('Password is too weak. Use at least 8 characters with a mix of uppercase, lowercase, numbers, and symbols.')
+      setLoading(false)
+      return
+    }
 
     try {
       const supabase = requireSupabase()
@@ -67,6 +89,7 @@ export function SignUpPage() {
 
   return (
     <PageLayout>
+      <SeoHead title="Sign Up" description="Create a Confluence account to start taking collaborative notes." />
       <div style={{
         minHeight: 'calc(100vh - 120px)',
         display: 'flex',
@@ -140,9 +163,30 @@ export function SignUpPage() {
                 value={form.password}
                 onChange={handleChange('password')}
                 autoComplete="new-password"
-                hint="Use at least 8 characters with a mix of letters and numbers."
+                hint="Use at least 8 characters with a mix of letters, numbers, and symbols."
                 required
               />
+              {form.password.length > 0 && (
+                <div style={{ marginTop: "-var(--space-2)" }}>
+                  <div style={{ display: "flex", gap: "var(--space-1)", marginBottom: "2px" }}>
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div
+                        key={i}
+                        style={{
+                          flex: 1,
+                          height: "3px",
+                          borderRadius: "2px",
+                          background: i <= strength.score ? strength.color : "var(--color-bg-muted)",
+                          transition: "background var(--duration-fast)",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span style={{ fontSize: "11px", color: strength.color, fontWeight: "var(--font-weight-medium)" }}>
+                    {strength.label}
+                  </span>
+                </div>
+              )}
               <Button type="submit" variant="primary" size="md" fullWidth style={{ marginTop: 'var(--space-2)' }} disabled={loading}>
                 {loading ? 'Creating account…' : 'Create account'}
               </Button>

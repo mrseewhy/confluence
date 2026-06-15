@@ -6,6 +6,7 @@ import { Badge, Button, EmptyState } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
 import { formatDateLong, timeAgo } from "@/lib/helpers";
 import { Avatar } from "@/components/Avatar";
+import { SeoHead } from "@/components/SeoHead";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -154,6 +155,7 @@ export function UserProfilePage() {
   if (loading) {
     return (
       <>
+        <SeoHead title="Loading\u2026" />
         <Navbar />
         <div style={styles.loader}>
           <div style={styles.loaderSpinner} />
@@ -166,6 +168,7 @@ export function UserProfilePage() {
   if (!profile) {
     return (
       <>
+        <SeoHead title="User Not Found" />
         <Navbar />
         <EmptyState
           icon="👤"
@@ -186,9 +189,10 @@ export function UserProfilePage() {
   const totalNotes = notes.length;
   const totalFolders = folders.length;
 
-  return (
-    <>
-      <Navbar />
+    return (
+      <>
+        <SeoHead title={`${profile.full_name} (@${profile.username})`} description={`Public profile of ${profile.full_name} on Confluence.`} />
+        <Navbar />
 
       <div style={styles.page}>
         {/* ─── Profile Header ─── */}

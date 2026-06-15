@@ -11,6 +11,7 @@ import { ShareModal } from "@/components/ShareModal";
 import { Modal } from "@/components/Modal";
 import { formatDate } from "@/lib/helpers";
 import { usePaginatedFetch } from "@/hooks/usePaginatedFetch";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
 import { PaginationBar } from "@/components/PaginationBar";
 import styles from "@/styles/dashboard.module.css";
 import { safeStr, safeArray } from "@/lib/safeParse";
@@ -165,9 +166,9 @@ export function DashboardNotes() {
     return () => clearTimeout(t)
   }, [reorderAnnounce])
 
-  // Pagination
-  const [search, setSearch] = useState("");
+  // Pagination + search
   const { page, setPage, pageSize: PAGE_SIZE, resetPage } = usePaginatedFetch({ totalCount });
+  const { search, setSearch, debouncedSearch } = useDebouncedSearch({ onSearchChange: resetPage });
 
   // Sensors for drag detection
   const sensors = useSensors(
@@ -182,65 +183,126 @@ export function DashboardNotes() {
     }),
   );
 
-  // ── Data fetching ──────────────────────────────────────────
+  // ── Data fetching (server-side search + visibility filter, block content via RPC) ──
   const fetchData = useCallback(async () => {
     if (!user) return;
     try {
       const supabase = requireSupabase();
 
-      // Get total count (non-deleted only)
-      const { count } = await supabase
-        .from("notes")
-        .select("*", { count: "exact", head: true })
-        .eq("owner_id", user.id)
-        .is("deleted_at", null);
-      setTotalCount(count ?? 0);
+      // When searching, use RPC that also searches note_blocks content
+      if (debouncedSearch) {
+        const from = (page - 1) * PAGE_SIZE;
+        const { data: rpcData, error: rpcError } = await supabase.rpc(
+          "search_notes_by_content",
+          {
+            p_owner_id: user.id,
+            p_search: debouncedSearch,
+            p_visibility: vis,
+            p_limit: PAGE_SIZE,
+            p_offset: from,
+          }
+        );
+        if (rpcError) throw rpcError;
 
-      // Fetch all folders for this user (to build parent hierarchy)
-      const { data: allFolders } = await supabase
-        .from("folders")
-        .select("id, title, slug, parent_id")
-        .eq("owner_id", user.id);
+        if (rpcData && rpcData.length > 0) {
+          setTotalCount(rpcData[0].total_count ?? 0);
+        } else {
+          setTotalCount(0);
+        }
 
-      const folderMap = new Map<string, { id: string; title: string; slug: string; parent_id: string | null }>();
-      const safeFolders = safeArray<Record<string, unknown>>(allFolders);
-      for (const f of safeFolders) {
-        folderMap.set(safeStr(f.id), { id: safeStr(f.id), title: safeStr(f.title), slug: safeStr(f.slug), parent_id: safeStr(f.parent_id) || null });
-      }
+        // Fetch folders for parent hierarchy
+        const { data: allFolders } = await supabase
+          .from("folders")
+          .select("id, title, slug, parent_id")
+          .eq("owner_id", user.id);
 
-      const from = (page - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      const { data, error } = await supabase
-        .from("notes")
-        .select("*, folder:folders!folder_id(id, title, slug, parent_id)")
-        .eq("owner_id", user.id)
-        .is("deleted_at", null)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: false })
-        .range(from, to);
+        const safeFolders = safeArray<Record<string, unknown>>(allFolders);
+        const folderMap = new Map<string, { id: string; title: string; slug: string; parent_id: string | null }>();
+        for (const f of safeFolders) {
+          folderMap.set(safeStr(f.id), { id: safeStr(f.id), title: safeStr(f.title), slug: safeStr(f.slug), parent_id: safeStr(f.parent_id) || null });
+        }
 
-      if (error) throw error;
-
-      // Build parent folder lookup by checking which folders have parents
-      const pfMap = new Map<string, { title: string; slug: string }>();
-      for (const f of safeFolders) {
-        const fParentId = safeStr(f.parent_id) || null;
-        if (fParentId) {
-          const parent = folderMap.get(fParentId);
-          if (parent) {
-            pfMap.set(safeStr(f.id), { title: parent.title, slug: parent.slug });
+        const pfMap = new Map<string, { title: string; slug: string }>();
+        for (const f of safeFolders) {
+          const fParentId = safeStr(f.parent_id) || null;
+          if (fParentId) {
+            const parent = folderMap.get(fParentId);
+            if (parent) {
+              pfMap.set(safeStr(f.id), { title: parent.title, slug: parent.slug });
+            }
           }
         }
-      }
 
-      setNotesList(data || []);
-      setParentFolders(pfMap);
+        // Attach folder data to each note
+        const enriched = (rpcData || []).map((note: Record<string, unknown>) => ({
+          ...note,
+          folder: folderMap.get(safeStr(note.folder_id)) || null,
+        }));
+
+        setNotesList(enriched as Note[]);
+        setParentFolders(pfMap);
+      } else {
+        // No search — use normal query (faster, includes folder join)
+        let countQuery = supabase
+          .from("notes")
+          .select("*", { count: "exact", head: true })
+          .eq("owner_id", user.id)
+          .is("deleted_at", null);
+
+        let dataQuery = supabase
+          .from("notes")
+          .select("*, folder:folders!folder_id(id, title, slug, parent_id)")
+          .eq("owner_id", user.id)
+          .is("deleted_at", null);
+
+        if (vis !== "all") {
+          countQuery = countQuery.eq("visibility", vis);
+          dataQuery = dataQuery.eq("visibility", vis);
+        }
+
+        const { count } = await countQuery;
+        setTotalCount(count ?? 0);
+
+        const { data: allFolders } = await supabase
+          .from("folders")
+          .select("id, title, slug, parent_id")
+          .eq("owner_id", user.id);
+
+        const folderMap = new Map<string, { id: string; title: string; slug: string; parent_id: string | null }>();
+        const safeFolders = safeArray<Record<string, unknown>>(allFolders);
+        for (const f of safeFolders) {
+          folderMap.set(safeStr(f.id), { id: safeStr(f.id), title: safeStr(f.title), slug: safeStr(f.slug), parent_id: safeStr(f.parent_id) || null });
+        }
+
+        const from = (page - 1) * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        const { data, error } = await dataQuery
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false })
+          .range(from, to);
+
+        if (error) throw error;
+
+        const pfMap = new Map<string, { title: string; slug: string }>();
+        for (const f of safeFolders) {
+          const fParentId = safeStr(f.parent_id) || null;
+          if (fParentId) {
+            const parent = folderMap.get(fParentId);
+            if (parent) {
+              pfMap.set(safeStr(f.id), { title: parent.title, slug: parent.slug });
+            }
+          }
+        }
+
+        setNotesList(data || []);
+        setParentFolders(pfMap);
+      }
     } catch {
       addToast("Failed to load notes", "error");
     } finally {
       setLoading(false);
     }
-  }, [user, page]);
+  }, [user, page, debouncedSearch, vis]);
 
   // Initial data load
   useEffect(() => {
@@ -248,15 +310,8 @@ export function DashboardNotes() {
     void fetchData();
   }, [fetchData]);
 
-  const filtered = notesList.filter((n) => {
-    const q = search.toLowerCase();
-    return (
-      (n.title.toLowerCase().includes(q) ||
-        (n.description ?? "").toLowerCase().includes(q) ||
-        (n.folder?.title ?? "").toLowerCase().includes(q)) &&
-      (vis === "all" || n.visibility === vis)
-    );
-  });
+  // Data is already filtered server-side by search + visibility
+  const filtered = notesList;
 
   const handleCopyLink = async (note: Note, e: React.MouseEvent) => {
     e.preventDefault();

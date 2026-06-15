@@ -261,7 +261,7 @@ export function ShareModal({
         background: 'var(--color-bg-elevated)',
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-2xl)',
-        boxShadow: 'var(--shadow-2xl)',
+        boxShadow: 'var(--shadow-xl)',
         overflow: 'hidden',
         animation: 'scaleIn var(--duration-normal) var(--ease-out)',
       }}>

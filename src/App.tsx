@@ -1,5 +1,6 @@
 import { lazy } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HelmetProvider } from 'react-helmet-async'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AuthProvider } from '@/context/AuthProvider'
 import { RequireAuth } from '@/components/RequireAuth'
@@ -21,6 +22,8 @@ const AuthRedirectPage     = lazy(() => import('@/pages/AuthRedirectPage').then(
 const NoteDetailPage       = lazy(() => import('@/pages/NoteDetailPage').then(m => ({ default: m.NoteDetailPage })))
 const FolderDetailPage     = lazy(() => import('@/pages/FolderDetailPage').then(m => ({ default: m.FolderDetailPage })))
 const UserProfilePage      = lazy(() => import('@/pages/UserProfilePage').then(m => ({ default: m.UserProfilePage })))
+const TermsPage            = lazy(() => import('@/pages/TermsPage').then(m => ({ default: m.TermsPage })))
+const PrivacyPage          = lazy(() => import('@/pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })))
 const DashboardOverview    = lazy(() => import('@/pages/dashboard/Overview').then(m => ({ default: m.DashboardOverview })))
 const DashboardFolders     = lazy(() => import('@/pages/dashboard/Folders').then(m => ({ default: m.DashboardFolders })))
 const DashboardSubfolders  = lazy(() => import('@/pages/dashboard/Subfolders').then(m => ({ default: m.DashboardSubfolders })))
@@ -71,6 +74,7 @@ export function EnvCheck() {
 
 export default function App() {
   return (
+    <HelmetProvider>
     <ThemeProvider>
       <EnvCheck />
       <BrowserRouter>          <AuthProvider>
@@ -91,6 +95,8 @@ export default function App() {
           <Route path="/recover" element={<RouteErrorBoundary><PasswordRecoveryPage /></RouteErrorBoundary>} />
           <Route path="/reset-password" element={<RouteErrorBoundary><ResetPasswordPage /></RouteErrorBoundary>} />
           <Route path="/auth/redirect" element={<RouteErrorBoundary><AuthRedirectPage /></RouteErrorBoundary>} />
+          <Route path="/terms"   element={<RouteErrorBoundary><TermsPage /></RouteErrorBoundary>} />
+          <Route path="/privacy" element={<RouteErrorBoundary><PrivacyPage /></RouteErrorBoundary>} />
 
           {/* ── User dashboard ── */}
           <Route path="/dashboard"            element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardOverview /></RouteErrorBoundary></RequireAuth>} />
@@ -119,5 +125,6 @@ export default function App() {
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
+    </HelmetProvider>
   )
 }

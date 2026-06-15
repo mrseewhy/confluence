@@ -380,6 +380,20 @@ export function useNoteEditor() {
     bumpVersion()
   }, [bumpVersion])
 
+  // ── Save a version snapshot before updating ────────────────
+
+  const saveVersion = useCallback(async (noteId: string, userId: string) => {
+    try {
+      const supabase = requireSupabase()
+      await supabase.rpc('save_note_version', {
+        p_note_id: noteId,
+        p_user_id: userId,
+      })
+    } catch {
+      // Version saving is best-effort — don't block the save
+    }
+  }, [])
+
   // ── Save (insert or update note + blocks into Supabase) ─────
   //
   // Reads from the ref instead of the closure—this means the callback
@@ -404,6 +418,9 @@ export function useNoteEditor() {
       const supabase = requireSupabase()
 
       if (s.noteId) {
+        // Save a version snapshot before updating (revision history)
+        await saveVersion(s.noteId, userId)
+
         // ── UPDATE existing note ──
         const { error: noteError } = await supabase
           .from('notes')
@@ -545,6 +562,29 @@ export function useNoteEditor() {
     }, 400)
   }, [])
 
+  // ── Draft state (for restore banner) ────────────────────────
+
+  const draftExists = hasDraft(null)
+  const draftTimestamp = (() => {
+    if (!draftExists) return null
+    const raw = loadDraft(null)
+    return raw?.savedAt ?? null
+  })()
+
+  const discardDraft = useCallback(() => {
+    clearDraft(null)
+    setState({
+      noteId:      null,
+      title:       '',
+      description: '',
+      slug:        '',
+      folder_id:   '',
+      visibility:  'public',
+      blocks:      [],
+    })
+    bumpVersion()
+  }, [bumpVersion])
+
   // ── Derived ─────────────────────────────────────────────────
 
   const isValid = useMemo(
@@ -665,9 +705,14 @@ export function useNoteEditor() {
     reorderBlock,
     // actions
     save,
+    saveVersion,
     checkSlugAvailability,
     loadFromExisting,
     resetEditor,
+    // draft
+    draftExists,
+    draftTimestamp,
+    discardDraft,
     // collaboration
     mergeRemoteBlocks,
   }

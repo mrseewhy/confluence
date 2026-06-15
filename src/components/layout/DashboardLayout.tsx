@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { useAuth } from "@/context/auth";
@@ -655,7 +656,7 @@ export function DashboardLayout({
             </div>
           </div>
 
-          {/* Right: theme + user */}
+          {/* Right: notifications + theme + user */}
           <div
             style={{
               display: "flex",
@@ -663,6 +664,7 @@ export function DashboardLayout({
               gap: "var(--space-3)",
             }}
           >
+            {variant === "user" && <NotificationBell userId={user.id} />}
             <ThemeToggle />
 
             <div style={{ position: "relative" }}>

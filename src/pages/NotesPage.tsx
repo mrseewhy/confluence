@@ -6,6 +6,7 @@ import { Badge, EmptyState } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
 import { timeAgo, buildFolderPath, OWNER_QUERY } from "@/lib/helpers";
 import { Avatar } from "@/components/Avatar";
+import { SeoHead } from "@/components/SeoHead";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -140,6 +141,7 @@ export function NotesPage() {
 
   return (
     <>
+      <SeoHead title="Public Notes" description="Browse public notes shared by the community." />
       <Navbar />
 
       <div style={styles.page}>

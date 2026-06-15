@@ -6,6 +6,7 @@ import { Badge, EmptyState } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
 import { OWNER_QUERY } from "@/lib/helpers";
 import { Avatar } from "@/components/Avatar";
+import { SeoHead } from "@/components/SeoHead";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -151,6 +152,7 @@ export function FoldersPage() {
 
   return (
     <>
+      <SeoHead title="Public Folders" description="Browse public folders shared by the community." />
       <Navbar />
 
       <div style={styles.page}>

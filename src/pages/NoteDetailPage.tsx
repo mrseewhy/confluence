@@ -12,6 +12,7 @@ import { ShareButtons } from "@/components/ShareButtons";
 import { useToast } from "@/components/Toast";
 import { Badge, Button } from "@/components/ui";
 import type { Note, NoteBlock } from "@/types";
+import { SeoHead } from "@/components/SeoHead";
 
 export function NoteDetailPage() {
   const { username, slug } = useParams<{ username: string; slug: string }>();
@@ -152,6 +153,7 @@ export function NoteDetailPage() {
   if (!note) {
     return (
       <>
+        <SeoHead title="Note Not Found" />
         <Navbar />
         <div
           style={{
@@ -184,6 +186,7 @@ export function NoteDetailPage() {
   if (!isPublic && !isOwner && !isCollaborator) {
     return (
       <>
+        <SeoHead title="Private Note" />
         <Navbar />
         <div
           style={{
@@ -209,9 +212,10 @@ export function NoteDetailPage() {
     );
   }
 
-  return (
-    <>
-      <Navbar />
+    return (
+      <>
+        <SeoHead title={note.title} description={note.description ?? undefined} />
+        <Navbar />
       <div
         style={{
           maxWidth: 1280,

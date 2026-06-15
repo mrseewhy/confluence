@@ -5,6 +5,7 @@ import { Button } from "@/components/ui";
 import { NoteEditor, SaveIndicator } from "@/components/editor/NoteEditor";
 import { useNoteEditor } from "@/hooks/useNoteEditor";
 import { useRealtimeCollaboration } from "@/hooks/useRealtimeCollaboration";
+import { DraftRestoreBanner } from "@/components/DraftRestoreBanner";
 import styles from "@/styles/dashboard.module.css";
 import { useAuth, fallbackProfile } from "@/context/auth";
 
@@ -124,40 +125,50 @@ export function CreateNote() {
     <DashboardLayout user={user || fallbackProfile()} variant="user" defaultCollapsed>
       {!user ? (
         <div className={styles.loadingState}>
-          Loading editor…
+          Loading editor\u2026
         </div>
       ) : (
-        <NoteEditor
-          state={editor.state}
-          actions={editor}
-          folderError={folderError}
-          onFolderChange={(id) => {
-            editor.setFolderId(id);
-            setFolderError("");
-          }}
-          username={user.username}
-          userId={user.id}
-          slugAvailable={editor.slugAvailable}
-          slugChecking={editor.slugChecking}
-          collaborators={collab.collaborators}
-          broadcastCursor={collab.broadcastCursor}
-          remoteCursors={collab.remoteCursors}
-          lastRemoteSaver={lastRemoteSaver}
-          breadcrumbLabel="New note"
-          headerActions={
-            <>
-            <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!editor.isValid || editor.saveStatus === "saving"}
-              onClick={handleSave}
-            >
-              Create note
-            </Button>
-          </>
-        }
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <DraftRestoreBanner
+            draftTimestamp={editor.draftTimestamp}
+            onRestore={() => {
+              // Draft is already loaded in editor state — dismiss banner
+              void editor.draftExists;
+            }}
+            onDiscard={editor.discardDraft}
+          />
+          <NoteEditor
+            state={editor.state}
+            actions={editor}
+            folderError={folderError}
+            onFolderChange={(id) => {
+              editor.setFolderId(id);
+              setFolderError("");
+            }}
+            username={user.username}
+            userId={user.id}
+            slugAvailable={editor.slugAvailable}
+            slugChecking={editor.slugChecking}
+            collaborators={collab.collaborators}
+            broadcastCursor={collab.broadcastCursor}
+            remoteCursors={collab.remoteCursors}
+            lastRemoteSaver={lastRemoteSaver}
+            breadcrumbLabel="New note"
+            headerActions={
+              <>
+              <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!editor.isValid || editor.saveStatus === "saving"}
+                onClick={handleSave}
+              >
+                Create note
+              </Button>
+            </>
+          }
+          />
+        </div>
       )}
     </DashboardLayout>
   );

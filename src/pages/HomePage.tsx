@@ -6,6 +6,7 @@ import { Button, Badge } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
 import { timeAgo, buildFolderPath, OWNER_QUERY, mapOwner } from "@/lib/helpers";
 import { Avatar } from "@/components/Avatar";
+import { SeoHead } from "@/components/SeoHead";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -250,6 +251,7 @@ export function HomePage() {
 
   return (
     <>
+      <SeoHead title="Home" description="A collaborative note-taking app with real-time editing and folder organisation." />
       <Navbar />
 
       {/* ================================================================

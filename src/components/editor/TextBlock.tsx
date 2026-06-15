@@ -1,4 +1,5 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useState } from 'react'
+import { MarkdownPreview } from '@/components/MarkdownPreview'
 
 interface TextBlockProps {
   content:  string
@@ -9,7 +10,6 @@ function wrapSelection(textarea: HTMLTextAreaElement, before: string, after: str
   const start = textarea.selectionStart
   const end = textarea.selectionEnd
   const selected = textarea.value.substring(start, end)
-  // If nothing selected, insert the syntax and place cursor in the middle
   if (!selected) {
     return textarea.value.substring(0, start) + before + after + textarea.value.substring(end)
   }
@@ -18,6 +18,7 @@ function wrapSelection(textarea: HTMLTextAreaElement, before: string, after: str
 
 export function TextBlock({ content, onChange }: TextBlockProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
+  const [preview, setPreview] = useState(false)
 
   // Auto-grow
   useEffect(() => {
@@ -133,30 +134,52 @@ export function TextBlock({ content, onChange }: TextBlockProps) {
         <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 400 }}>
           Markdown supported
         </span>
+        <div style={{ flex: 1 }} />
+        <button
+          type="button"
+          onClick={() => setPreview(p => !p)}
+          style={{
+            fontSize: '11px',
+            fontWeight: 'var(--font-weight-medium)',
+            padding: '2px 8px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-border)',
+            background: preview ? 'var(--color-accent-subtle)' : 'transparent',
+            color: preview ? 'var(--color-accent)' : 'var(--color-text-muted)',
+            cursor: 'pointer',
+            transition: 'all var(--duration-fast)',
+          }}
+        >
+          {preview ? 'Edit' : 'Preview'}
+        </button>
       </div>
 
-      <textarea
-        ref={ref}
-        value={content}
-        onChange={e => onChange(e.target.value)}
-        placeholder="Start writing…"
-        rows={3}
-        style={{
-          width:       '100%',
-          resize:      'none',
-          overflow:    'hidden',
-          border:      'none',
-          outline:     'none',
-          background:  'transparent',
-          fontFamily:  'var(--font-sans)',
-          fontSize:    'var(--font-size-base)',
-          lineHeight:  'var(--line-height-loose)',
-          color:       'var(--color-text-primary)',
-          padding:     0,
-          boxSizing:   'border-box',
-          minHeight:   '80px',
-        }}
-      />
+      {preview ? (
+        <MarkdownPreview content={content} />
+      ) : (
+        <textarea
+          ref={ref}
+          value={content}
+          onChange={e => onChange(e.target.value)}
+          placeholder="Start writing\u2026"
+          rows={3}
+          style={{
+            width:       '100%',
+            resize:      'none',
+            overflow:    'hidden',
+            border:      'none',
+            outline:     'none',
+            background:  'transparent',
+            fontFamily:  'var(--font-sans)',
+            fontSize:    'var(--font-size-base)',
+            lineHeight:  'var(--line-height-loose)',
+            color:       'var(--color-text-primary)',
+            padding:     0,
+            boxSizing:   'border-box',
+            minHeight:   '80px',
+          }}
+        />
+      )}
     </div>
   )
 }

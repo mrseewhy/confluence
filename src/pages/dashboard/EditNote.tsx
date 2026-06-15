@@ -6,6 +6,7 @@ import { NoteEditor, SaveIndicator } from "@/components/editor/NoteEditor";
 import { useNoteEditor } from "@/hooks/useNoteEditor";
 import { useRealtimeCollaboration } from "@/hooks/useRealtimeCollaboration";
 import { useAuth, fallbackProfile } from "@/context/auth";
+import { VersionHistoryModal } from "@/components/VersionHistoryModal";
 import styles from "@/styles/dashboard.module.css";
 import { requireSupabase } from "@/lib/supabase";
 
@@ -27,6 +28,7 @@ export function EditNote() {
   const [folderError, setFolderError] = useState("");
   const [lastRemoteSaver, setLastRemoteSaver] = useState<string | null>(null);
   const remoteSaveIdRef = useRef(0);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   // Load existing note data
   const { loadFromExisting } = editor;
@@ -252,6 +254,16 @@ export function EditNote() {
 
   return (
     <DashboardLayout user={user || sharedUser} variant="user" defaultCollapsed>
+      {showVersionHistory && editor.state.noteId && (
+        <VersionHistoryModal
+          noteId={editor.state.noteId}
+          userId={user?.id ?? ""}
+          onClose={() => setShowVersionHistory(false)}
+          onRestore={() => {
+            window.location.reload();
+          }}
+        />
+      )}
       {!user ? null : (
         <NoteEditor
           state={editor.state}
@@ -270,9 +282,29 @@ export function EditNote() {
           remoteCursors={collab.remoteCursors}
           lastRemoteSaver={lastRemoteSaver}
           breadcrumbLabel="Edit note"
-          headerActions={
-            <>
-            <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
+            headerActions={
+              <>
+              <button
+                type="button"
+                onClick={() => setShowVersionHistory(true)}
+                style={{
+                  fontSize: "var(--font-size-sm)",
+                  padding: "0.35em 0.85em",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--color-border)",
+                  background: "transparent",
+                  color: "var(--color-text-secondary)",
+                  cursor: "pointer",
+                  fontWeight: "var(--font-weight-medium)",
+                  fontFamily: "var(--font-sans)",
+                  transition: "all var(--duration-fast)",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-bg-muted)"; e.currentTarget.style.color = "var(--color-text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--color-text-secondary)"; }}
+              >
+                Version history
+              </button>
+              <SaveIndicator status={editor.saveStatus} message={editor.saveError} autoSave={autoSaving} />
             <Button
               variant="primary"
               size="sm"

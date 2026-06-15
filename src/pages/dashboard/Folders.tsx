@@ -10,6 +10,7 @@ import { ShareModal } from "@/components/ShareModal";
 import { formatDate, buildSlug } from "@/lib/helpers";
 import { Modal } from "@/components/Modal";
 import { usePaginatedFetch } from "@/hooks/usePaginatedFetch";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
 import { PaginationBar } from "@/components/PaginationBar";
 import styles from "@/styles/dashboard.module.css";
 import type { Folder, Visibility } from "@/types";
@@ -175,9 +176,9 @@ export function DashboardFolders() {
   const [editVisibility, setEditVisibility] = useState<Visibility>("public");
   const [editing, setEditing] = useState(false);
 
-  // Pagination
-  const [search, setSearch] = useState("");
+  // Pagination + search
   const { page, setPage, pageSize: PAGE_SIZE, resetPage } = usePaginatedFetch({ totalCount: totalRootCount });
+  const { search, setSearch, debouncedSearch } = useDebouncedSearch({ onSearchChange: resetPage });
 
   // Sensors for drag detection
   const sensors = useSensors(
@@ -214,11 +215,19 @@ export function DashboardFolders() {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      const { data: folders, error: foldersErr } = await supabase
+      let foldersQuery = supabase
         .from("folders")
         .select("*")
         .eq("owner_id", user.id)
-        .is("parent_id", null)
+        .is("parent_id", null);
+
+      if (debouncedSearch) {
+        foldersQuery = foldersQuery.or(
+          `title.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%`
+        );
+      }
+
+      const { data: folders, error: foldersErr } = await foldersQuery
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -243,7 +252,7 @@ export function DashboardFolders() {
     } finally {
       setLoading(false);
     }
-  }, [user, page]);
+  }, [user, page, debouncedSearch]);
 
   // Initial data load
   useEffect(() => {
@@ -254,20 +263,26 @@ export function DashboardFolders() {
   // Build the enriched list from the root folders (those with parent_id === null in the fetched batch)
 const rootFolders = foldersList.filter((f) => f.parent_id === null);
 
-// Fetch total root folder count once on mount
+// Fetch total root folder count once on mount (and when search changes)
 useEffect(() => {
   if (!user) return;
   const fetchCount = async () => {
     const supabase = requireSupabase();
-    const { count } = await supabase
+    let countQuery = supabase
       .from("folders")
       .select("*", { count: "exact", head: true })
       .eq("owner_id", user.id)
       .is("parent_id", null);
+    if (debouncedSearch) {
+      countQuery = countQuery.or(
+        `title.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%`
+      );
+    }
+    const { count } = await countQuery;
     if (count !== null) setTotalRootCount(count);
   };
   void fetchCount();
-}, [user]);
+}, [user, debouncedSearch]);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();

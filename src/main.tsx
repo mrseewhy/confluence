@@ -1,7 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import { initSentry } from './lib/sentry'
 import App from './App'
+
+// ── Error monitoring — no-op if VITE_SENTRY_DSN is not set ────
+initSentry()
 
 // ── Startup environment variable validation ───────────────────
 // Fail early with a clear message instead of silent runtime errors.
