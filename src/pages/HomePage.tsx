@@ -653,7 +653,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   featuresGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
     gap: "var(--space-5)",
     marginTop: "var(--space-10)",
     textAlign: "left",
