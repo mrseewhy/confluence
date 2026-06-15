@@ -99,6 +99,7 @@ export function VideoBlock({ content, metadata, onChange, onMeta }: VideoBlockPr
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-presentation"
             style={{
               position: 'absolute',
               top: 0, left: 0,

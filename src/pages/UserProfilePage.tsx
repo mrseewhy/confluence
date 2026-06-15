@@ -4,7 +4,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
-import { Avatar, formatDateLong, timeAgo } from "@/lib/helpers";
+import { formatDateLong, timeAgo } from "@/lib/helpers";
+import { Avatar } from "@/components/Avatar";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -66,9 +67,9 @@ export function UserProfilePage() {
       try {
         const supabase = requireSupabase();
 
-        // 1. Find profile by username
+        // 1. Find profile by username (using public_profiles for anon-safe access)
         const { data: profileData, error: profileErr } = await supabase
-          .from("profiles")
+          .from("public_profiles")
           .select("id, full_name, username, avatar_url, user_type, created_at")
           .eq("username", username)
           .single();

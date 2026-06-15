@@ -4,7 +4,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Badge, EmptyState } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
-import { Avatar, OWNER_QUERY } from "@/lib/helpers";
+import { OWNER_QUERY } from "@/lib/helpers";
+import { Avatar } from "@/components/Avatar";
 
 // ─── Types ────────────────────────────────────────────────────
 

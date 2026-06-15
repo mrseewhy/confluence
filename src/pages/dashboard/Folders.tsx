@@ -11,8 +11,6 @@ import { Modal } from "@/components/Modal";
 import styles from "@/styles/dashboard.module.css";
 import type { Folder, Visibility } from "@/types";
 
-// (formatDate imported from @/lib/helpers)
-
 export function DashboardFolders() {
   const { profile } = useAuth();
   const user = profile;
@@ -38,7 +36,10 @@ export function DashboardFolders() {
   const [totalRootCount, setTotalRootCount] = useState(0);
   const PAGE_SIZE = 20;
 
-  const loadData = useCallback(async () => {
+  // ── Data fetching ──────────────────────────────────────────
+  // Defined as a plain async + kept in a ref so imperative calls
+  // (create/delete) always call the latest version.
+  const fetchData = useCallback(async () => {
     if (!user) return;
     try {
       const supabase = requireSupabase();
@@ -54,7 +55,6 @@ export function DashboardFolders() {
         .order("created_at", { ascending: false })
         .range(from, to);
 
-      // Also fetch all subfolders + notes for the counts (lightweight query)
       const [
         { data: subfolders, error: subErr },
         { data: notes, error: notesErr },
@@ -67,7 +67,6 @@ export function DashboardFolders() {
       if (subErr) throw subErr;
       if (notesErr) throw notesErr;
 
-      // Combine root folders and all subfolders into foldersList (needed for enrichment)
       const allSubs = subfolders || [];
       setFoldersList([...(folders || []), ...allSubs]);
       setNotesList(notes || []);
@@ -78,14 +77,13 @@ export function DashboardFolders() {
     }
   }, [user, page]);
 
+  // Initial data load
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchData();
+  }, [fetchData]);
 
-  // Reset page when search/vis changes
-  useEffect(() => {
-    setPage(1);
-  }, [search, vis]);// Build the enriched list from the root folders (those with parent_id === null in the fetched batch)
+  // Build the enriched list from the root folders (those with parent_id === null in the fetched batch)
 const rootFolders = foldersList.filter((f) => f.parent_id === null);
 
 // Fetch total root folder count once on mount
@@ -127,7 +125,7 @@ useEffect(() => {
 
       if (error) throw error;
 
-      await loadData();
+      await fetchData();
       setIsCreateOpen(false);
       setNewTitle("");
       setNewDesc("");
@@ -144,7 +142,7 @@ useEffect(() => {
 
       if (error) throw error;
 
-      await loadData();
+      await fetchData();
       setConfirmDelete(null);
     } catch (err) {
       console.error("Error deleting folder:", err);
@@ -208,7 +206,7 @@ useEffect(() => {
           type="search"
           placeholder="Search folders…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className={styles.searchInput}
           aria-label="Search folders"
         />
@@ -217,7 +215,7 @@ useEffect(() => {
                 key={v}
                 variant={vis === v ? "accent-ghost" : "secondary"}
                 size="sm"
-                onClick={() => setVis(v)}
+                onClick={() => { setVis(v); setPage(1); }}
                 style={{ textTransform: "capitalize" }}
                 aria-pressed={vis === v}
               >

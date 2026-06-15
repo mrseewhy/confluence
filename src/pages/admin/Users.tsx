@@ -52,9 +52,15 @@ export function AdminUsers() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "admin" | "user">("all");
 
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -72,9 +78,6 @@ export function AdminUsers() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
 
-  const PAGE_SIZE = 20;
-  const [page, setPage] = useState(1);
-
   const loadUsers = useCallback(async (currentPage: number, currentSearch: string, currentFilter: "all" | "admin" | "user") => {
     try {
       const supabase = requireSupabase();
@@ -89,8 +92,8 @@ export function AdminUsers() {
 
       // Fetch notes/folders counts for the returned users
       const ids = (usersWithEmail || []).map((p: Record<string, unknown>) => safeStr(p.user_id) || safeStr(p.id));
-      let noteCounts: Record<string, number> = {};
-      let folderCounts: Record<string, number> = {};
+      const noteCounts: Record<string, number> = {};
+      const folderCounts: Record<string, number> = {};
       if (ids.length > 0) {
         const [{ data: notesData }, { data: foldersData }] = await Promise.all([
           supabase.from("notes").select("owner_id").in("owner_id", ids),
@@ -126,6 +129,7 @@ export function AdminUsers() {
     }
   }, [addToast]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadUsers(page, debouncedSearch, filter); }, [page, debouncedSearch, filter, loadUsers]);
 
   // ── Helpers ──
@@ -160,8 +164,6 @@ export function AdminUsers() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const paginated = filtered;
-
-  useEffect(() => { setPage(1); }, [debouncedSearch, filter]);
 
   // ── Loading state ──
 
@@ -218,7 +220,7 @@ export function AdminUsers() {
             </div>
             <div className={styles.filterBtnGroup}>
               {(["all", "admin", "user"] as const).map((v) => (
-                <Button key={v} variant={filter === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => setFilter(v)} style={{ textTransform: "capitalize" }} aria-pressed={filter === v}>
+                <Button key={v} variant={filter === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => { setFilter(v); setPage(1); }} style={{ textTransform: "capitalize" }} aria-pressed={filter === v}>
                   {v}
                 </Button>
               ))}

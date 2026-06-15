@@ -4,6 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui";
 import { NoteEditor, SaveIndicator } from "@/components/editor/NoteEditor";
 import { useNoteEditor } from "@/hooks/useNoteEditor";
+import { useRealtimeCollaboration } from "@/hooks/useRealtimeCollaboration";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import styles from "@/styles/dashboard.module.css";
 import { requireSupabase } from "@/lib/supabase";
@@ -24,6 +25,8 @@ export function EditNote() {
   const [notFound, setNotFound] = useState(false);
   const [notOwner, setNotOwner] = useState(false);
   const [folderError, setFolderError] = useState("");
+  const [lastRemoteSaver, setLastRemoteSaver] = useState<string | null>(null);
+  const remoteSaveIdRef = useRef(0);
 
   // Load existing note data
   const { loadFromExisting } = editor;
@@ -46,11 +49,29 @@ export function EditNote() {
           return;
         }
 
-        // Verify ownership
+        // Verify ownership — or editor collaborator access
         if (noteData.owner_id !== user.id) {
-          setNotOwner(true);
-          setLoading(false);
-          return;
+          // Check if user is a collaborator with edit access
+          const { data: authData } = await supabase.auth.getUser();
+          const userEmail = authData?.user?.email;
+          if (!userEmail) {
+            setNotOwner(true);
+            setLoading(false);
+            return;
+          }
+          const { data: collab } = await supabase
+            .from("collaborators")
+            .select("access_level")
+            .eq("note_id", noteData.id)
+            .eq("invitee_email", userEmail)
+            .maybeSingle();
+          if (!collab) {
+            setNotOwner(true);
+            setLoading(false);
+            return;
+          }
+          // Any collaborator (viewer or editor) can open the edit page.
+          // Write access is enforced server-side by replace_note_blocks.
         }
 
         // Fetch blocks
@@ -73,9 +94,60 @@ export function EditNote() {
     void loadNote();
   }, [slug, user, loadFromExisting]);
 
+  // ── Realtime collaboration ─────────────────────────────────
+  // Subscribe to the note's Realtime channel once the note ID is
+  // known (after load). Broadcast blocks on auto-save and merge
+  // remote blocks when received.
+
+  const onBlocksReceived = (
+    payload: Parameters<typeof editor.mergeRemoteBlocks>[0],
+  ) => {
+    editor.mergeRemoteBlocks(payload);
+    const savedBy = (payload as { savedBy?: string }).savedBy ?? null;
+    // Use a ref counter to force re-render even for same user
+    remoteSaveIdRef.current += 1;
+    setLastRemoteSaver(savedBy ? `${savedBy}::${remoteSaveIdRef.current}` : null);
+  }
+
+  const collab = useRealtimeCollaboration({
+    noteId: editor.state.noteId,
+    userId: user?.id ?? "",
+    username: user?.username ?? "User",
+    avatarUrl: user?.avatar_url ?? null,
+    enabled: !loading && !!user && !!editor.state.noteId,
+    onBlocksReceived,
+  });
+
+  // ── Broadcast helper ───────────────────────────────────────
+  // Deduplicates the collab.broadcast() call used in auto-save,
+  // manual save, and beforeunload.  Recreated every render so
+  // closures are always fresh. The beforeunload effect is no-deps
+  // so it always captures the latest version.
+  const broadcastCurrentState = () => {
+    collab.broadcast({
+      blocks: editor.state.blocks,
+      title: editor.state.title,
+      description: editor.state.description,
+      savedBy: user?.username ?? "",
+      version: editor.contentVersion,
+    })
+  }
+
+  // ── Broadcast on beforeunload ──────────────────────────────
+  // Fire-and-forget: channel.send() returns a Promise but we don't
+  // await it because the browser may unload before resolution.
+  // No dependency array — re-registers on every render so the
+  // handler always captures the latest broadcastCurrentState.
+  useEffect(() => {
+    if (!editor.state.noteId || !user) return
+    const handler = () => { broadcastCurrentState() }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  })
+
   // ── Auto-save with debounce (only after initial load) ──
-  // Only depends on contentVersion + stable save() + loading,
-  // so the timer isn't re-created on every keystroke.
+  // Only depends on contentVersion — the deps are intentionally scoped
+  // because editor is a render-time object. save/isValid are stable.
   useEffect(() => {
     if (!user || !editor.isValid || loading) return;
     const timer = setTimeout(async () => {
@@ -86,6 +158,7 @@ export function EditNote() {
       setAutoSaving(true);
       try {
         await editor.save(user.id);
+        broadcastCurrentState();
       } catch {
         // Auto-save failures are silent
       } finally {
@@ -93,6 +166,7 @@ export function EditNote() {
       }
     }, AUTO_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, loading, editor.contentVersion, editor.save, editor.isValid]);
 
   async function handleSave() {
@@ -109,9 +183,13 @@ export function EditNote() {
     justManuallySaved.current = true;
     try {
       await editor.save(user.id);
+      broadcastCurrentState();
       navigate("/dashboard/notes");
     } catch (err) {
       console.error("[EditNote] save failed", err);
+    } finally {
+      // Reset manually-saved flag even on failure so auto-save can retry
+      justManuallySaved.current = false;
     }
   }
 
@@ -158,7 +236,7 @@ export function EditNote() {
         <div style={{ padding: "var(--space-20)", textAlign: "center" }}>
           <h2>Access denied</h2>
           <p style={{ color: "var(--color-text-muted)" }}>
-            You can only edit your own notes.
+            You can only edit your own notes or notes you have editor access to.
           </p>
           <Link to="/dashboard/notes">
             <Button
@@ -189,6 +267,10 @@ export function EditNote() {
           userId={user.id}
           slugAvailable={editor.slugAvailable}
           slugChecking={editor.slugChecking}
+          collaborators={collab.collaborators}
+          broadcastCursor={collab.broadcastCursor}
+          remoteCursors={collab.remoteCursors}
+          lastRemoteSaver={lastRemoteSaver}
           breadcrumbLabel="Edit note"
           headerActions={
             <>

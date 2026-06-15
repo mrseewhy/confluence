@@ -47,7 +47,10 @@ export function DashboardCollaborations() {
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -110,7 +113,7 @@ export function DashboardCollaborations() {
       });
 
       // Fetch owner names for returned items only
-      let ownerMap: Record<string, { full_name: string; username: string | null }> = {};
+      const ownerMap: Record<string, { full_name: string; username: string | null }> = {};
       if (ownerIds.size > 0) {
         const { data: ownerProfiles } = await supabase
           .from("profiles")
@@ -162,8 +165,7 @@ export function DashboardCollaborations() {
     }
   }, [user]);
 
-  // Reset page when filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadData(debouncedSearch, typeFilter, page); }, [page, debouncedSearch, typeFilter, loadData]);
 
   // ─── Derived — client-side search on current page ─────────

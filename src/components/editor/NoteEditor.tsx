@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   DndContext,
@@ -27,6 +27,8 @@ import { VideoBlock } from "@/components/editor/VideoBlock";
 import { HeadingBlock } from "@/components/editor/HeadingBlock";
 import type { BlockType, BlockMetadata, Visibility } from "@/types";
 import type { SaveStatus } from "@/hooks/useNoteEditor";
+import type { Collaborator, RemoteCursor } from "@/hooks/useRealtimeCollaboration";
+import { avatarColor } from "@/hooks/useRealtimeCollaboration";
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -436,7 +438,12 @@ export interface NoteEditorActions {
   removeBlock: (id: string) => void;
   moveBlock: (id: string, direction: "up" | "down") => void;
   reorderBlock: (fromIndex: number, toIndex: number) => void;
-  checkSlugAvailability: (userId: string) => void;
+  checkSlugAvailability: (userId: string, slug?: string) => void;
+  mergeRemoteBlocks: (payload: {
+    blocks: Array<{ id: string; type: BlockType; content: string; metadata: BlockMetadata; order_index: number }>
+    title: string
+    description: string
+  }) => void;
 }
 
 interface NoteEditorProps {
@@ -460,9 +467,93 @@ interface NoteEditorProps {
   slugAvailable?: boolean;
   /** Whether a slug availability check is in flight */
   slugChecking?: boolean;
+  /** Collaborators currently viewing/editing this note (realtime presence) */
+  collaborators?: Collaborator[];
+  /** Broadcast cursor focus */
+  broadcastCursor?: (blockId: string | null) => void;
+  /** Remote cursors keyed by userId */
+  remoteCursors?: Record<string, RemoteCursor>;
+  /** Username of the last remote saver (for flash indicator) */
+  lastRemoteSaver?: string | null;
 }
 
 // ── Component ─────────────────────────────────────────────────
+
+function PresenceAvatars({ collaborators }: { collaborators: Collaborator[] }) {
+  if (collaborators.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        padding: "var(--space-2) var(--space-3)",
+        background: "var(--color-bg-subtle)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "var(--radius-lg)",
+        animation: "fadeIn var(--duration-normal) var(--ease-out)",
+      }}
+      title={`${collaborators.map(c => c.username).join(", ")} ${collaborators.length === 1 ? "is" : "are"} viewing`}
+    >
+      <span
+        style={{
+          fontSize: "11px",
+          color: "var(--color-text-muted)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {"\uD83D\uDC65"}{" "}{collaborators.length}
+      </span>
+      <div style={{ display: "flex", marginLeft: "var(--space-1)" }}>
+        {collaborators.slice(0, 5).map((c) => (
+          <div
+            key={c.userId}
+            title={c.username}
+            style={{
+              width: "22px",
+              height: "22px",
+              borderRadius: "50%",
+              background: avatarColor(c.userId),
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "10px",
+              fontWeight: "var(--font-weight-bold)",
+              marginLeft: "-4px",
+              border: "2px solid var(--color-bg-subtle)",
+              flexShrink: 0,
+            }}
+          >
+            {c.username.charAt(0).toUpperCase()}
+          </div>
+        ))}
+        {collaborators.length > 5 && (
+          <div
+            style={{
+              width: "22px",
+              height: "22px",
+              borderRadius: "50%",
+              background: "var(--color-bg-muted)",
+              color: "var(--color-text-muted)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "9px",
+              fontWeight: "var(--font-weight-bold)",
+              marginLeft: "-4px",
+              border: "2px solid var(--color-bg-subtle)",
+              flexShrink: 0,
+            }}
+          >
+            +{collaborators.length - 5}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function NoteEditor({
   state,
@@ -476,15 +567,45 @@ export function NoteEditor({
   userId,
   slugAvailable = true,
   slugChecking = false,
+  collaborators = [],
+  broadcastCursor,
+  remoteCursors = {},
+  lastRemoteSaver,
 }: NoteEditorProps) {
   const [copied, setCopied] = useState(false);
+  const [focusedBlock, setFocusedBlock] = useState<string | null>(null);
+  const [flashVisible, setFlashVisible] = useState(false);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Auto-check slug availability on change ──
+  // Pass the current slug directly rather than relying on the hook's
+  // internal ref, which may be stale due to React's effect ordering
+  // (child effects fire before parent effects, and the ref update
+  // lives in the parent hook).
   useEffect(() => {
     if (state.slug) {
-      actions.checkSlugAvailability(userId);
+      actions.checkSlugAvailability(userId, state.slug);
     }
-  }, [state.slug, userId, actions.checkSlugAvailability]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.slug, userId]);
+
+  // ── Broadcast cursor on focus change ──
+  useEffect(() => {
+    broadcastCursor?.(focusedBlock);
+  }, [focusedBlock, broadcastCursor]);
+
+  // ── Flash indicator when remote save arrives ──
+  useEffect(() => {
+    if (lastRemoteSaver) {
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+      setFlashVisible(true);
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = setTimeout(() => setFlashVisible(false), 3000);
+    }
+    return () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    };
+  }, [lastRemoteSaver]);
 
   // ── dnd-kit sensors ──
   const sensors = useSensors(
@@ -558,8 +679,29 @@ export function NoteEditor({
           }}
         >
           {headerActions}
+          {/* Remote save flash indicator */}
+          {flashVisible && lastRemoteSaver && (
+            <span
+              style={{
+                fontSize: "var(--font-size-xs)",
+                fontWeight: "var(--font-weight-medium)",
+                color: "var(--color-accent)",
+                animation: "fadeIn var(--duration-normal) var(--ease-out)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {lastRemoteSaver?.replace(/::\d+$/, '')} saved
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Presence bar */}
+      {collaborators.length > 0 && (
+        <div style={{ maxWidth: "720px" }}>
+          <PresenceAvatars collaborators={collaborators} />
+        </div>
+      )}
 
       {/* Editor body */}
       <div
@@ -656,10 +798,16 @@ export function NoteEditor({
                   border: "none",
                   minWidth: "80px",
                 }}
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    `${window.location.origin}/${username}/n/${state.slug}`,
-                  );
+                onClick={async () => {
+                  try {
+                    if (navigator?.clipboard?.writeText) {
+                      await navigator.clipboard.writeText(
+                        `${window.location.origin}/${username}/n/${state.slug}`,
+                      );
+                    }
+                  } catch {
+                    // Clipboard write failed (insecure context, permission denied) — silently fall back
+                  }
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
@@ -802,15 +950,24 @@ export function NoteEditor({
               items={state.blocks.map(b => b.id)}
               strategy={verticalListSortingStrategy}
             >
-              {state.blocks.map((block, idx) => (
-                <SortableBlock
-                  key={block.id}
-                  block={block}
-                  idx={idx}
-                  totalBlocks={state.blocks.length}
-                  actions={actions}
-                />
-              ))}
+              {state.blocks.map((block, idx) => {
+                const remoteOnBlock = Object.entries(remoteCursors).filter(
+                  ([, c]) => c.blockId === block.id
+                );
+                return (
+                  <SortableBlock
+                    key={block.id}
+                    block={block}
+                    idx={idx}
+                    totalBlocks={state.blocks.length}
+                    actions={actions}
+                    isFocused={focusedBlock === block.id}
+                    onFocus={() => setFocusedBlock(block.id)}
+                    onBlur={() => setFocusedBlock(null)}
+                    remoteCursor={remoteOnBlock.length > 0 ? remoteOnBlock[0][1] : undefined}
+                  />
+                );
+              })}
             </SortableContext>
           </DndContext>
         )}
@@ -901,6 +1058,7 @@ export function NoteEditor({
 
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
       `}</style>
     </>
   );
@@ -913,11 +1071,19 @@ function SortableBlock({
   idx,
   totalBlocks,
   actions,
+  isFocused,
+  onFocus,
+  onBlur,
+  remoteCursor,
 }: {
   block: NoteEditorState['blocks'][number];
   idx: number;
   totalBlocks: number;
   actions: NoteEditorActions;
+  isFocused?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  remoteCursor?: RemoteCursor;
 }) {
   const {
     attributes,
@@ -932,12 +1098,15 @@ function SortableBlock({
   const isLast = idx === totalBlocks - 1;
   const isCode = block.type === "code";
 
+  // Remote cursor indicator styling
+  const remoteColor = remoteCursor ? avatarColor(remoteCursor.userId) : undefined;
+
   const style: React.CSSProperties = {
-    border: `1px solid var(--color-border)`,
+    border: `1px solid ${remoteCursor ? remoteColor + '80' : 'var(--color-border)'}`,
     borderRadius: "var(--radius-xl)",
     overflow: "hidden",
     background: isCode ? "var(--color-code-bg)" : "var(--color-bg-elevated)",
-    boxShadow: isDragging ? "var(--shadow-lg)" : "var(--shadow-xs)",
+    boxShadow: isFocused ? `0 0 0 2px var(--color-accent-subtle)` : isDragging ? "var(--shadow-lg)" : "var(--shadow-xs)",
     opacity: isDragging ? 0.85 : 1,
     transform: CSS.Transform.toString(transform),
     transition: transition || undefined,
@@ -946,7 +1115,35 @@ function SortableBlock({
   };
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      tabIndex={-1}
+      onFocusCapture={() => onFocus?.()}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          onBlur?.();
+        }
+      }}
+    >
+      {/* Remote cursor indicator dot */}
+      {remoteCursor && (
+        <div
+          title={`${remoteCursor.username} is editing this block`}
+          style={{
+            position: "absolute",
+            top: "var(--space-1)",
+            right: "var(--space-1)",
+            width: "10px",
+            height: "10px",
+            borderRadius: "50%",
+            background: remoteColor,
+            border: "2px solid var(--color-bg-elevated)",
+            zIndex: 5,
+            animation: "pulse 2s ease-in-out infinite",
+          }}
+        />
+      )}
       <div
         style={{
           display: "flex",

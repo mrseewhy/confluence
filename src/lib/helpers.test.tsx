@@ -5,13 +5,14 @@ import {
   formatDateLong,
   timeAgo,
   buildSlug,
-  Avatar,
   buildFolderPath,
   detectVideoProvider,
   getVideoEmbedUrl,
+  sanitizeImageUrl,
   mapOwner,
   OWNER_QUERY,
 } from './helpers'
+import { Avatar } from '@/components/Avatar'
 
 describe('formatDate', () => {
   it('formats an ISO date string', () => {
@@ -236,6 +237,36 @@ describe('getVideoEmbedUrl', () => {
 
   it('returns null for malformed URLs', () => {
     expect(getVideoEmbedUrl('not-a-url', 'youtube')).toBeNull()
+  })
+})
+
+describe('sanitizeImageUrl', () => {
+  it('allows https URLs', () => {
+    expect(sanitizeImageUrl('https://example.com/image.jpg')).toBe('https://example.com/image.jpg')
+  })
+
+  it('allows http URLs', () => {
+    expect(sanitizeImageUrl('http://example.com/image.jpg')).toBe('http://example.com/image.jpg')
+  })
+
+  it('allows data URLs', () => {
+    expect(sanitizeImageUrl('data:image/png;base64,abc123')).toBe('data:image/png;base64,abc123')
+  })
+
+  it('rejects javascript: URLs (XSS prevention)', () => {
+    expect(sanitizeImageUrl('javascript:alert("xss")')).toBeNull()
+  })
+
+  it('rejects vbscript: URLs', () => {
+    expect(sanitizeImageUrl('vbscript:msgbox("xss")')).toBeNull()
+  })
+
+  it('rejects file: URLs', () => {
+    expect(sanitizeImageUrl('file:///etc/passwd')).toBeNull()
+  })
+
+  it('returns null for empty string', () => {
+    expect(sanitizeImageUrl('')).toBeNull()
   })
 })
 

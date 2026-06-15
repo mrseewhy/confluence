@@ -55,7 +55,7 @@ export function DashboardSettings() {
         // Silently fall back to default
       }
     })();
-  }, [user?.id]);
+  }, [user?.id, user]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

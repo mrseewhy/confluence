@@ -34,4 +34,4 @@ const localStorageMock = {
   get length() { return store.size },
   key: vi.fn((index: number) => [...store.keys()][index] ?? null),
 }
-global.localStorage = localStorageMock as any
+global.localStorage = localStorageMock as unknown as typeof global.localStorage

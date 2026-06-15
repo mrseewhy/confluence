@@ -4,6 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui";
 import { NoteEditor, SaveIndicator } from "@/components/editor/NoteEditor";
 import { useNoteEditor } from "@/hooks/useNoteEditor";
+import { useRealtimeCollaboration } from "@/hooks/useRealtimeCollaboration";
 import styles from "@/styles/dashboard.module.css";
 import { useAuth, fallbackProfile } from "@/context/auth";
 
@@ -19,11 +20,62 @@ export function CreateNote() {
   const [autoSaving, setAutoSaving] = useState(false);
 
   const [folderError, setFolderError] = useState("");
+  const [lastRemoteSaver, setLastRemoteSaver] = useState<string | null>(null);
+  const remoteSaveIdRef = useRef(0);
+
+  // ── Realtime collaboration ─────────────────────────────────
+  // Subscribe once the note is created (noteId becomes non-null after first save).
+  // Broadcast blocks after each auto-save so collaborators see live changes.
+
+  const onBlocksReceived = (
+    payload: Parameters<typeof editor.mergeRemoteBlocks>[0],
+  ) => {
+    editor.mergeRemoteBlocks(payload);
+    const savedBy = (payload as { savedBy?: string }).savedBy ?? null;
+    remoteSaveIdRef.current += 1;
+    setLastRemoteSaver(savedBy ? `${savedBy}::${remoteSaveIdRef.current}` : null);
+  }
+
+  const collab = useRealtimeCollaboration({
+    noteId: editor.state.noteId,
+    userId: user?.id ?? "",
+    username: user?.username ?? "User",
+    avatarUrl: user?.avatar_url ?? null,
+    enabled: !!user && !!editor.state.noteId,
+    onBlocksReceived,
+  });
+
+  // ── Broadcast helper ───────────────────────────────────────
+  // Deduplicates the collab.broadcast() call used in auto-save,
+  // manual save, and beforeunload. Recreated every render so
+  // closures are always fresh. The beforeunload effect is no-deps
+  // so it always captures the latest version.
+  const broadcastCurrentState = () => {
+    collab.broadcast({
+      blocks: editor.state.blocks,
+      title: editor.state.title,
+      description: editor.state.description,
+      savedBy: user?.username ?? "",
+      version: editor.contentVersion,
+    })
+  }
+
+  // ── Broadcast on beforeunload ──────────────────────────────
+  // Fire-and-forget: channel.send() returns a Promise but we don't
+  // await it because the browser may unload before resolution.
+  // No dependency array — re-registers on every render so the
+  // handler always captures the latest broadcastCurrentState.
+  useEffect(() => {
+    if (!editor.state.noteId || !user) return
+    const handler = () => { broadcastCurrentState() }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  })
 
   // ── Auto-save with debounce ──
-  // Only depends on contentVersion (a counter bumped on every
-  // content change) + the stable save() callback, so the timer
-  // isn't re-created on every keystroke.
+  // Only depends on contentVersion — the deps are intentionally scoped
+  // because editor is a render-time object (adding it would recreate the
+  // timer on every keystroke). save/isValid are stable callbacks.
   useEffect(() => {
     if (!user || !editor.isValid) return;
     const timer = setTimeout(async () => {
@@ -34,6 +86,7 @@ export function CreateNote() {
       setAutoSaving(true);
       try {
         await editor.save(user.id);
+        broadcastCurrentState();
       } catch {
         // Auto-save failures are silent — manual save will surface errors
       } finally {
@@ -41,6 +94,7 @@ export function CreateNote() {
       }
     }, AUTO_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, editor.contentVersion, editor.save, editor.isValid]);
 
   async function handleSave() {
@@ -57,9 +111,13 @@ export function CreateNote() {
     justManuallySaved.current = true;
     try {
       await editor.save(user.id);
+      broadcastCurrentState();
       navigate("/dashboard/notes");
     } catch (err) {
       console.error("[CreateNote] save failed", err);
+    } finally {
+      // Reset manually-saved flag even on failure so auto-save can retry
+      justManuallySaved.current = false;
     }
   }
 
@@ -82,6 +140,10 @@ export function CreateNote() {
           userId={user.id}
           slugAvailable={editor.slugAvailable}
           slugChecking={editor.slugChecking}
+          collaborators={collab.collaborators}
+          broadcastCursor={collab.broadcastCursor}
+          remoteCursors={collab.remoteCursors}
+          lastRemoteSaver={lastRemoteSaver}
           breadcrumbLabel="New note"
           headerActions={
             <>

@@ -46,9 +46,9 @@ export function FolderDetailPage() {
       try {
         const supabase = requireSupabase();
 
-        // Find owner by username
+        // Find owner by username (using public_profiles for anon-safe access)
         const { data: owner } = await supabase
-          .from("profiles")
+          .from("public_profiles")
           .select("id, username")
           .eq("username", username)
           .single();

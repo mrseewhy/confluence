@@ -47,15 +47,18 @@ export function DashboardSubfolders() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [shareItem, setShareItem] = useState<Folder | null>(null);
 
+  // Pagination
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
-
-  // Pagination
-  const [page, setPage] = useState(1);
-  const PAGE_SIZE = 20;
 
   // Creation state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -115,7 +118,7 @@ export function DashboardSubfolders() {
 
       // Fetch notes counts for the returned subfolders
       const sfIds = (subfoldersRaw || []).map((sf: { id: string }) => sf.id);
-      let noteCounts: Record<string, number> = {};
+      const noteCounts: Record<string, number> = {};
       if (sfIds.length > 0) {
         const { data: notesData } = await supabase
           .from("notes")
@@ -157,8 +160,7 @@ export function DashboardSubfolders() {
     }
   }, [user]);
 
-  // Reset to page 1 when search changes
-  useEffect(() => { setPage(1); }, [debouncedSearch]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadData(debouncedSearch, page); }, [page, debouncedSearch, loadData]);
 
   // ---------------------------------------------------------------------------

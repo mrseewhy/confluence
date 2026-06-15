@@ -33,7 +33,9 @@ export function safeBool(val: unknown, fallback = false): boolean {
 /** Extract a nullable string safely */
 export function safeStrNull(val: unknown): string | null {
   if (val === null || val === undefined) return null;
-  return safeStr(val, null as unknown as string) || null;
+  const s = safeStr(val);
+  // Return null only for truly null/undefined, not empty strings
+  return s === '' ? '' : s;
 }
 
 /** Ensure the value is an array (empty array fallback) */

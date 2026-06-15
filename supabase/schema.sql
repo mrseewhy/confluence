@@ -393,9 +393,8 @@ create policy "Users can insert their own notes"
 drop policy if exists "Users can update their own notes" on public.notes;
 create policy "Users can update their own notes"
   on public.notes for update to authenticated
-  using (owner_id = auth.uid())
+  using (public.can_edit_note(id, auth.uid()))
   with check (
-    owner_id = auth.uid() AND
     not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
   );
 
@@ -577,16 +576,63 @@ create policy "Admins can read all activity log"
 grant select, insert on public.activity_log to authenticated;
 
 -- ═════════════════════════════════════════════════════════════
+-- EDIT ACCESS HELPER
+-- ═════════════════════════════════════════════════════════════
+-- Returns true if the given user can edit the note (owner or
+-- collaborator with access_level = 'editor').
+
+create or replace function public.can_edit_note(note_uuid uuid, user_uuid uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  note_owner_id uuid;
+  user_email text;
+begin
+  -- Admin access
+  if exists (select 1 from public.profiles where id = user_uuid and user_type = 'admin') then
+    return true;
+  end if;
+
+  -- Fetch note owner
+  select owner_id into note_owner_id from public.notes where id = note_uuid;
+  if note_owner_id is null then
+    return false;
+  end if;
+
+  -- Owner access
+  if note_owner_id = user_uuid then
+    return true;
+  end if;
+
+  -- Editor collaborator access
+  select email into user_email from auth.users where id = user_uuid;
+  if user_email is not null then
+    return exists (
+      select 1 from public.collaborators
+      where note_id = note_uuid
+        and invitee_email = user_email
+        and access_level = 'editor'
+    );
+  end if;
+
+  return false;
+end;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.can_edit_note(uuid, uuid) FROM anon;
+
+-- ═════════════════════════════════════════════════════════════
 -- ATOMIC BLOCK REPLACEMENT (single transaction)
 -- ═════════════════════════════════════════════════════════════
 -- Deletes all existing blocks for a note and inserts new ones
 -- in one atomic transaction. If the insert fails, the delete
 -- is rolled back, preventing data loss.
 --
--- SECURITY: Includes an explicit ownership check to prevent
--- any authenticated user from overwriting blocks they don't own.
--- Though the client-side Supabase client passes the user's JWT,
--- SECURITY DEFINER bypasses RLS, so the check is done in-code.
+-- SECURITY: Checks can_edit_note() to allow both owners and
+-- editor collaborators to replace blocks.
 
 create or replace function public.replace_note_blocks(
   p_note_id uuid,
@@ -599,7 +645,6 @@ set search_path = public
 as $$
 declare
   caller_id uuid;
-  note_owner_id uuid;
 begin
   -- Get the calling user's ID from the JWT
   caller_id := auth.uid();
@@ -607,14 +652,14 @@ begin
     raise exception 'Not authenticated';
   end if;
 
-  -- Check that the note exists and the caller owns it
-  select owner_id into note_owner_id from public.notes where id = p_note_id;
-  if note_owner_id is null then
+  -- Check that the note exists
+  if not exists (select 1 from public.notes where id = p_note_id) then
     raise exception 'Note not found';
   end if;
 
-  if note_owner_id != caller_id then
-    raise exception 'Not authorized: you do not own this note';
+  -- Check edit access (owner or editor collaborator)
+  if not public.can_edit_note(p_note_id, caller_id) then
+    raise exception 'Not authorized: you do not have edit access to this note';
   end if;
 
   -- Defense-in-depth: also check that the caller is not banned

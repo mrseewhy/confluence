@@ -75,8 +75,18 @@ function createSupabaseMock() {
   const fromFn = vi.fn(() => ({
     select: selectFn,
   }))
+  const mockChannel = {
+    on: vi.fn().mockReturnThis(),
+    subscribe: vi.fn((cb: (s: string) => void) => { cb('SUBSCRIBED'); return { unsubscribe: vi.fn() } }),
+    track: vi.fn().mockResolvedValue(undefined),
+    untrack: vi.fn(),
+    unsubscribe: vi.fn(),
+    send: vi.fn().mockResolvedValue('ok'),
+    presenceState: vi.fn().mockReturnValue({}),
+  }
   return {
     from: fromFn,
+    channel: vi.fn(() => mockChannel),
   }
 }
 

@@ -59,9 +59,38 @@ function PageSkeleton() {
   )
 }
 
+export function EnvCheck() {
+  const missing = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (missing) {
+    console.error(
+      '%c[confluence] Missing Supabase environment variables.\n' +
+      '%cSet VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file.\n' +
+      '%cThe app will render but all Supabase features (auth, DB, storage) will be unavailable.',
+      'font-weight: bold; color: #e74c3c; font-size: 13px;',
+      'color: #e67e22; font-size: 12px;',
+      'color: #95a5a6; font-size: 12px;',
+    )
+    return (
+      <div style={{
+        background: '#e74c3c',
+        color: '#fff',
+        textAlign: 'center',
+        padding: '12px 16px',
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        fontWeight: 600,
+      }}>
+        ⚠️ Configuration Error: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set in .env.local
+      </div>
+    )
+  }
+  return null
+}
+
 export default function App() {
   return (
     <ThemeProvider>
+      <EnvCheck />
       <BrowserRouter>          <AuthProvider>
           <ToastProvider>
           <ErrorBoundary>

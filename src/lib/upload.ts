@@ -29,6 +29,11 @@ export async function uploadImage(
     return { ok: false, error: 'Unsupported image format. Use PNG, JPG, GIF, WebP, or SVG.' }
   }
 
+  // Validate userId before building path
+  if (!userId) {
+    return { ok: false, error: 'User ID is required for upload.' }
+  }
+
   // Generate a unique path: userId/timestamp-random.ext
   const timestamp = Date.now()
   const random = Math.random().toString(36).slice(2, 8)

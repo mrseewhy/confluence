@@ -6,7 +6,7 @@ import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
-import { formatDate, detectVideoProvider, getVideoEmbedUrl } from "@/lib/helpers";
+import { formatDate, detectVideoProvider, getVideoEmbedUrl, sanitizeImageUrl } from "@/lib/helpers";
 import { ShareButtons } from "@/components/ShareButtons";
 import { useToast } from "@/components/Toast";
 import type { Note, NoteBlock } from "@/types";
@@ -20,6 +20,7 @@ export function NoteDetailPage() {
   const [ownerUsername, setOwnerUsername] = useState<string>("");
   const { addToast } = useToast();
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isCollaborator, setIsCollaborator] = useState(false);
 
   // Listen for share-copy events
   useEffect(() => {
@@ -37,9 +38,9 @@ export function NoteDetailPage() {
       try {
         const supabase = requireSupabase();
 
-        // Find owner by username
+        // Find owner by username (using public_profiles for anon-safe access)
         const { data: owner } = await supabase
-          .from("profiles")
+          .from("public_profiles")
           .select("id, username")
           .eq("username", username)
           .single();
@@ -51,25 +52,45 @@ export function NoteDetailPage() {
 
         setOwnerUsername(owner.username);
 
-        // Find note by slug AND owner_id.
-        // Always filter by visibility for security: only the owner
-        // may see their private notes through this public endpoint.
-        const query = supabase
+        // Step 1: Fetch the note by slug (no visibility filter yet)
+        // We need the note UUID to check collaborator status
+        const { data: noteData } = await supabase
           .from("notes")
           .select("*, owner_id, folder:folders(id, title, slug)")
           .eq("slug", slug)
-          .eq("owner_id", owner.id);
-
-        // Non-owners can only see public notes — prevents the brief
-        // flash of private content before the fallback renders and
-        // provides defense-in-depth against RLS misconfiguration.
-        if (!authUser || authUser.id !== owner.id) {
-          query.eq("visibility", "public");
-        }
-
-        const { data: noteData } = await query.single();
+          .eq("owner_id", owner.id)
+          .single();
 
         if (!noteData) {
+          setLoading(false);
+          return;
+        }
+
+        // Step 2: Determine if user can view this note
+        const isOwner = authUser?.id === noteData.owner_id;
+        const isPublic = noteData.visibility === "public";
+        
+        // Check collaborator status for non-owners of private notes
+        let canView = isOwner || isPublic;
+        if (!canView && authUser) {
+          const { data: authData } = await supabase.auth.getUser();
+          const userEmail = authData?.user?.email;
+          if (userEmail) {
+            const { data: collab } = await supabase
+              .from("collaborators")
+              .select("id")
+              .eq("note_id", noteData.id)
+              .eq("invitee_email", userEmail)
+              .maybeSingle();
+            if (collab) {
+              canView = true;
+              setIsCollaborator(true);
+            }
+          }
+        }
+
+        if (!canView) {
+          // Private note and user isn't owner or collaborator — show fallback
           setLoading(false);
           return;
         }
@@ -145,8 +166,8 @@ export function NoteDetailPage() {
   const isPublic = note.visibility === "public";
   const isOwner = authUser?.id === note.owner_id;
 
-  // Only block non-owner viewers from seeing private notes
-  if (!isPublic && !isOwner) {
+  // Only block non-owner/non-collaborator viewers from seeing private notes
+  if (!isPublic && !isOwner && !isCollaborator) {
     return (
       <>
         <Navbar />
@@ -356,7 +377,7 @@ export function NoteDetailPage() {
                   ) : block.type === "image" ? (
                     <div>
                       <img
-                        src={block.content}
+                        src={sanitizeImageUrl(block.content) ?? ''}
                         alt={block.metadata?.alt || ""}
                         style={{
                           maxWidth: "100%",
@@ -401,6 +422,7 @@ export function NoteDetailPage() {
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             referrerPolicy="strict-origin-when-cross-origin"
                             allowFullScreen
+                            sandbox="allow-scripts allow-same-origin allow-presentation"
                           />
                           {block.metadata?.caption && (
                             <p

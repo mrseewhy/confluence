@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { BlockType, BlockMetadata, Visibility } from '@/types'
 import { requireSupabase } from '@/lib/supabase'
 import { safeVisibility, safeBlockType, safeBlockMetadata } from '@/lib/safeParse'
+import { buildSlug } from '@/lib/helpers'
 
 // ── EditorBlock (client-only, not a DB NoteBlock) ─────────────
 
@@ -33,13 +34,7 @@ function nextId(): string {
   return `block-${crypto.randomUUID()}`
 }
 
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80)
-}
+
 
 const DEFAULT_METADATA: Record<BlockType, BlockMetadata> = {
   text:  {},
@@ -160,7 +155,9 @@ export function useNoteEditor() {
   // Always keep a ref to the latest state so that callbacks
   // (e.g. the save function) never capture stale closures.
   const stateRef = useRef(state)
-  stateRef.current = state
+  useEffect(() => {
+    stateRef.current = state
+  })
 
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
@@ -185,7 +182,7 @@ export function useNoteEditor() {
     setState(prev => ({
       ...prev,
       title: value,
-      slug:  slugManuallyEdited ? prev.slug : slugify(value),
+      slug:  slugManuallyEdited ? prev.slug : buildSlug(value),
     }))
     bumpVersion()
   }, [slugManuallyEdited, bumpVersion])
@@ -203,11 +200,13 @@ export function useNoteEditor() {
 
   const setFolderId = useCallback((value: string) => {
     setState(prev => ({ ...prev, folder_id: value }))
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
   const setVisibility = useCallback((value: Visibility) => {
     setState(prev => ({ ...prev, visibility: value }))
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
   // ── Block actions ────────────────────────────────────────────
 
@@ -378,7 +377,8 @@ export function useNoteEditor() {
       visibility:  'public',
       blocks:      [],
     })
-  }, [])
+    bumpVersion()
+  }, [bumpVersion])
 
   // ── Save (insert or update note + blocks into Supabase) ─────
   //
@@ -398,7 +398,7 @@ export function useNoteEditor() {
     setSaveStatus('saving')
     setSaveError(null)
 
-    const slug = s.slug || slugify(s.title)
+    const slug = s.slug || buildSlug(s.title)
 
     try {
       const supabase = requireSupabase()
@@ -506,12 +506,14 @@ export function useNoteEditor() {
   // Calls the Postgres RPC function is_slug_available to
   // proactively warn the user before they attempt to save.
 
-  const checkSlugAvailability = useCallback((userId: string) => {
+  const checkSlugAvailability = useCallback((userId: string, slug?: string) => {
+    // Use the provided slug if given (avoids stale ref timing issues),
+    // otherwise fall back to reading from stateRef.current.
     const s = stateRef.current
-    const slug = s.slug || slugify(s.title)
+    const effectiveSlug = slug ?? (s.slug || buildSlug(s.title))
 
     // Don't check empty slugs
-    if (!slug) {
+    if (!effectiveSlug) {
       setSlugAvailable(true)
       setSlugChecking(false)
       return
@@ -528,7 +530,7 @@ export function useNoteEditor() {
       try {
         const supabase = requireSupabase()
         const { data, error } = await supabase.rpc('is_slug_available', {
-          p_slug:           slug,
+          p_slug:           effectiveSlug,
           p_owner_id:       userId,
           p_exclude_note_id: s.noteId,
         })
@@ -584,7 +586,6 @@ export function useNoteEditor() {
       saveDraft(stateRef.current)
     }
     // Re-run on every content change so the timer resets
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentVersion])
 
   // ── beforeunload save + warning ─────────────────────────────
@@ -614,6 +615,33 @@ export function useNoteEditor() {
     }
   }, [])
 
+  // ── Merge remote blocks (from Realtime collaboration) ──────
+  // Called when another collaborator's auto-save broadcasts their
+  // blocks. Intentionally does NOT bump contentVersion — remote
+  // updates should not trigger auto-save loops.
+
+  const mergeRemoteBlocks = useCallback(
+    (payload: {
+      blocks: Array<{ id: string; type: BlockType; content: string; metadata: BlockMetadata; order_index: number }>
+      title: string
+      description: string
+    }) => {
+      setState(prev => ({
+        ...prev,
+        title:     payload.title,
+        description: payload.description,
+        blocks:    payload.blocks.map((b, i) => ({
+          id:          b.id,
+          type:        b.type,
+          content:     b.content,
+          metadata:    b.metadata,
+          order_index: i,
+        })),
+      }))
+    },
+    [],
+  )
+
   return {
     state,
     saveStatus,
@@ -640,5 +668,7 @@ export function useNoteEditor() {
     checkSlugAvailability,
     loadFromExisting,
     resetEditor,
+    // collaboration
+    mergeRemoteBlocks,
   }
 }

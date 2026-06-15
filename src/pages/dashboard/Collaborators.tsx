@@ -54,7 +54,10 @@ export function DashboardCollaborators() {
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -129,8 +132,7 @@ export function DashboardCollaborators() {
     }
   }, [user]);
 
-  // Reset page when filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadData(debouncedSearch, typeFilter, page); }, [page, debouncedSearch, typeFilter, loadData]);
 
   // ─── Derived ──────────────────────────────────────────────

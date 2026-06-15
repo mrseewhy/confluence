@@ -24,7 +24,7 @@ export function ResetPasswordPage() {
         if (!session) {
           setError('No active reset session. Please request another password recovery email.')
         }
-      } catch (err) {
+      } catch {
         setError('Database connection error.')
       }
     }

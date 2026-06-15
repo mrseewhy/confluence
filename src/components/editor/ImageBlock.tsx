@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import type { BlockMetadata } from '@/types'
 import { useAuth } from '@/context/auth'
 import { uploadImage } from '@/lib/upload'
+import { sanitizeImageUrl } from '@/lib/helpers'
 
 interface ImageBlockProps {
   content:  string
@@ -161,7 +162,7 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
       {/* Image preview (when URL is set, upload mode only — URL mode has its own preview) */}
       {mode === 'upload' && isUrl && content && (
         <img
-          src={content}
+          src={sanitizeImageUrl(content) ?? ''}
           alt={metadata.alt ?? 'Image preview'}
           style={{
             maxWidth:     '100%',
@@ -208,7 +209,7 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
           {/* Image preview for URL mode (only shown in this mode) */}
           {isUrl && content && (
             <img
-              src={content}
+              src={sanitizeImageUrl(content) ?? ''}
               alt={metadata.alt ?? 'Image preview'}
               style={{
                 maxWidth:     '100%',

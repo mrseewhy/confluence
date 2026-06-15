@@ -22,7 +22,9 @@ export function formatDateLong(iso: string): string {
 
 export function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60000)
+  const absDiff = Math.abs(diff)
+  const mins = Math.floor(absDiff / 60000)
+  if (mins < 1) return 'just now'
   if (mins < 60) return `${mins}m ago`
   const hours = Math.floor(mins / 60)
   if (hours < 24) return `${hours}h ago`
@@ -39,61 +41,6 @@ export function buildSlug(title: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 80)
-}
-
-// ── Avatar helpers ────────────────────────────────────────────
-
-const AVATAR_COLORS = [
-  '#0D7F66', '#B87009', '#4F46E5', '#BE185D',
-  '#059669', '#D97706', '#7C3AED', '#DB2777',
-]
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
-
-function getAvatarColor(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
-}
-
-export interface AvatarProps {
-  name: string
-  size?: number
-  color?: string
-}
-
-export function Avatar({ name, size = 32, color }: AvatarProps) {
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        background: color ?? getAvatarColor(name),
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#fff',
-        fontSize: size * 0.4,
-        fontWeight: 600,
-        fontFamily: 'var(--font-sans)',
-        flexShrink: 0,
-        lineHeight: 1,
-      }}
-      title={name}
-    >
-      {getInitials(name)}
-    </div>
-  )
 }
 
 // ── Folder path builder ───────────────────────────────────────
@@ -169,6 +116,17 @@ export function getVideoEmbedUrl(url: string, provider: VideoProvider): string |
     // Invalid URL — ignore
   }
   return null
+}
+
+// ── URL safety ────────────────────────────────────────────────
+
+/** Sanitize an image URL — returns null for unsafe protocols. */
+export function sanitizeImageUrl(url: string): string | null {
+  if (!url) return null
+  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:')) {
+    return null
+  }
+  return url
 }
 
 // ── Owner query fragment ──────────────────────────────────────

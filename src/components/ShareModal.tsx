@@ -12,7 +12,7 @@ interface Collaborator {
   created_at: string
 }
 
-const INVITE_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-collaborator-invite`;
+const INVITE_FUNCTION_URL = `${(import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/+$/, '')}/functions/v1/send-collaborator-invite`;
 
 interface ShareModalProps {
   isOpen: boolean
@@ -68,34 +68,35 @@ export function ShareModal({
     ? `${window.location.origin}/${ownerUsername}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
     : `${window.location.origin}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
 
-  const loadCollaborators = useCallback(async () => {
-    if (!isOpen) return
-    setLoading(true)
-    setError('')
-    try {
-      const supabase = requireSupabase()
-      const filterKey = itemType === 'folder' ? 'folder_id' : 'note_id'
-      const { data, error: fetchError } = await supabase
-        .from('collaborators')
-        .select('*')
-        .eq(filterKey, itemId)
-        .order('created_at', { ascending: true })
+  const fetchCollaborators = useCallback(async () => {
+    if (!isOpen) return null
+    const supabase = requireSupabase()
+    const filterKey = itemType === 'folder' ? 'folder_id' : 'note_id'
+    const { data, error: fetchError } = await supabase
+      .from('collaborators')
+      .select('*')
+      .eq(filterKey, itemId)
+      .order('created_at', { ascending: true })
 
-      if (fetchError) throw fetchError
-      setCollaborators(data || [])
-
-    } catch (err) {
-      console.error('Error loading collaborators:', err)
-      // If no RLS policy yet or table doesn't exist, silently fall back
-      setCollaborators([])
-    } finally {
-      setLoading(false)
-    }
-  }, [isOpen, itemId, itemType, fetchInviterInfo])
+    if (fetchError) throw fetchError
+    return (data || []) as Collaborator[]
+  }, [isOpen, itemId, itemType])
 
   useEffect(() => {
-    void loadCollaborators()
-  }, [loadCollaborators])
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true)
+    setError('')
+    fetchCollaborators()
+      .then(data => {
+        if (data) setCollaborators(data)
+        else setCollaborators([])
+      })
+      .catch(err => {
+        console.error('Error loading collaborators:', err)
+        setCollaborators([])
+      })
+      .finally(() => setLoading(false))
+  }, [fetchCollaborators])
 
   if (!isOpen) return null
 
@@ -221,8 +222,14 @@ export function ShareModal({
     }
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(itemShareUrl)
+  const handleCopy = async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(itemShareUrl)
+      }
+    } catch {
+      // Clipboard write failed — silently fall back
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

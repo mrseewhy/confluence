@@ -46,7 +46,10 @@ export function AdminFolders() {
 
   // Debounce search to avoid rapid API calls
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -104,13 +107,10 @@ export function AdminFolders() {
     }
   }, []);
 
-  // Reset to page 1 when search/vis changes, then load
-  useEffect(() => { setPage(1); }, [debouncedSearch, vis]);
-
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadFolders(debouncedSearch, vis, page); }, [page, debouncedSearch, vis, loadFolders]);
 
-  // Reset transfer modal when selection changes
-  useEffect(() => { setShowTransferModal(false); }, [transferSelectedId]);
+  // Reset transfer modal when selection changes is handled inline in onSelect
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const paginated = allFolders;
@@ -131,8 +131,7 @@ export function AdminFolders() {
         try { await supabase.from("activity_log").insert({
           inviter_id: user!.id, invitee_email: "", action: "folder_deleted",
           item_type: "folder", item_title: target?.title || "Unknown",
-          details: `Admin ${user?.full_name} deleted folder "${target?.title}"`,
-        }); } catch {}
+          details: `Admin ${user?.full_name} deleted folder "${target?.title}"`,                  }); } catch { /* activity log best-effort */ }
       })();
     } catch {
       addToast("Failed to delete folder", "error");
@@ -179,7 +178,7 @@ export function AdminFolders() {
             </div>
             <div className={styles.filterBtnGroup}>
               {(["all", "public", "private"] as const).map((v) => (
-                <Button key={v} variant={vis === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => setVis(v)} style={{ textTransform: "capitalize" }} aria-pressed={vis === v}>{v}</Button>
+                <Button key={v} variant={vis === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => { setVis(v); setPage(1); }} style={{ textTransform: "capitalize" }} aria-pressed={vis === v}>{v}</Button>
               ))}
             </div>
           </div>
@@ -271,7 +270,7 @@ export function AdminFolders() {
                           inviter_id: user!.id, invitee_email: "", action: "visibility_changed",
                           item_type: "folder", item_title: target.title,
                           details: `Admin ${user?.full_name} changed folder "${target.title}" visibility to ${newVis}`,
-                        }); } catch {}
+                        }); } catch { addToast("Activity log failed", "error"); }
                       })();
                     } catch { addToast("Failed to update visibility", "error"); }
                   }}
@@ -285,7 +284,7 @@ export function AdminFolders() {
 
         {/* ── Transfer Ownership ── */}
         <ActionPanel title="Transfer Ownership" description="Reassign a folder to a different user" icon={IC.users} accent="warning">
-          <ItemSelect items={allFolders.map(folderToSelect)} selectedId={transferSelectedId} onSelect={setTransferSelectedId} placeholder="Choose a folder to transfer…" />
+          <ItemSelect items={allFolders.map(folderToSelect)} selectedId={transferSelectedId} onSelect={(id) => { setTransferSelectedId(id); setShowTransferModal(false); }} placeholder="Choose a folder to transfer…" />
           {transferSelectedId && (() => {
             const target = getFolder(transferSelectedId);
             if (!target) return null;
@@ -325,7 +324,8 @@ export function AdminFolders() {
                     action: "ownership_transferred", item_type: "folder",
                     item_title: target.title,
                     details: `Admin ${user?.full_name} transferred folder "${target.title}" to ${newOwnerName}`,
-                  }); } catch {}
+                  // eslint-disable-next-line no-empty
+                  }); } catch { }
                 })();
               } catch { addToast("Failed to transfer ownership. Try again.", "error"); }
               setShowTransferModal(false);

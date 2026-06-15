@@ -99,6 +99,7 @@ export function DashboardActivityLog() {
   }, [user]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData();
   }, [loadData]);
 
@@ -107,12 +108,13 @@ export function DashboardActivityLog() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
 
-    const now = Date.now();
-    const msDay = 86400000;
+const msDay = 86400000;
     let dateCutoff: number | null = null;
-    if (datePreset === "7d") dateCutoff = now - 7 * msDay;
-    else if (datePreset === "30d") dateCutoff = now - 30 * msDay;
-    else if (datePreset === "90d") dateCutoff = now - 90 * msDay;
+    // eslint-disable-next-line react-hooks/purity
+    const renderNow = Date.now();
+    if (datePreset === "7d") dateCutoff = renderNow - 7 * msDay;
+    else if (datePreset === "30d") dateCutoff = renderNow - 30 * msDay;
+    else if (datePreset === "90d") dateCutoff = renderNow - 90 * msDay;
 
     return entries.filter((e) => {
       const matchesSearch =
@@ -144,11 +146,6 @@ export function DashboardActivityLog() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [search, typeFilter, actionFilter, datePreset, customStart, customEnd]);
 
   // ─── Monthly summary ──────────────────────────────────────
 
@@ -395,7 +392,7 @@ export function DashboardActivityLog() {
           type="search"
           placeholder="Search by email, item name, or inviter…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           style={{
             flex: "1 1 220px",
             fontFamily: "var(--font-sans)",
@@ -422,7 +419,7 @@ export function DashboardActivityLog() {
               key={v}
               variant={typeFilter === v ? "accent-ghost" : "secondary"}
               size="sm"
-              onClick={() => setTypeFilter(v)}
+              onClick={() => { setTypeFilter(v); setPage(1); }}
               style={{ textTransform: "capitalize" }}
             >
               {v === "all" ? "All" : v === "folder" ? "Folders" : "Notes"}
@@ -435,7 +432,7 @@ export function DashboardActivityLog() {
               key={v}
               variant={actionFilter === v ? "accent-ghost" : "ghost"}
               size="sm"
-              onClick={() => setActionFilter(v)}
+              onClick={() => { setActionFilter(v); setPage(1); }}
               style={{ textTransform: "capitalize" }}
             >
               {v === "all" ? "All" : v === "invited" ? "Invites" : "Revoked"}
@@ -466,7 +463,7 @@ export function DashboardActivityLog() {
               key={preset.value}
               variant={datePreset === preset.value ? "accent-ghost" : "ghost"}
               size="xs"
-              onClick={() => setDatePreset(preset.value)}
+              onClick={() => { setDatePreset(preset.value); setPage(1); }}
             >
               {preset.label}
             </Button>

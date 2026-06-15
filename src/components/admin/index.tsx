@@ -94,6 +94,7 @@ export function ItemSelect({ items, selectedId, onSelect, placeholder }: ItemSel
   // Focus search input when dropdown opens
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveIndex(-1);
       // Small delay to allow DOM to render
       requestAnimationFrame(() => inputRef.current?.focus());

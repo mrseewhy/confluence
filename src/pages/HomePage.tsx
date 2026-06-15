@@ -4,7 +4,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button, Badge } from "@/components/ui";
 import { requireSupabase } from "@/lib/supabase";
-import { Avatar, timeAgo, buildFolderPath, OWNER_QUERY, mapOwner } from "@/lib/helpers";
+import { timeAgo, buildFolderPath, OWNER_QUERY, mapOwner } from "@/lib/helpers";
+import { Avatar } from "@/components/Avatar";
 
 // ─── Types ────────────────────────────────────────────────────
 

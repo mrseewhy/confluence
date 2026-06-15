@@ -95,12 +95,13 @@ export function AdminActivityLog() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    const now = Date.now();
     const msDay = 86400000;
     let dateCutoff: number | null = null;
-    if (datePreset === "7d") dateCutoff = now - 7 * msDay;
-    else if (datePreset === "30d") dateCutoff = now - 30 * msDay;
-    else if (datePreset === "90d") dateCutoff = now - 90 * msDay;
+    // eslint-disable-next-line react-hooks/purity
+    const renderNow = Date.now();
+    if (datePreset === "7d") dateCutoff = renderNow - 7 * msDay;
+    else if (datePreset === "30d") dateCutoff = renderNow - 30 * msDay;
+    else if (datePreset === "90d") dateCutoff = renderNow - 90 * msDay;
 
     return entries.filter((e) => {
       const matchesSearch = !q ||
@@ -127,8 +128,6 @@ export function AdminActivityLog() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  useEffect(() => { setPage(1); }, [search, actionFilter, typeFilter, datePreset, customStart, customEnd]);
 
   // CSV export
   const buildCsvContent = useMemo(() => {
@@ -233,17 +232,17 @@ export function AdminActivityLog() {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: "var(--space-3)", marginBottom: "var(--space-4)", flexWrap: "wrap" }}>
-        <input type="search" placeholder="Search by email, item, or details…" value={search} onChange={(e) => setSearch(e.target.value)}
+        <input type="search" placeholder="Search by email, item, or details…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className={styles.searchInput} style={{ flex: "1 1 220px" }} aria-label="Search activity log" />
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
-          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}
+          <select value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
             style={{ fontFamily: "var(--font-sans)", fontSize: "var(--font-size-xs)", color: "var(--color-text-primary)", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "var(--space-1) var(--space-2)", outline: "none", cursor: "pointer" }}>
             <option value="all">All actions</option>
             {ACTIONS.map((a) => (
               <option key={a} value={a}>{a.replace(/_/g, " ")}</option>
             ))}
           </select>
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+          <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
             style={{ fontFamily: "var(--font-sans)", fontSize: "var(--font-size-xs)", color: "var(--color-text-primary)", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "var(--space-1) var(--space-2)", outline: "none", cursor: "pointer" }}>
             <option value="all">All types</option>
             <option value="folder">Folder</option>
@@ -257,7 +256,7 @@ export function AdminActivityLog() {
       <div style={{ display: "flex", gap: "var(--space-3)", marginBottom: "var(--space-4)", flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: "var(--space-1)", alignItems: "center" }}>
           {DATE_PRESETS.map((preset) => (
-            <Button key={preset.value} variant={datePreset === preset.value ? "accent-ghost" : "ghost"} size="xs" onClick={() => setDatePreset(preset.value)}>
+            <Button key={preset.value} variant={datePreset === preset.value ? "accent-ghost" : "ghost"} size="xs" onClick={() => { setDatePreset(preset.value); setPage(1); }}>
               {preset.label}
             </Button>
           ))}

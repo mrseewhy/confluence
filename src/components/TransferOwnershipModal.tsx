@@ -34,6 +34,9 @@ export function TransferOwnershipModal({
   useEffect(() => {
     if (!isOpen) return;
     const fetchUsers = async () => {
+      // Reset state before fetching (runs synchronously before first await)
+      setSelectedUserId(null);
+      setSearch("");
       setLoading(true);
       try {
         const supabase = requireSupabase();
@@ -67,8 +70,6 @@ export function TransferOwnershipModal({
       }
     };
     void fetchUsers();
-    setSelectedUserId(null);
-    setSearch("");
   }, [isOpen]);
 
   const filtered = users.filter((u) => {

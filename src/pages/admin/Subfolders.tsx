@@ -47,7 +47,10 @@ export function AdminSubfolders() {
 
   // Debounce search to avoid rapid API calls
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -103,11 +106,11 @@ export function AdminSubfolders() {
     }
   }, []);
 
-  // Reset to page 1 when search/vis changes, then load
-  useEffect(() => { setPage(1); }, [debouncedSearch, vis]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadSubfolders(debouncedSearch, vis, page); }, [page, debouncedSearch, vis, loadSubfolders]);
 
   // Reset transfer modal when selection changes
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setShowTransferModal(false); }, [transferSelectedId]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -127,7 +130,7 @@ export function AdminSubfolders() {
           inviter_id: user!.id, invitee_email: "", action: "folder_deleted",
           item_type: "folder", item_title: target?.title || "Unknown",
           details: `Admin ${user?.full_name} deleted subfolder "${target?.title}"`,
-        }); } catch {}
+        }); } catch { /* best-effort */ }
       })();
     } catch { addToast("Failed to delete subfolder", "error"); }
     setPendingDeleteId(null);
@@ -172,7 +175,7 @@ export function AdminSubfolders() {
             </div>
             <div className={styles.filterBtnGroup}>
               {(["all", "public", "private"] as const).map((v) => (
-                <Button key={v} variant={vis === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => setVis(v)} style={{ textTransform: "capitalize" }} aria-pressed={vis === v}>{v}</Button>
+                <Button key={v} variant={vis === v ? "accent-ghost" : "secondary"} size="xs" onClick={() => { setVis(v); setPage(1); }} style={{ textTransform: "capitalize" }} aria-pressed={vis === v}>{v}</Button>
               ))}
             </div>
           </div>
@@ -260,7 +263,7 @@ export function AdminSubfolders() {
                           inviter_id: user!.id, invitee_email: "", action: "visibility_changed",
                           item_type: "folder", item_title: target.title,
                           details: `Admin ${user?.full_name} changed subfolder "${target.title}" visibility to ${newVis}`,
-                        }); } catch {}
+                        }); } catch { /* best-effort */ }
                       })();
                     } catch { addToast("Failed to update visibility", "error"); }
                   }}
@@ -314,7 +317,7 @@ export function AdminSubfolders() {
                     action: "ownership_transferred", item_type: "folder",
                     item_title: target.title,
                     details: `Admin ${user?.full_name} transferred subfolder "${target.title}" to ${newOwnerName}`,
-                  }); } catch {}
+                  }); } catch { /* best-effort */ }
                 })();
               } catch { addToast("Failed to transfer ownership. Try again.", "error"); }
               setShowTransferModal(false);

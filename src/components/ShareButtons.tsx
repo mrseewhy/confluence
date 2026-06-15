@@ -10,6 +10,7 @@ interface SharePlatform {
   getUrl: (url: string, title: string, text: string) => string | null; // null = use clipboard fallback
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const PLATFORMS: SharePlatform[] = [
   {
     id: "twitter",

@@ -13,8 +13,6 @@ import styles from "@/styles/dashboard.module.css";
 import { safeStr, safeArray } from "@/lib/safeParse";
 import type { Note } from "@/types";
 
-// (formatDate imported from @/lib/helpers)
-
 export function DashboardNotes() {
   const { profile } = useAuth();
   const user = profile;
@@ -33,7 +31,8 @@ export function DashboardNotes() {
   const [totalCount, setTotalCount] = useState(0);
   const PAGE_SIZE = 20;
 
-  const loadData = useCallback(async () => {
+  // ── Data fetching ──────────────────────────────────────────
+  const fetchData = useCallback(async () => {
     if (!user) return;
     try {
       const supabase = requireSupabase();
@@ -89,14 +88,11 @@ export function DashboardNotes() {
     }
   }, [user, page]);
 
+  // Initial data load
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
-  // Reset page when search/vis changes
-  useEffect(() => {
-    setPage(1);
-  }, [search, vis]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchData();
+  }, [fetchData]);
 
   const filtered = notesList.filter((n) => {
     const q = search.toLowerCase();
@@ -108,11 +104,17 @@ export function DashboardNotes() {
     );
   });
 
-  const handleCopyLink = (note: Note, e: React.MouseEvent) => {
+  const handleCopyLink = async (note: Note, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const link = `${window.location.origin}/${user?.username || "u"}/n/${note.slug}`;
-    navigator.clipboard.writeText(link);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      }
+    } catch {
+      // Clipboard write failed — silently ignore
+    }
     setCopiedId(note.id);
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -123,7 +125,7 @@ export function DashboardNotes() {
       const { error } = await supabase.from("notes").delete().eq("id", id);
 
       if (error) throw error;
-      await loadData();
+      await fetchData();
     } catch (err) {
       console.error("Error deleting note:", err);
     } finally {
@@ -174,7 +176,7 @@ export function DashboardNotes() {
           type="search"
           placeholder="Search notes…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className={styles.searchInput}
           aria-label="Search notes"
         />
@@ -183,7 +185,7 @@ export function DashboardNotes() {
                 key={v}
                 variant={vis === v ? "accent-ghost" : "secondary"}
                 size="sm"
-                onClick={() => setVis(v)}
+                onClick={() => { setVis(v); setPage(1); }}
                 style={{ textTransform: "capitalize" }}
                 aria-pressed={vis === v}
               >
