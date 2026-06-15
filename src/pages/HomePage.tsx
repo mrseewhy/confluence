@@ -296,7 +296,7 @@ export function HomePage() {
           <h2 style={styles.centeredTitle}>Everything you need, nothing you don&apos;t</h2>
           <p style={styles.centeredSub}>Designed for developers, teachers, writers, and thinkers.</p>
 
-          <div style={styles.featuresGrid}>
+          <div className="features-grid" style={styles.featuresGrid}>
             {FEATURES.map((feature) => (
               <div key={feature.title} style={styles.featureCard}>
                 <span style={styles.featureIcon}>{feature.icon}</span>
@@ -306,6 +306,7 @@ export function HomePage() {
             ))}
           </div>
         </div>
+        <style>{`@media (max-width: 768px) { .features-grid { grid-template-columns: 1fr !important; } }`}</style>
       </section>
 
       {/* ================================================================
@@ -653,7 +654,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   featuresGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: "var(--space-5)",
     marginTop: "var(--space-10)",
     textAlign: "left",
