@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
@@ -40,6 +40,7 @@ interface SubfolderRow extends Folder {
   parentTitle: string;
   parentSlug: string;
   derivedNoteCount: number;
+  depth: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +180,29 @@ export function DashboardSubfolders() {
   const [error, setError] = useState<string | null>(null);
   const [subfoldersData, setSubfoldersData] = useState<SubfolderRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [rootFolders, setRootFolders] = useState<Folder[]>([]);
+  const [allFolders, setAllFolders] = useState<Pick<Folder, "id" | "title" | "parent_id">[]>([]);
+
+  const flatFolders = useMemo(() => {
+    type FlatFolder = { id: string; title: string; depth: number; parent_id: string | null };
+    const roots = allFolders.filter((f) => !f.parent_id);
+    const result: FlatFolder[] = [];
+
+    const addChildren = (parentId: string, depth: number) => {
+      const children = allFolders.filter((f) => f.parent_id === parentId);
+      for (const child of children) {
+        result.push({ id: child.id, title: child.title, parent_id: child.parent_id, depth });
+        addChildren(child.id, depth + 1);
+      }
+    };
+
+    for (const root of roots) {
+      result.push({ id: root.id, title: root.title, parent_id: root.parent_id, depth: 0 });
+      addChildren(root.id, 1);
+    }
+
+    return result;
+  }, [allFolders]);
+
   const [shareItem, setShareItem] = useState<Folder | null>(null);
 
   // Pagination
@@ -204,6 +227,20 @@ export function DashboardSubfolders() {
   const [editParentId, setEditParentId] = useState("");
   const [editVisibility, setEditVisibility] = useState<Visibility>(DEFAULT_VISIBILITY);
   const [editing, setEditing] = useState(false);
+
+  // Collect IDs to exclude from parent picker when editing (folder + its descendants)
+  const editExcludeIds = useMemo(() => {
+    if (!editFolder) return new Set<string>();
+    const ids = new Set<string>();
+    const collect = (parentId: string) => {
+      ids.add(parentId);
+      for (const f of allFolders) {
+        if (f.parent_id === parentId) collect(f.id);
+      }
+    };
+    collect(editFolder.id);
+    return ids;
+  }, [editFolder, allFolders]);
 
   // Delete confirmation state
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -245,13 +282,13 @@ export function DashboardSubfolders() {
     try {
       const supabase = requireSupabase();
 
-      // Fetch root folders for the parent select dropdown (unpaginated — small dataset)
-      const { data: roots } = await supabase
+      // Fetch all folders for the parent select dropdown (shows hierarchy)
+      const { data: all } = await supabase
         .from("folders")
-        .select("id, title, slug")
+        .select("id, title, parent_id")
         .eq("owner_id", user.id)
-        .is("parent_id", null);
-      setRootFolders(safeArray<Folder>(roots));
+        .order("title");
+      setAllFolders(safeArray(all) as Pick<Folder, "id" | "title" | "parent_id">[]);
 
       // Count subfolders matching search
       let countQuery = supabase
@@ -294,6 +331,14 @@ export function DashboardSubfolders() {
       }
 
       const safeRaw = safeArray<Record<string, unknown>>(subfoldersRaw);
+      const folderData = safeArray(all) as { id: string; parent_id: string | null }[];
+      const getDepth = (id: string, visited = new Set<string>()): number => {
+        if (visited.has(id)) return 0; // circular safety
+        visited.add(id);
+        const f = folderData.find((a) => a.id === id);
+        if (!f || !f.parent_id) return 1;
+        return 1 + getDepth(f.parent_id, visited);
+      };
       const mapped: SubfolderRow[] = safeRaw.map((sf) => {
         const parent = safeArray<Record<string, unknown>>(sf.parent).length > 0
           ? safeArray<Record<string, unknown>>(sf.parent)[0]
@@ -312,6 +357,7 @@ export function DashboardSubfolders() {
           parentTitle: parent ? safeStr(parent.title, "Unknown Parent") : "Unknown Parent",
           parentSlug: parent ? safeStr(parent.slug) : "",
           derivedNoteCount: noteCounts[sfId] || 0,
+          depth: getDepth(sfId),
         };
       });
 
@@ -747,6 +793,19 @@ export function DashboardSubfolders() {
                           onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
                         >
                           {sf.title}
+                          {sf.depth > 1 && (
+                            <span style={{
+                              marginLeft: "6px",
+                              fontSize: "10px",
+                              color: "var(--color-text-muted)",
+                              background: "var(--color-bg-muted)",
+                              padding: "0 6px",
+                              borderRadius: "var(--radius-sm)",
+                              verticalAlign: "middle",
+                            }}>
+                              Lv.{sf.depth}
+                            </span>
+                          )}
                           <svg
                             width="11"
                             height="11"
@@ -980,11 +1039,11 @@ export function DashboardSubfolders() {
                   }}
                 >
                   <option value="" disabled>
-                    Select a root folder…
+                    Select a parent folder…
                   </option>
-                  {rootFolders.map((f) => (
+                  {flatFolders.map((f) => (
                     <option key={f.id} value={f.id}>
-                      📁 {f.title}
+                      {"\u00A0\u00A0\u00A0\u00A0".repeat(f.depth)}📁 {f.title}
                     </option>
                   ))}
                 </select>
@@ -1083,13 +1142,12 @@ export function DashboardSubfolders() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
             <label htmlFor="edit-parent-folder-select" style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>
-              Parent Folder *
+              Parent Folder
             </label>
             <select
               id="edit-parent-folder-select"
               value={editParentId}
               onChange={(e) => setEditParentId(e.target.value)}
-              required
               style={{
                 width: "100%",
                 fontFamily: "var(--font-sans)",
@@ -1103,9 +1161,9 @@ export function DashboardSubfolders() {
                 cursor: "pointer",
               }}
             >
-              <option value="" disabled>Select a root folder…</option>
-              {rootFolders.map((f) => (
-                <option key={f.id} value={f.id}>📁 {f.title}</option>
+              <option value="">None (root folder)</option>
+              {flatFolders.filter((f) => !editExcludeIds.has(f.id)).map((f) => (
+                <option key={f.id} value={f.id}>{"\u00A0\u00A0\u00A0\u00A0".repeat(f.depth)}📁 {f.title}</option>
               ))}
             </select>
           </div>

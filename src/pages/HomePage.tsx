@@ -106,7 +106,6 @@ export function HomePage() {
               `id, title, description, slug, owner_id, parent_id,
                owner:profiles!owner_id(${OWNER_QUERY})`,
             )
-            .is("parent_id", null)
             .eq("visibility", "public")
             .order("updated_at", { ascending: false })
             .limit(6),

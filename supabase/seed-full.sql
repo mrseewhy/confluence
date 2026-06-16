@@ -546,6 +546,49 @@ VALUES
   );
 
 -- ═════════════════════════════════════════════════════════════
+-- 4d. Grandchild folders (depth-3) under some subfolders to test arbitrary nesting
+-- ═════════════════════════════════════════════════════════════
+INSERT INTO public.folders (id, owner_id, parent_id, title, description, slug, visibility, created_at, updated_at)
+SELECT * FROM (VALUES
+  (
+    'd1000000-0000-0000-0000-000000000001'::uuid,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    (SELECT id FROM public.folders WHERE slug = 'getting-started' AND owner_id = '00000000-0000-0000-0000-000000000001'),
+    'Basics',
+    'Fundamental concepts and first steps.',
+    'basics',
+    'public'::public.visibility_type,
+    now() - interval '10 days',
+    now() - interval '1 days'
+  ),
+  (
+    'd1000000-0000-0000-0000-000000000002'::uuid,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    (SELECT id FROM public.folders WHERE slug = 'getting-started' AND owner_id = '00000000-0000-0000-0000-000000000001'),
+    'Advanced',
+    'Deeper dives for power users.',
+    'advanced',
+    'public'::public.visibility_type,
+    now() - interval '9 days',
+    now() - interval '1 days'
+  ),
+  (
+    'd1000000-0000-0000-0000-000000000003'::uuid,
+    '00000000-0000-0000-0000-000000000003'::uuid,
+    (SELECT id FROM public.folders WHERE slug = 'notes' AND owner_id = '00000000-0000-0000-0000-000000000003'),
+    'Deep Research',
+    'In-depth research notes and references.',
+    'deep-research',
+    'public'::public.visibility_type,
+    now() - interval '8 days',
+    now() - interval '1 days'
+  )
+) AS gc
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.folders WHERE slug = gc.column7 AND owner_id = gc.column2
+);
+
+-- ═════════════════════════════════════════════════════════════
 -- 5. NOTES (3 per subfolder = 90 total)
 -- Note slugs must be GLOBALLY UNIQUE per the notes_slug_key constraint.
 -- Each note is public so it appears on the homepage / notes page.
@@ -1094,6 +1137,14 @@ SELECT * FROM (VALUES
   ('a5000000-0000-0000-0000-000000000015'::uuid, 'b3000000-0000-0000-0000-000000000010'::uuid, '00000000-0000-0000-0000-000000000005'::uuid, 'Design Tokens Architecture', 'Building a scalable design tokens system for multi-platform design systems.', 'design-tokens-architecture'::text, 'public'::public.visibility_type, now() - interval '2 days', now() - interval '1 day')
 ) AS t(id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at);
 
+-- 5h. Notes for grandchild (depth-3) folders
+INSERT INTO public.notes (id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at)
+SELECT * FROM (VALUES
+  ('a6000000-0000-0000-0000-000000000001'::uuid, 'd1000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'What is Confluence?', 'An overview of the platform and its core concepts.', 'what-is-confluence'::text, 'public'::public.visibility_type, now() - interval '5 days', now() - interval '1 day'),
+  ('a6000000-0000-0000-0000-000000000002'::uuid, 'd1000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Creating Your First Note', 'Step-by-step guide to writing and publishing your first note.', 'creating-first-note'::text, 'public'::public.visibility_type, now() - interval '4 days', now() - interval '1 day'),
+  ('a6000000-0000-0000-0000-000000000003'::uuid, 'd1000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-000000000001'::uuid, 'Keyboard Shortcuts', 'Productivity shortcuts for power users.', 'keyboard-shortcuts'::text, 'public'::public.visibility_type, now() - interval '3 days', now() - interval '1 day')
+) AS gn(id, folder_id, owner_id, title, description, slug, visibility, created_at, updated_at);
+
 -- 6f. Note blocks for the new 20 notes (a4* and a5* batches)
 INSERT INTO public.note_blocks (note_id, type, content, order_index, metadata)
 SELECT n.id, 'text',
@@ -1103,6 +1154,16 @@ SELECT n.id, 'text',
 FROM public.notes n
 WHERE n.id >= 'a4000000-0000-0000-0000-000000000001'::uuid
   AND n.id <= 'a5000000-0000-0000-0000-000000000015'::uuid
+  AND NOT EXISTS (SELECT 1 FROM public.note_blocks WHERE note_id = n.id);
+
+-- Note blocks for grandchild folder notes
+INSERT INTO public.note_blocks (note_id, type, content, order_index, metadata)
+SELECT n.id, 'text',
+  'This note lives in a depth-3 folder, demonstrating that arbitrary nesting works end-to-end.',
+  0, '{}'::jsonb
+FROM public.notes n
+WHERE n.id >= 'a6000000-0000-0000-0000-000000000001'::uuid
+  AND n.id <= 'a6000000-0000-0000-0000-000000000003'::uuid
   AND NOT EXISTS (SELECT 1 FROM public.note_blocks WHERE note_id = n.id);
 
 -- ═════════════════════════════════════════════════════════════

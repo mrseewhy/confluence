@@ -49,6 +49,42 @@ function getFolderEmoji(index: number): string {
   return FOLDER_EMOJIS[index % FOLDER_EMOJIS.length];
 }
 
+interface FolderTreeNode extends PublicFolder {
+  children: FolderTreeNode[];
+  depth: number;
+}
+
+function FolderCard({ folder, defaultIndex, username, depth = 0 }: { folder: FolderTreeNode; defaultIndex: number; username: string; depth?: number }) {
+  return (
+    <div>
+      <Link
+        to={`/${username}/folder/${folder.slug}`}
+        style={{ textDecoration: "none", display: "block", marginLeft: depth * 20 }}
+      >
+        <div style={depth === 0 ? styles.card : { ...styles.card, padding: "var(--space-3) var(--space-4)", borderLeft: "2px solid var(--color-border-subtle)" }} className="profile-card-hover">
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "var(--space-1)" }}>
+            <span style={{ fontSize: depth === 0 ? 28 : 18, lineHeight: 1 }}>{depth === 0 ? getFolderEmoji(defaultIndex) : "📂"}</span>
+            <h3 style={depth === 0 ? styles.cardTitle : { ...styles.cardTitle, fontSize: "var(--font-size-sm)" }}>{folder.title}</h3>
+          </div>
+          {folder.description && (
+            <p style={depth === 0 ? styles.cardDesc : { ...styles.cardDesc, WebkitLineClamp: 1, fontSize: "var(--font-size-xs)" }}>{folder.description}</p>
+          )}
+          <Badge variant="accent" style={{ alignSelf: "flex-start", fontSize: depth === 0 ? undefined : 10 }}>
+            📄 {folder.note_count} note{folder.note_count !== 1 ? "s" : ""}
+          </Badge>
+        </div>
+      </Link>
+      {folder.children.length > 0 && (
+        <div style={{ marginTop: "var(--space-1)" }}>
+          {folder.children.map((child, i) => (
+            <FolderCard key={child.id} folder={child} defaultIndex={i} username={username} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── UserProfilePage ──────────────────────────────────────────
 
 export function UserProfilePage() {
@@ -91,12 +127,8 @@ export function UserProfilePage() {
           .order("title", { ascending: true });
 
         const allFolders = (folderData || []) as PublicFolder[];
-        const roots = allFolders.filter((f) => !f.parent_id);
-        const subs = allFolders.filter((f) => f.parent_id);
 
-        setSubfolderCount(subs.length);
-
-        // 3. Fetch public notes owned by this user
+        // Count notes per folder
         const { data: noteData } = await supabase
           .from("notes")
           .select(
@@ -107,20 +139,28 @@ export function UserProfilePage() {
           .order("updated_at", { ascending: false })
           .limit(20);
 
-        // 4. Count notes per folder
         const noteCounts: Record<string, number> = {};
         (noteData || []).forEach((n: Record<string, unknown>) => {
           const fid = n.folder_id as string;
           noteCounts[fid] = (noteCounts[fid] || 0) + 1;
         });
 
-        // Build root folders with note_count
-        const mappedRoots: PublicFolder[] = roots.map((f) => ({
+        // Build recursive folder tree
+        const addNoteCounts = (f: PublicFolder): PublicFolder & { children: (PublicFolder & { children: never[] })[]; depth: number } => ({
           ...f,
           note_count: noteCounts[f.id] || 0,
-        }));
+          children: allFolders
+            .filter((child) => child.parent_id === f.id)
+            .map((child) => addNoteCounts(child) as never),
+          depth: 0,
+        });
 
-        setFolders(mappedRoots);
+        const tree = allFolders
+          .filter((f) => !f.parent_id)
+          .map((f) => addNoteCounts(f));
+
+        setSubfolderCount(allFolders.length - tree.length);
+        setFolders(tree as unknown as PublicFolder[]);
 
         // Map notes with folder info
         const mappedNotes: PublicNote[] = (noteData || []).map(
@@ -211,24 +251,24 @@ export function UserProfilePage() {
         </div>
 
         {/* ─── Stats ─── */}
-        <div style={styles.statsRow}>
-          <div style={styles.statCard}>
-            <span style={styles.statValue}>{totalFolders}</span>
-            <span style={styles.statLabel}>
-              Folder{totalFolders !== 1 ? "s" : ""}
-            </span>
+          <div style={styles.statsRow}>
+            <div style={styles.statCard}>
+              <span style={styles.statValue}>{totalFolders}</span>
+              <span style={styles.statLabel}>
+                Folder{totalFolders !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div style={styles.statCard}>
+              <span style={styles.statValue}>{subfolderCount}</span>
+              <span style={styles.statLabel}>Nested</span>
+            </div>
+            <div style={styles.statCard}>
+              <span style={styles.statValue}>{totalNotes}</span>
+              <span style={styles.statLabel}>
+                Note{totalNotes !== 1 ? "s" : ""}
+              </span>
+            </div>
           </div>
-          <div style={styles.statCard}>
-            <span style={styles.statValue}>{subfolderCount}</span>
-            <span style={styles.statLabel}>Subfolder{subfolderCount !== 1 ? "s" : ""}</span>
-          </div>
-          <div style={styles.statCard}>
-            <span style={styles.statValue}>{totalNotes}</span>
-            <span style={styles.statLabel}>
-              Note{totalNotes !== 1 ? "s" : ""}
-            </span>
-          </div>
-        </div>
 
         {/* ─── Public Folders ─── */}
         <section style={styles.section}>
@@ -242,22 +282,7 @@ export function UserProfilePage() {
           {folders.length > 0 ? (
             <div style={styles.cardGrid}>
               {folders.map((folder, i) => (
-                <Link
-                  key={folder.id}
-                  to={`/${profile.username}/folder/${folder.slug}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <div style={styles.card} className="profile-card-hover">
-                    <span style={styles.cardEmoji}>{getFolderEmoji(i)}</span>
-                    <h3 style={styles.cardTitle}>{folder.title}</h3>
-                    {folder.description && (
-                      <p style={styles.cardDesc}>{folder.description}</p>
-                    )}
-                    <Badge variant="accent" style={{ alignSelf: "flex-start" }}>
-                      📄 {folder.note_count} note{folder.note_count !== 1 ? "s" : ""}
-                    </Badge>
-                  </div>
-                </Link>
+                <FolderCard key={folder.id} folder={folder as FolderTreeNode} defaultIndex={i} username={profile.username} />
               ))}
             </div>
           ) : (

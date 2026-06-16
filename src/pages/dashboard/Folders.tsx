@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
@@ -168,6 +168,32 @@ export function DashboardFolders() {
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newVisibility, setNewVisibility] = useState<Visibility>("public");
+  const [newParentId, setNewParentId] = useState("");
+  const resetCreateFields = useCallback(() => {
+    setNewTitle("");
+    setNewDesc("");
+    setNewVisibility("public");
+    setNewParentId("");
+    setIsCreateOpen(false);
+  }, []);
+  const [allFoldersForSelect, setAllFoldersForSelect] = useState<{ id: string; title: string; parent_id: string | null }[]>([]);
+
+  const flatFolderOptions = useMemo(() => {
+    const roots = allFoldersForSelect.filter((f) => !f.parent_id);
+    const result: { id: string; title: string; depth: number }[] = [];
+    const addChildren = (parentId: string, depth: number) => {
+      const children = allFoldersForSelect.filter((f) => f.parent_id === parentId);
+      for (const child of children) {
+        result.push({ id: child.id, title: child.title, depth });
+        addChildren(child.id, depth + 1);
+      }
+    };
+    for (const root of roots) {
+      result.push({ id: root.id, title: root.title, depth: 0 });
+      addChildren(root.id, 1);
+    }
+    return result;
+  }, [allFoldersForSelect]);
 
   // Edit Folder State
   const [editFolder, setEditFolder] = useState<Folder | null>(null);
@@ -284,6 +310,21 @@ useEffect(() => {
   void fetchCount();
 }, [user, debouncedSearch]);
 
+// Fetch all folders for parent dropdown
+useEffect(() => {
+  if (!user) return;
+  const load = async () => {
+    const supabase = requireSupabase();
+    const { data } = await supabase
+      .from("folders")
+      .select("id, title, parent_id")
+      .eq("owner_id", user.id)
+      .order("title");
+    setAllFoldersForSelect(data || []);
+  };
+  void load();
+}, [user]);
+
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !user) return;
@@ -297,19 +338,18 @@ useEffect(() => {
 
     try {
       const supabase = requireSupabase();
-      // Get the current max sort_order for root folders
-      const { data: maxOrder } = await supabase
-        .from("folders")
-        .select("sort_order")
-        .eq("owner_id", user.id)
-        .is("parent_id", null)
+      // Get the current max sort_order for the selected parent scope
+      const parentCondition = newParentId
+        ? supabase.from("folders").select("sort_order").eq("owner_id", user.id).eq("parent_id", newParentId)
+        : supabase.from("folders").select("sort_order").eq("owner_id", user.id).is("parent_id", null);
+      const { data: maxOrder } = await parentCondition
         .order("sort_order", { ascending: false })
         .limit(1);
       const nextOrder = (maxOrder?.[0]?.sort_order ?? -1) + 1;
 
       const { error } = await supabase.from("folders").insert({
         owner_id: user.id,
-        parent_id: null,
+        parent_id: newParentId || null,
         title: newTitle.trim(),
         description: newDesc.trim() || null,
         slug,
@@ -324,6 +364,7 @@ useEffect(() => {
       setNewTitle("");
       setNewDesc("");
       setNewVisibility("public");
+      setNewParentId("");
       addToast("Folder created successfully", "success");
     } catch {
       addToast("Failed to create folder", "error");
@@ -792,7 +833,7 @@ useEffect(() => {
       </Modal>
 
       {/* Create Folder Modal */}
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="New Folder">
+      <Modal isOpen={isCreateOpen} onClose={resetCreateFields} title="New Folder">
         <form onSubmit={handleCreateFolder} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
               <Input
                 label="Folder Title *"
@@ -807,6 +848,35 @@ useEffect(() => {
                 value={newDesc}
                 onChange={(e) => setNewDesc(e.target.value)}
               />
+
+              <div>
+                <label style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", display: "block", marginBottom: "var(--space-2)" }}>
+                  Parent Folder <span style={{ color: "var(--color-text-muted)", fontWeight: 400 }}>(leave empty for root)</span>
+                </label>
+                <select
+                  value={newParentId}
+                  onChange={(e) => setNewParentId(e.target.value)}
+                  style={{
+                    width: "100%",
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "var(--font-size-sm)",
+                    color: "var(--color-text-primary)",
+                    background: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "var(--radius-md)",
+                    padding: "10px var(--space-3)",
+                    outline: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="">None (root folder)</option>
+                  {flatFolderOptions.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {"\u00A0\u00A0\u00A0\u00A0".repeat(f.depth)}📁 {f.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <div
                 style={{
@@ -893,7 +963,7 @@ useEffect(() => {
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={() => setIsCreateOpen(false)}
+                  onClick={resetCreateFields}
                 >
                   Cancel
                 </Button>

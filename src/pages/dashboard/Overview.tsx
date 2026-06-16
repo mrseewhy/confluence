@@ -268,7 +268,7 @@ export function DashboardOverview() {
       {/* Stats cards — clickable */}
       <div className={styles.statsGrid}>
         <StatCard label="Folders" value={stats.rootFolders} icon={IC.folder} href="/dashboard/folders" />
-        <StatCard label="Subfolders" value={stats.subfolders} icon={IC.subfolder} href="/dashboard/subfolders" />
+        <StatCard label="Nested" value={stats.subfolders} icon={IC.subfolder} href="/dashboard/subfolders" />
         <StatCard label="Notes" value={stats.notes} icon={IC.notes} href="/dashboard/notes" />
         <StatCard label="Public" value={stats.publicNotes} icon={IC.globe} href="/dashboard/notes" />
         <StatCard label="Collaborators" value={stats.collaborators} icon={IC.users} href="/dashboard/collaborators" />
@@ -282,7 +282,7 @@ export function DashboardOverview() {
             Ready to create something?
           </h4>
           <p className={styles.headerSubtitle}>
-            Start with a folder, subfolder, then add notes inside.
+            Start with a folder, then add notes and nested folders inside.
           </p>
         </div>
         <div className={styles.createBannerCta}>

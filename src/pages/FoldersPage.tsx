@@ -22,8 +22,19 @@ interface FolderItem {
   owner_avatar: string | null;
 }
 
-interface FolderWithSubfolders extends FolderItem {
-  subfolders: FolderItem[];
+interface FlatFolderRecord {
+  id: string;
+  title: string;
+  description: string | null;
+  slug: string;
+  parent_id: string | null;
+  owner_id: string;
+  owner: { full_name?: string; avatar_url?: string | null; username?: string | null }[];
+}
+
+interface FolderTreeNode extends FolderItem {
+  children: FolderTreeNode[];
+  depth: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -36,10 +47,46 @@ function getFolderEmoji(index: number): string {
   return FOLDER_EMOJIS[index % FOLDER_EMOJIS.length];
 }
 
+// ─── Recursive folder card ────────────────────────────────────
+
+function FolderTreeCard({ folder, index, depth = 0 }: { folder: FolderTreeNode; index: number; depth?: number }) {
+  const indent = depth * 24;
+  return (
+    <div>
+      <Link
+        to={`/${folder.owner_username}/folder/${folder.slug}`}
+        style={{ textDecoration: "none", display: "block", marginLeft: indent }}
+      >
+        <div style={{ ...styles.card, ...(depth > 0 ? styles.subfolderCard : {}) }} className="folder-card-hover">
+          <div style={styles.cardEmoji}>{depth === 0 ? getFolderEmoji(index) : "📂"}</div>
+          <div style={styles.cardBody}>
+            <h3 style={styles.cardTitle}>{folder.title}</h3>
+            {folder.description && <p style={styles.cardDesc}>{folder.description}</p>}
+          </div>
+          <div style={styles.cardFooter}>
+            <div style={styles.authorRow}>
+              <Avatar name={folder.owner_name} size={depth === 0 ? 24 : 20} />
+              <span style={styles.authorName}>{folder.owner_name}</span>
+            </div>
+            <Badge variant="muted">📄 {folder.note_count} notes</Badge>
+          </div>
+        </div>
+      </Link>
+      {folder.children.length > 0 && (
+        <div style={{ marginTop: "var(--space-2)" }}>
+          {folder.children.map((child, i) => (
+            <FolderTreeCard key={child.id} folder={child} index={i} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── FoldersPage Component ────────────────────────────────────
 
 export function FoldersPage() {
-  const [folders, setFolders] = useState<FolderWithSubfolders[]>([]);
+  const [folders, setFolders] = useState<FolderTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -67,35 +114,34 @@ export function FoldersPage() {
           return;
         }
 
-        // Split into roots and subfolders
-        const all = data as (Record<string, unknown> & { parent_id: string | null })[];
-        const roots = all.filter((f) => !f.parent_id);
-        const subfolders = all.filter((f) => f.parent_id);
+        const all = data as FlatFolderRecord[];
 
-        // Map owner info
-        const mapItem = (f: Record<string, unknown>): FolderItem => {
-          const owner = (f.owner as { full_name?: string; avatar_url?: string | null; username?: string | null } | null);
+        const mapItem = (f: FlatFolderRecord): FolderItem => {
+          const owner = f.owner?.[0] ?? null;
           return {
-            id: f.id as string,
-            title: f.title as string,
-            description: (f.description as string | null) ?? null,
-            slug: f.slug as string,
+            id: f.id,
+            title: f.title,
+            description: f.description ?? null,
+            slug: f.slug,
             note_count: 0,
-            owner_id: f.owner_id as string,
+            owner_id: f.owner_id,
             owner_name: owner?.full_name || "Unknown",
             owner_username: owner?.username || "unknown",
             owner_avatar: owner?.avatar_url ?? null,
           };
         };
 
-        const mapped: FolderWithSubfolders[] = roots.map((root) => ({
-          ...mapItem(root),
-          subfolders: subfolders
-            .filter((sf) => sf.parent_id === root.id)
-            .map(mapItem),
-        }));
+        function buildTree(parentId: string | null, depth: number): FolderTreeNode[] {
+          return all
+            .filter((f) => f.parent_id === parentId)
+            .map((f) => ({
+              ...mapItem(f),
+              children: buildTree(f.id, depth + 1),
+              depth,
+            }));
+        }
 
-        setFolders(mapped);
+        setFolders(buildTree(null, 0));
       } catch {
         if (!mounted) return;
         setFolders([]);
@@ -110,28 +156,21 @@ export function FoldersPage() {
 
   // ─── Filter by search ────────────────────────────────────
 
+  function matchesSearch(item: FolderTreeNode): boolean {
+    const q = search.toLowerCase();
+    return item.title.toLowerCase().includes(q) ||
+      item.description?.toLowerCase().includes(q) ||
+      item.owner_name.toLowerCase().includes(q) ||
+      item.children.some(matchesSearch);
+  }
+
   const filtered = search.trim()
     ? folders
-        .map((f) => ({
-          ...f,
-          // When searching, only show subfolders that match (if the root itself doesn't match)
-          subfolders: f.title.toLowerCase().includes(search.toLowerCase()) ||
-            f.description?.toLowerCase().includes(search.toLowerCase()) ||
-            f.owner_name.toLowerCase().includes(search.toLowerCase())
-            ? f.subfolders
-            : f.subfolders.filter(
-                (sf) =>
-                  sf.title.toLowerCase().includes(search.toLowerCase()) ||
-                  sf.description?.toLowerCase().includes(search.toLowerCase()),
-              ),
-        }))
-        .filter(
-          (f) =>
-            f.title.toLowerCase().includes(search.toLowerCase()) ||
-            f.description?.toLowerCase().includes(search.toLowerCase()) ||
-            f.owner_name.toLowerCase().includes(search.toLowerCase()) ||
-            f.subfolders.length > 0,
-        )
+        .map((f) => {
+          const filteredChildren = f.children.filter(matchesSearch);
+          return { ...f, children: filteredChildren };
+        })
+        .filter(matchesSearch)
     : folders;
 
   // ─── Loader ──────────────────────────────────────────────
@@ -194,72 +233,11 @@ export function FoldersPage() {
           </p>
         )}
 
-        {/* Folder grid */}
+        {/* Folder grid — recursive tree */}
         {filtered.length > 0 ? (
           <div style={styles.grid}>
             {filtered.map((folder, index) => (
-              <div key={folder.id} style={styles.rootCard}>                  <Link
-                    to={`/${folder.owner_username}/folder/${folder.slug}`}
-                    style={{ textDecoration: "none" }}
-                  >
-                  <div style={styles.card} className="folder-card-hover">
-                    <div style={styles.cardEmoji}>{getFolderEmoji(index)}</div>
-
-                    <div style={styles.cardBody}>
-                      <h3 style={styles.cardTitle}>{folder.title}</h3>
-                      {folder.description && (
-                        <p style={styles.cardDesc}>{folder.description}</p>
-                      )}
-                    </div>
-
-                    <div style={styles.cardFooter}>
-                      <div style={styles.authorRow}>
-                        <Avatar name={folder.owner_name} size={24} />
-                        <span style={styles.authorName}>{folder.owner_name}</span>
-                      </div>
-                      <Badge variant="muted">
-                        📄 {folder.note_count} notes
-                      </Badge>
-                    </div>
-                  </div>
-                </Link>
-
-                {/* Subfolders */}
-                {folder.subfolders.length > 0 && (
-                  <div style={styles.subfolderSection}>
-                    <div style={styles.subfolderList}>
-                      {folder.subfolders.map((sub) => (
-                        <Link
-                          key={sub.id}
-                          to={`/${sub.owner_username}/folder/${sub.slug}`}
-                          style={{ textDecoration: "none" }}
-                        >
-                          <div style={styles.subfolderCard} className="subfolder-hover">
-                            <div style={styles.subfolderTop}>
-                              <span style={styles.subfolderIcon}>📂</span>
-                              <span style={styles.subfolderTitle}>{sub.title}</span>
-                            </div>
-                            {sub.description && (
-                              <p style={styles.subfolderDesc}>{sub.description}</p>
-                            )}
-                            <div style={styles.subfolderMeta}>
-                              <span style={styles.subfolderAuthor}>
-                                <Avatar name={sub.owner_name} size={16} />
-                                <span style={styles.subfolderAuthorName}>
-                                  {sub.owner_name}
-                                </span>
-                              </span>
-                              <Badge variant="muted" style={{ fontSize: 10, padding: "1px 8px" }}>
-                                📄 {sub.note_count}
-                              </Badge>
-                            </div>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <FolderTreeCard key={folder.id} folder={folder} index={index} />
             ))}
           </div>
         ) : (
