@@ -80,9 +80,6 @@ test.describe('Drag-to-reorder', () => {
     await expect(firstHandle).toBeVisible({ timeout: 5000 });
 
     // Verify hover changes color (accent color)
-    const initialColor = await firstHandle.evaluate((el) =>
-      window.getComputedStyle(el).color,
-    );
     await firstHandle.hover();
     await page.waitForTimeout(200);
     const hoverColor = await firstHandle.evaluate((el) =>

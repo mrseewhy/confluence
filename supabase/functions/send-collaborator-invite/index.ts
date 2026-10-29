@@ -94,7 +94,6 @@ serve(async (req) => {
       item_type,
       item_title,
       item_slug,
-      access_level,
       owner_username,
     } = payload;
 
@@ -119,7 +118,6 @@ serve(async (req) => {
     const itemPath = item_type === "folder" ? "folder" : "n";
     const shareUrl = `${siteUrl}/${owner_username}/${itemPath}/${item_slug}`;
 
-    const roleLabel = access_level === "editor" ? "can edit" : "can view";
     const itemLabel = item_type === "folder" ? "folder" : "note";
 
     // Send email via Resend API directly (no SDK needed in Edge Functions)

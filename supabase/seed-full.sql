@@ -585,7 +585,7 @@ SELECT * FROM (VALUES
   )
 ) AS gc
 WHERE NOT EXISTS (
-  SELECT 1 FROM public.folders WHERE slug = gc.column7 AND owner_id = gc.column2
+  SELECT 1 FROM public.folders WHERE slug = gc.column6 AND owner_id = gc.column2
 );
 
 -- ═════════════════════════════════════════════════════════════
