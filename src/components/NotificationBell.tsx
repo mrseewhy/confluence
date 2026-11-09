@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { requireSupabase } from "@/lib/supabase";
 
@@ -20,40 +20,79 @@ export function NotificationBell({ userId }: { userId: string }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const supabase = requireSupabase();
-        const { data } = await supabase.rpc("unread_notification_count", { p_user_id: userId });
-        if (typeof data === "number") setUnread(data);
-      } catch {
-        // silently fail
-      }
-    };
-    void load();
+  const fetchUnread = useCallback(async (): Promise<number | null> => {
+    try {
+      const supabase = requireSupabase();
+      const { data } = await supabase.rpc("unread_notification_count", { p_user_id: userId });
+      return typeof data === "number" ? data : null;
+    } catch {
+      return null;
+    }
+  }, [userId]);
+
+  const fetchList = useCallback(async (): Promise<Notification[]> => {
+    try {
+      const supabase = requireSupabase();
+      const { data } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      return (data as Notification[]) || [];
+    } catch {
+      return [];
+    }
   }, [userId]);
 
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const count = await fetchUnread();
+      if (!cancelled && count !== null) setUnread(count);
+    })();
+    return () => { cancelled = true; };
+  }, [fetchUnread]);
+
+  // Live updates: refresh the unread badge (and open list) whenever this
+  // user's notifications change. RLS on the table restricts the stream to
+  // rows the subscriber can see.
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    try {
+      const supabase = requireSupabase();
+      const channel = supabase
+        .channel(`notifications:${userId}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+          () => {
+            void (async () => {
+              const count = await fetchUnread();
+              if (count !== null) setUnread(count);
+              if (open) setNotifications(await fetchList());
+            })();
+          },
+        )
+        .subscribe();
+      unsubscribe = () => { void supabase.removeChannel(channel); };
+    } catch {
+      // Realtime unavailable — the bell still works via manual reload.
+    }
+    return () => { if (unsubscribe) unsubscribe(); };
+  }, [userId, open, fetchUnread, fetchList]);
+
+  useEffect(() => {
     if (!open) return;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const supabase = requireSupabase();
-        const { data } = await supabase
-          .from("notifications")
-          .select("*")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(20);
-        setNotifications(data || []);
-      } catch {
-        // silently fail
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
-  }, [open, userId]);
+    let cancelled = false;
+    void (async () => {
+      const rows = await fetchList();
+      if (cancelled) return;
+      setNotifications(rows);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [open, fetchList]);
 
   useEffect(() => {
     if (!open) return;

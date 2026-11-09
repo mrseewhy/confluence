@@ -53,8 +53,7 @@ beforeEach(() => {
   insertSingle.mockReset()
   mockAddToast.mockReset()
   mockAuth.user = { id: 'u1', email: 'me@test.com' }
-  mockAuth.profile = { id: 'u1', user_type: 'user' }
-})
+  mockAuth.profile = { id: 'u1', user_type: 'user' }})
 
 describe('CommentsPanel', () => {
   it('shows an empty state when there are no comments', async () => {
@@ -90,6 +89,20 @@ describe('CommentsPanel', () => {
     await waitFor(() => expect(screen.getByText('hello')).toBeInTheDocument())
     expect(insertSingle).toHaveBeenCalled()
     expect(mockAddToast).toHaveBeenCalledWith('Comment posted', 'success')
+  })
+
+  it('shows the poster name on a newly posted comment', async () => {
+    mockAuth.profile = { id: 'u1', user_type: 'user', full_name: 'Me Myself' } as never
+    insertSingle.mockResolvedValue({
+      data: { id: 'c9', note_id: 'n1', author_id: 'u1', parent_id: null, body: 'hi there', created_at: '2026-01-03T00:00:00Z', updated_at: '2026-01-03T00:00:00Z' },
+      error: null,
+    })
+    render(<CommentsPanel noteId="n1" noteOwnerId="owner" />)
+    await waitFor(() => expect(screen.getByText('No comments yet.')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Add a comment'), { target: { value: 'hi there' } })
+    fireEvent.click(screen.getByText('Post comment'))
+    await waitFor(() => expect(screen.getByText('hi there')).toBeInTheDocument())
+    expect(screen.getByText('Me Myself')).toBeInTheDocument()
   })
 
   it('prompts anonymous visitors to sign in and hides the composer', async () => {

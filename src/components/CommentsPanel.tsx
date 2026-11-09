@@ -111,7 +111,16 @@ export function CommentsPanel({ noteId, noteOwnerId }: CommentsPanelProps) {
         .select('id, note_id, author_id, parent_id, body, created_at, updated_at')
         .single()
       if (error) throw error
-      setComments((prev) => [...prev, data as NoteComment])
+      // Attach the current user's display info so the new comment renders
+      // with the right author immediately (no reload needed).
+      const posted = data as NoteComment
+      posted.author = {
+        id: user.id,
+        full_name: profile?.full_name ?? null,
+        username: profile?.username ?? null,
+        avatar_url: profile?.avatar_url ?? null,
+      }
+      setComments((prev) => [...prev, posted])
       if (parentId) {
         setReplyBody('')
         setReplyTo(null)
