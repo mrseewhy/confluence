@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { login, waitForIdle } from './helpers'
 
 /**
  * Covers the features added in the last round of work: the global search
@@ -10,28 +11,24 @@ import { test, expect, type Page } from '@playwright/test'
 test.describe.configure({ mode: 'serial', timeout: 90_000 })
 
 async function signIn(page: Page, email = 'sarah@confluence.test', password = 'Sarah123!') {
-  await page.goto('/login')
-  await page.locator('input[type="email"]').fill(email)
-  await page.locator('input[type="password"]').first().fill(password)
-  await page.locator('button[type="submit"]').first().click()
-  await page.waitForURL(/\/dashboard/, { timeout: 20000 })
+  await login(page, { email, password })
 }
 
 /** Open a known public note owned by sarah. */
 async function openFirstNote(page: Page) {
   await page.goto('/notes')
-  await page.waitForTimeout(1200)
   const link = page.locator('a[href*="/n/"]').first()
-  await expect(link).toBeVisible({ timeout: 10000 })
+  await expect(link).toBeVisible({ timeout: 30_000 })
   await link.click()
-  await page.waitForTimeout(1500)
+  // Wait for the note itself rather than guessing how long it takes to load.
+  await expect(page.locator('h1').first()).toBeVisible({ timeout: 30_000 })
 }
 
 test.describe('Global search', () => {
   test('finds notes by title and navigates to them', async ({ page }) => {
     await signIn(page)
     await page.goto('/dashboard')
-    await page.waitForTimeout(1000)
+    await expect(page.locator('aside.dash-sidebar').first()).toBeVisible({ timeout: 30_000 })
 
     await page.getByRole('button', { name: /search/i }).first().click()
     const input = page.getByLabel('Search notes, folders and people')
@@ -40,8 +37,7 @@ test.describe('Global search', () => {
     await expect(page.getByRole('option').first()).toBeVisible({ timeout: 10000 })
     const before = page.url()
     await page.getByRole('option').first().click()
-    await page.waitForTimeout(1200)
-    expect(page.url()).not.toBe(before)
+    await expect(page).not.toHaveURL(before, { timeout: 30_000 })
   })
 
   test('shows an empty state for a query with no matches', async ({ page }) => {
@@ -103,12 +99,12 @@ test.describe('Notifications', () => {
   test('the bell opens a panel', async ({ page }) => {
     await signIn(page)
     await page.goto('/dashboard')
-    await page.waitForTimeout(1000)
+    await expect(page.locator('aside.dash-sidebar').first()).toBeVisible({ timeout: 30_000 })
 
     const bell = page.getByRole('button', { name: /notifications/i }).first()
     await expect(bell).toBeVisible({ timeout: 10000 })
     await bell.click()
-    await page.waitForTimeout(800)
+    await waitForIdle(page)
     // Panel shows either items or an empty state.
     const body = await page.locator('body').innerText()
     expect(/no notifications|mark all as read|notifications/i.test(body)).toBeTruthy()
@@ -119,27 +115,26 @@ test.describe('Dashboard utility pages', () => {
   test('trash page loads', async ({ page }) => {
     await signIn(page)
     await page.goto('/dashboard/trash')
-    await page.waitForTimeout(1500)
+    // Wait for the page's own heading instead of a fixed delay.
+    await expect(page.getByRole('heading', { name: /trash/i }).first()).toBeVisible({ timeout: 30_000 })
     const body = await page.locator('body').innerText()
-    expect(/trash/i.test(body)).toBeTruthy()
     expect(/something went wrong|error boundary/i.test(body)).toBeFalsy()
   })
 
   test('settings page loads and shows the free plan', async ({ page }) => {
     await signIn(page)
     await page.goto('/dashboard/settings')
-    await page.waitForTimeout(1500)
+    await expect(page.getByText(/current plan/i).first()).toBeVisible({ timeout: 30_000 })
     const body = await page.locator('body').innerText()
     expect(/settings|profile/i.test(body)).toBeTruthy()
-    expect(/current plan/i.test(body)).toBeTruthy()
   })
 
   test('billing plan buttons open a free/coming-soon modal', async ({ page }) => {
     await signIn(page)
     await page.goto('/dashboard/settings')
-    await page.waitForTimeout(1500)
 
     const bronze = page.getByRole('button', { name: /bronze plan/i }).first()
+    await expect(bronze).toBeVisible({ timeout: 30_000 })
     if ((await bronze.count()) === 0) test.skip()
     await bronze.click()
 
@@ -155,7 +150,10 @@ test.describe('Admin', () => {
     // alex is promoted to admin by scripts/seed-test-users.sh
     await signIn(page, 'alex@confluence.test', 'Alex123!')
     await page.goto('/admin/dashboard/users')
-    await page.waitForTimeout(2000)
+    // Either the users table or the not-authorised message must appear.
+    await expect(
+      page.getByText(/users|not authorized|access denied/i).first(),
+    ).toBeVisible({ timeout: 30_000 })
 
     const body = await page.locator('body').innerText()
     if (/not authorized|access denied/i.test(body)) test.skip()

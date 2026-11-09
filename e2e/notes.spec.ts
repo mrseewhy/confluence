@@ -16,8 +16,8 @@ test.describe('Notes Flow', () => {
     await page.waitForURL(/\/dashboard/, { timeout: 15000 });
 
     // Use SPA navigation to preserve auth session
-    await page.click('aside a[href="/dashboard/notes"]');
-    await page.waitForTimeout(1000);
+    await page.locator('aside.dash-sidebar a[href="/dashboard/notes"]').first().click();
+    await page.waitForURL(/\/dashboard\/notes$/, { timeout: 30000 });
     await page.click('a[href="/dashboard/notes/new"]');
 
     // Now on the create page — wait for editor to fully render
@@ -63,8 +63,8 @@ test('should create a note and verify it renders publicly', async ({ page }) => 
     await page.waitForURL(/\/dashboard/, { timeout: 15000 });
 
     // ── Navigate to create note ────────────────────────────────
-    await page.click('aside a[href="/dashboard/notes"]');
-    await page.waitForTimeout(1500);
+    await page.locator('aside.dash-sidebar a[href="/dashboard/notes"]').first().click();
+    await page.waitForURL(/\/dashboard\/notes$/, { timeout: 30000 });
     await page.click('a[href="/dashboard/notes/new"]');
 
     const titleInput = page.getByPlaceholder('Note title');
@@ -110,8 +110,8 @@ test('should create a note and verify it renders publicly', async ({ page }) => 
     await page.waitForURL(/\/dashboard/, { timeout: 15000 });
 
     // Navigate to create a new note
-    await page.click('aside a[href="/dashboard/notes"]');
-    await page.waitForTimeout(1000);
+    await page.locator('aside.dash-sidebar a[href="/dashboard/notes"]').first().click();
+    await page.waitForURL(/\/dashboard\/notes$/, { timeout: 30000 });
     await page.click('a[href="/dashboard/notes/new"]');
 
     const titleInput = page.getByPlaceholder('Note title');
@@ -189,8 +189,8 @@ test('should create a note and verify it renders publicly', async ({ page }) => 
     await page.waitForURL(/\/dashboard/, { timeout: 15000 });
 
     // Navigate to create note via SPA
-    await page.click('aside a[href="/dashboard/notes"]');
-    await page.waitForTimeout(1000);
+    await page.locator('aside.dash-sidebar a[href="/dashboard/notes"]').first().click();
+    await page.waitForURL(/\/dashboard\/notes$/, { timeout: 30000 });
     await page.click('a[href="/dashboard/notes/new"]');
 
     // Wait for editor to load

@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test'
+import { login, goTo, waitForRows } from './helpers'
 
 // These flows reorder shared folders, so they must not overlap with
 // other suites that read the same rows.
@@ -6,142 +7,79 @@ test.describe.configure({ mode: 'serial' })
 
 test.describe('Drag-to-reorder', () => {
   test('folders page shows drag handles on table rows', async ({ page }) => {
-    test.setTimeout(60000);
+    await login(page)
+    await goTo(page, '/dashboard/folders')
 
-    // Login
-    await page.goto('/login');
-    await page.fill('input[type="email"]', 'sarah@confluence.test');
-    await page.fill('input[type="password"]', 'Sarah123!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+    const rowCount = await waitForRows(page)
+    expect(rowCount).toBeGreaterThan(0)
 
-    // Navigate to folders
-    await page.click('aside a[href="/dashboard/folders"]');
-
-    // Wait for the table to render (data loads asynchronously)
-    await page.waitForSelector('[class*="tableRow"]', { timeout: 10000 });
-    await page.waitForTimeout(500);
-
-    // Check that drag handles exist on folder rows
-    const dragHandles = page.locator('.drag-handle');
-    const count = await dragHandles.count();
-    expect(count).toBeGreaterThan(0);
-  });
+    // Every folder row must offer a drag handle, or reordering is unreachable.
+    await expect(page.locator('.drag-handle').first()).toBeVisible()
+    expect(await page.locator('.drag-handle').count()).toBeGreaterThan(0)
+  })
 
   test('subfolders page renders correctly (drag handles shown when subfolders exist)', async ({ page }) => {
-    test.setTimeout(60000);
+    await login(page)
+    await goTo(page, '/dashboard/subfolders')
 
-    // Login
-    await page.goto('/login');
-    await page.fill('input[type="email"]', 'sarah@confluence.test');
-    await page.fill('input[type="password"]', 'Sarah123!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+    // Legitimately empty for some accounts, so assert the page settled rather
+    // than requiring rows.
+    await expect(page.locator('body')).toBeVisible()
+    await expect(page.locator('[class*="tableCard"], [class*="empty"]').first()).toBeVisible()
+  })
 
-    // Navigate to subfolders
-    await page.click('aside a[href="/dashboard/subfolders"]');
-    await page.waitForTimeout(2000);
+  test('notes page renders its rows', async ({ page }) => {
+    // Reordering is only implemented for folders; the notes list has no drag
+    // handle, so this asserts the list renders and not a reorder affordance.
+    await login(page)
+    await goTo(page, '/dashboard/notes')
 
-    // Page should load — either with table rows or empty state
-    const body = page.locator('body');
-    await expect(body).toBeVisible({ timeout: 5000 });
-  });
+    await expect(page.locator('body')).toBeVisible()
+    const rowCount = await waitForRows(page)
+    if (rowCount > 0) {
+      await expect(page.locator('[class*="tableRow"]').first()).toBeVisible()
+    }
+  })
 
-  test('notes page renders correctly (drag handles shown when notes exist)', async ({ page }) => {
-    test.setTimeout(60000);
+  test('drag handle is present and styled on hover', async ({ page }) => {
+    await login(page)
+    await goTo(page, '/dashboard/folders')
 
-    // Login
-    await page.goto('/login');
-    await page.fill('input[type="email"]', 'sarah@confluence.test');
-    await page.fill('input[type="password"]', 'Sarah123!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+    const firstHandle = page.locator('.drag-handle').first()
+    await expect(firstHandle).toBeVisible()
 
-    // Navigate to notes
-    await page.click('aside a[href="/dashboard/notes"]');
-    await page.waitForTimeout(2000);
+    const before = await firstHandle.evaluate((el) => getComputedStyle(el).color)
+    await firstHandle.hover()
+    const after = await firstHandle.evaluate((el) => getComputedStyle(el).color)
 
-    // Page should load — either with table rows or empty state
-    const body = page.locator('body');
-    await expect(body).toBeVisible({ timeout: 5000 });
-  });
-
-  test('drag handle changes color on hover', async ({ page }) => {
-    test.setTimeout(60000);
-
-    // Login and go to folders
-    await page.goto('/login');
-    await page.fill('input[type="email"]', 'sarah@confluence.test');
-    await page.fill('input[type="password"]', 'Sarah123!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/dashboard/, { timeout: 15000 });
-    await page.click('aside a[href="/dashboard/folders"]');
-    await page.waitForSelector('[class*="tableRow"]', { timeout: 10000 });
-    await page.waitForTimeout(500);
-
-    // Hover over the first drag handle
-    const firstHandle = page.locator('.drag-handle').first();
-    await expect(firstHandle).toBeVisible({ timeout: 5000 });
-
-    // Verify hover changes color (accent color)
-    await firstHandle.hover();
-    await page.waitForTimeout(200);
-    const hoverColor = await firstHandle.evaluate((el) =>
-      window.getComputedStyle(el).color,
-    );
-    // The color should have changed (grab → accent on hover via JS)
-    // Since we use accent color on hover, we just check it's not the same
-    // Note: this is a basic check since we can't easily verify CSS variable values
-    expect(typeof hoverColor).toBe('string');
-  });
+    // Both must be parseable colours; the hover style may or may not differ
+    // depending on the theme, and asserting a specific value would be brittle.
+    expect(before).toMatch(/^(rgb|rgba|color)\(/)
+    expect(after).toMatch(/^(rgb|rgba|color)\(/)
+  })
 
   test('drag overlay shows with elevated style while dragging a folder', async ({ page }) => {
-    test.setTimeout(60000);
+    await login(page)
+    await goTo(page, '/dashboard/folders')
 
-    // Login and go to folders
-    await page.goto('/login');
-    await page.fill('input[type="email"]', 'sarah@confluence.test');
-    await page.fill('input[type="password"]', 'Sarah123!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/dashboard/, { timeout: 15000 });
-    await page.click('aside a[href="/dashboard/folders"]');
-    await page.waitForSelector('[class*="tableRow"]', { timeout: 10000 });
+    const firstHandle = page.locator('.drag-handle').first()
+    await expect(firstHandle).toBeVisible()
+    await expect(page.locator('[class*="tableCard"]')).toBeVisible()
 
-    // Get the first drag handle and simulate drag start
-    const firstHandle = page.locator('.drag-handle').first();
-    await expect(firstHandle).toBeVisible({ timeout: 5000 });
-
-    // Check that the folders table exists
-    const tableCard = page.locator('[class*="tableCard"]');
-    await expect(tableCard).toBeVisible({ timeout: 5000 });
-
-    // Verify folder titles are present
-    const rows = page.locator('[class*="tableRow"]');
-    const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThan(0);
-  });
+    const rowCount = await waitForRows(page)
+    expect(rowCount).toBeGreaterThan(0)
+  })
 
   test('notes page reorder maintains integrity (verify items exist after drag attempt)', async ({ page }) => {
-    test.setTimeout(60000);
+    await login(page)
+    await goTo(page, '/dashboard/notes')
 
-    // Login and go to notes
-    await page.goto('/login');
-    await page.fill('input[type="email"]', 'sarah@confluence.test');
-    await page.fill('input[type="password"]', 'Sarah123!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/dashboard/, { timeout: 15000 });
-    await page.click('aside a[href="/dashboard/notes"]');
-    await page.waitForTimeout(2000);
+    const noteLinks = page.locator('a[href*="/n/"]')
+    const initialCount = await noteLinks.count()
 
-    // Get the current list of note titles
-    const noteLinks = page.locator('a[href*="/n/"]');
-    const initialCount = await noteLinks.count();
-
-    // If there are notes, verify they're displayed
     if (initialCount > 0) {
-      await expect(noteLinks.first()).toBeVisible({ timeout: 5000 });
-      const firstTitle = await noteLinks.first().textContent();
-      expect(firstTitle).toBeTruthy();
+      await expect(noteLinks.first()).toBeVisible()
+      expect(await noteLinks.first().textContent()).toBeTruthy()
     }
-  });
-});
+  })
+})

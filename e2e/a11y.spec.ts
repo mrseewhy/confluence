@@ -62,19 +62,19 @@ test.describe('Accessibility', () => {
 
   test('public notes list has no serious/critical violations', async ({ page }) => {
     await page.goto('/notes')
-    await page.waitForTimeout(1500)
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 30000 })
     expect(await audit(page, '/notes')).toEqual([])
   })
 
   test('a public note page has no serious/critical violations', async ({ page }) => {
     await page.goto('/notes')
-    await page.waitForTimeout(1500)
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 30000 })
 
     // Follow the first note link rather than hard-coding a seed slug.
     const firstNote = page.locator('a[href*="/n/"]').first()
     if ((await firstNote.count()) === 0) test.skip()
     await firstNote.click()
-    await page.waitForTimeout(2000)
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 30000 })
     expect(await audit(page, 'note detail')).toEqual([])
   })
 
@@ -83,8 +83,8 @@ test.describe('Accessibility', () => {
     await page.locator('input[type="email"]').fill('sarah@confluence.test')
     await page.locator('input[type="password"]').first().fill('Sarah123!')
     await page.locator('button[type="submit"]').first().click()
-    await page.waitForURL(/\/dashboard/, { timeout: 20000 })
-    await page.waitForTimeout(2000)
+    await page.waitForURL(/\/dashboard/, { timeout: 30000 })
+    await expect(page.locator('aside.dash-sidebar').first()).toBeVisible({ timeout: 30000 })
     expect(await audit(page, '/dashboard')).toEqual([])
   })
 })

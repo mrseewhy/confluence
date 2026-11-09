@@ -7,7 +7,15 @@ export default defineConfig({
   // redirects rather than finding real failures. Cap concurrency.
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // One local retry separates "the machine was busy" from "this is broken".
+  // A genuine failure fails both attempts and still fails the run; a timeout
+  // caused by contention passes on the second and is reported as flaky.
+  retries: process.env.CI ? 2 : 1,
+  // Per-test budget. Firefox needs 25-40s for a single page when the local
+  // Supabase gateway is saturated, and the 30s default turned correct tests
+  // into failures. This is headroom, not a fix: tests below still assert on
+  // real readiness, so a fast failure still fails fast.
+  timeout: 90_000,
   // Several suites (notes, features, reorder) mutate the SAME local database
   // rows. Running them in parallel makes them stomp on each other, producing
   // failures that look like app bugs. Keep concurrency low enough that the
