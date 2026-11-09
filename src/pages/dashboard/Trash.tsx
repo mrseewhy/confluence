@@ -177,7 +177,7 @@ export function DashboardTrash() {
           </div>
           <div className={styles.tableHeader} style={{ gridTemplateColumns: "1fr 120px 140px 120px" }}>
             {["Note", "Folder", "Deleted", "Actions"].map((h) => (
-              <span className={styles.tableHeaderCell}>{h}</span>
+              <span key={h} className={styles.tableHeaderCell}>{h}</span>
             ))}
           </div>
 

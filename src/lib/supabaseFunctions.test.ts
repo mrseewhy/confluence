@@ -5,12 +5,20 @@ import { describe, it, expect } from 'vitest'
 /**
  * Validate the invite payload body.
  * Returns an error message string if invalid, or null if valid.
+ *
+ * The Edge Function derives the item title and owner username server-side
+ * (from the authenticated caller + DB lookup), so the payload only carries
+ * the invitee email and the item identifier.
  */
 function validateInvitePayload(body: Record<string, unknown>): string | null {
-  const { invitee_email, item_title, owner_username } = body
+  const { invitee_email, item_type, item_slug } = body
 
-  if (!invitee_email || !item_title || !owner_username) {
+  if (!invitee_email || !item_type || !item_slug) {
     return 'Missing required fields'
+  }
+
+  if (item_type !== 'folder' && item_type !== 'note') {
+    return "item_type must be 'folder' or 'note'"
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -23,6 +31,7 @@ function validateInvitePayload(body: Record<string, unknown>): string | null {
 
 /**
  * Build the share URL for a note or folder.
+ * Path segments are encoded to prevent injection into the URL.
  */
 function buildShareUrl(
   ownerUsername: string,
@@ -32,7 +41,7 @@ function buildShareUrl(
 ): string {
   const base = siteUrl || 'http://localhost:3000'
   const path = itemType === 'folder' ? 'folder' : 'n'
-  return `${base}/${ownerUsername}/${path}/${itemSlug}`
+  return `${base}/${encodeURIComponent(ownerUsername)}/${path}/${encodeURIComponent(itemSlug)}`
 }
 
 /**
@@ -75,8 +84,8 @@ describe('validateInvitePayload', () => {
   it('returns null for a valid payload', () => {
     const result = validateInvitePayload({
       invitee_email: 'test@example.com',
-      item_title: 'My Note',
-      owner_username: 'johndoe',
+      item_type: 'note',
+      item_slug: 'my-note',
     })
     expect(result).toBeNull()
   })
@@ -84,28 +93,36 @@ describe('validateInvitePayload', () => {
   it('rejects missing invitee_email', () => {
     const result = validateInvitePayload({
       invitee_email: '',
-      item_title: 'My Note',
-      owner_username: 'johndoe',
+      item_type: 'note',
+      item_slug: 'my-note',
     })
     expect(result).toBe('Missing required fields')
   })
 
-  it('rejects missing item_title', () => {
+  it('rejects missing item_slug', () => {
     const result = validateInvitePayload({
       invitee_email: 'test@example.com',
-      item_title: '',
-      owner_username: 'johndoe',
+      item_type: 'note',
+      item_slug: '',
     })
     expect(result).toBe('Missing required fields')
   })
 
-  it('rejects missing owner_username', () => {
+  it('rejects missing item_type', () => {
     const result = validateInvitePayload({
       invitee_email: 'test@example.com',
-      item_title: 'My Note',
-      owner_username: '',
+      item_slug: 'my-note',
     })
     expect(result).toBe('Missing required fields')
+  })
+
+  it('rejects invalid item_type', () => {
+    const result = validateInvitePayload({
+      invitee_email: 'test@example.com',
+      item_type: 'page',
+      item_slug: 'my-note',
+    })
+    expect(result).toBe("item_type must be 'folder' or 'note'")
   })
 
   it('rejects empty object', () => {
@@ -115,8 +132,8 @@ describe('validateInvitePayload', () => {
   it('rejects invalid email format (no @)', () => {
     const result = validateInvitePayload({
       invitee_email: 'notanemail',
-      item_title: 'My Note',
-      owner_username: 'johndoe',
+      item_type: 'note',
+      item_slug: 'my-note',
     })
     expect(result).toBe('Invalid email format')
   })
@@ -124,8 +141,8 @@ describe('validateInvitePayload', () => {
   it('rejects invalid email format (no domain)', () => {
     const result = validateInvitePayload({
       invitee_email: 'user@',
-      item_title: 'My Note',
-      owner_username: 'johndoe',
+      item_type: 'note',
+      item_slug: 'my-note',
     })
     expect(result).toBe('Invalid email format')
   })
@@ -133,8 +150,8 @@ describe('validateInvitePayload', () => {
   it('rejects invalid email format (no TLD)', () => {
     const result = validateInvitePayload({
       invitee_email: 'user@domain',
-      item_title: 'My Note',
-      owner_username: 'johndoe',
+      item_type: 'note',
+      item_slug: 'my-note',
     })
     expect(result).toBe('Invalid email format')
   })
@@ -142,8 +159,8 @@ describe('validateInvitePayload', () => {
   it('accepts email with subdomain', () => {
     const result = validateInvitePayload({
       invitee_email: 'user@sub.example.com',
-      item_title: 'My Note',
-      owner_username: 'johndoe',
+      item_type: 'note',
+      item_slug: 'my-note',
     })
     expect(result).toBeNull()
   })
@@ -151,8 +168,8 @@ describe('validateInvitePayload', () => {
   it('accepts email with plus sign', () => {
     const result = validateInvitePayload({
       invitee_email: 'user+tag@example.com',
-      item_title: 'My Note',
-      owner_username: 'johndoe',
+      item_type: 'note',
+      item_slug: 'my-note',
     })
     expect(result).toBeNull()
   })

@@ -46,24 +46,6 @@ export function ShareModal({
   const [error, setError] = useState('')
 
 
-  // Helper to fetch the inviter's profile fresh (avoids race condition with state)
-  const fetchInviterInfo = useCallback(async () => {
-    if (!ownerId) return { name: 'Someone', email: '' }
-    try {
-      const supabase = requireSupabase()
-      const [profileRes, userRes] = await Promise.all([
-        supabase.from('profiles').select('full_name').eq('id', ownerId).single(),
-        supabase.auth.getUser(),
-      ])
-      return {
-        name: profileRes.data?.full_name || 'Someone',
-        email: userRes.data?.user?.email || '',
-      }
-    } catch {
-      return { name: 'Someone', email: '' }
-    }
-  }, [ownerId])
-
   const itemShareUrl = ownerUsername
     ? `${window.location.origin}/${ownerUsername}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
     : `${window.location.origin}/${itemType === 'folder' ? 'folder' : 'n'}/${itemSlug}`
@@ -164,7 +146,6 @@ export function ShareModal({
 
       // Fire-and-forget: send email notification via Edge Function
       // Check if the user has notifications enabled first
-      const info = await fetchInviterInfo()
       let shouldSendEmail = true
       try {
         const { data: prefs } = await supabase
@@ -187,14 +168,10 @@ export function ShareModal({
           'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
         },
         body: JSON.stringify({
-          inviter_name: info.name,
-          inviter_email: info.email,
           invitee_email: email.trim().toLowerCase(),
           item_type: itemType,
-          item_title: itemTitle,
           item_slug: itemSlug,
           access_level: role,
-          owner_username: ownerUsername,
         }),
       }).catch(err => console.error('Failed to send invite notification:', err));
       }

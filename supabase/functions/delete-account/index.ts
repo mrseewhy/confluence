@@ -30,6 +30,36 @@ function checkMemoryRateLimit(clientIp: string): boolean {
   return true;
 }
 
+// Hash an IP for privacy before storing it in the rate-limit table.
+async function hashIp(ip: string): Promise<string> {
+  const data = new TextEncoder().encode(`rl:${ip}`);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// DB-backed rate limiting so limits hold across Edge Function instances.
+// Falls back to the in-memory limiter if the RPC is unavailable.
+async function allowRequest(clientIp: string, endpoint: string): Promise<boolean> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!supabaseUrl || !serviceKey) return checkMemoryRateLimit(clientIp);
+  try {
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    const { data, error } = await admin.rpc("check_rate_limit", {
+      p_ip_hash: await hashIp(clientIp),
+      p_endpoint: endpoint,
+      p_max_requests: RATE_LIMIT_MAX,
+      p_window_seconds: RATE_LIMIT_WINDOW / 1000,
+    });
+    if (error) return checkMemoryRateLimit(clientIp);
+    return data !== false;
+  } catch {
+    return checkMemoryRateLimit(clientIp);
+  }
+}
+
 serve(async (req) => {
   // CORS headers for local dev and production
   // Handle preflight
@@ -43,7 +73,7 @@ serve(async (req) => {
       || req.headers.get("x-real-ip")
       || "unknown";
 
-    if (!checkMemoryRateLimit(clientIp)) {
+    if (!(await allowRequest(clientIp, "delete-account"))) {
       return new Response(
         JSON.stringify({ error: "Too many requests. Please try again later." }),
         {

@@ -123,10 +123,15 @@ export function getVideoEmbedUrl(url: string, provider: VideoProvider): string |
 /** Sanitize an image URL — returns null for unsafe protocols. */
 export function sanitizeImageUrl(url: string): string | null {
   if (!url) return null
-  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:')) {
-    return null
+  // Only http(s) remote images, or data: URLs restricted to safe raster
+  // image types (SVG is intentionally excluded — it can carry script).
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
   }
-  return url
+  if (/^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(url)) {
+    return url
+  }
+  return null
 }
 
 /**

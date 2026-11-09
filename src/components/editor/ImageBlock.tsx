@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react'
 import type { BlockMetadata } from '@/types'
 import { useAuth } from '@/context/auth'
-import { uploadImage } from '@/lib/upload'
-import { sanitizeImageUrl } from '@/lib/helpers'
+import { uploadNoteImage } from '@/lib/noteMedia'
+import { NoteImage } from '@/components/NoteImage'
 
 interface ImageBlockProps {
   content:  string
@@ -32,15 +32,14 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
     setUploadError(null)
     setUploading(true)
 
-    const result = await uploadImage(file, profile.id)
-
-    setUploading(false)
-
-    if (result.ok) {
-      onChange(result.url)
+    try {
+      const content = await uploadNoteImage(file, profile.id)
+      onChange(content)
       onMeta({ filename: file.name })
-    } else {
-      setUploadError(result.error)
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Upload failed.')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -160,9 +159,9 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
       )}
 
       {/* Image preview (when URL is set, upload mode only — URL mode has its own preview) */}
-      {mode === 'upload' && isUrl && content && (
-        <img
-          src={sanitizeImageUrl(content) ?? ''}
+      {mode === 'upload' && content && (
+        <NoteImage
+          content={content}
           alt={metadata.alt ?? 'Image preview'}
           style={{
             maxWidth:     '100%',
@@ -208,8 +207,8 @@ export function ImageBlock({ content, metadata, onChange, onMeta }: ImageBlockPr
           />
           {/* Image preview for URL mode (only shown in this mode) */}
           {isUrl && content && (
-            <img
-              src={sanitizeImageUrl(content) ?? ''}
+            <NoteImage
+              content={content}
               alt={metadata.alt ?? 'Image preview'}
               style={{
                 maxWidth:     '100%',

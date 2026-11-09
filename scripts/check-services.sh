@@ -40,7 +40,8 @@ PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -c 'SELEC
 check "Supabase Database" "postgresql://127.0.0.1:54322 not accessible — run: supabase start" $?
 
 # ── 4. Supabase Studio (port 54323) ──
-curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54323/ 2>/dev/null | grep -q '200'
+# Studio answers 307 (redirect to /project) when healthy, so accept 2xx/3xx.
+curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54323/ 2>/dev/null | grep -qE '^[23][0-9][0-9]$'
 check "Supabase Studio"  "http://127.0.0.1:54323/ not responding — run: supabase start" $?
 
 # ── 5. Admin RPC functions ──
@@ -49,7 +50,8 @@ if [ -n "$ANON_KEY" ]; then
   RPC_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:54321/rest/v1/rpc/admin_get_users" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $ANON_KEY" \
-    -H "apikey: $ANON_KEY" 2>/dev/null)
+    -H "apikey: $ANON_KEY" \
+    -d '{"p_limit":1,"p_offset":0,"p_search":null,"p_user_type":null}' 2>/dev/null)
   if [ "$RPC_STATUS" = "200" ]; then
     check "Admin RPC"        "admin_get_users available" 0
   elif [ "$RPC_STATUS" = "404" ]; then

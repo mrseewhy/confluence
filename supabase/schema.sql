@@ -98,27 +98,29 @@ create policy "Users can select their own note blocks"
   on public.note_blocks for select to authenticated
   using (exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid()))))));
 
+-- Write access requires edit access (owner, editor collaborator, or admin).
+-- Viewers may SELECT blocks but must not INSERT/UPDATE/DELETE them.
 drop policy if exists "Users can insert their own note blocks" on public.note_blocks;
 create policy "Users can insert their own note blocks"
   on public.note_blocks for insert to authenticated
   with check (
-    exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid())))) AND
+    public.can_edit_note(note_id, auth.uid()) AND
     not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
   );
 
 drop policy if exists "Users can update their own note blocks" on public.note_blocks;
 create policy "Users can update their own note blocks"
   on public.note_blocks for update to authenticated
-  using (exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid()))))))
+  using (public.can_edit_note(note_id, auth.uid()))
   with check (
-    exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid())))) AND
+    public.can_edit_note(note_id, auth.uid()) AND
     not exists (select 1 from public.profiles where id = auth.uid() and is_banned = true)
   );
 
 drop policy if exists "Users can delete their own note blocks" on public.note_blocks;
 create policy "Users can delete their own note blocks"
   on public.note_blocks for delete to authenticated
-  using (exists (select 1 from public.notes where id = note_id and (owner_id = auth.uid() or exists (select 1 from public.collaborators where note_id = public.notes.id and invitee_email = (select email from auth.users where id = auth.uid()))))));
+  using (public.can_edit_note(note_id, auth.uid()));
 
 -- COLLABORATORS / INVITATIONS
 create table if not exists public.collaborators (

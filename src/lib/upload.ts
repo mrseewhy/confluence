@@ -1,6 +1,6 @@
 import { requireSupabase } from '@/lib/supabase'
 
-const BUCKET = 'note-images'
+const BUCKET = 'avatars'
 const MAX_SIZE = 5 * 1024 * 1024 // 5 MB
 
 export type UploadResult =

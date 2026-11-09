@@ -7,16 +7,28 @@
 //   SITE_URL         — the base URL of the app (used to construct share links)
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 interface InvitePayload {
-  inviter_name: string;
-  inviter_email: string;
   invitee_email: string;
   item_type: "folder" | "note";
-  item_title: string;
   item_slug: string;
-  access_level: "viewer" | "editor";
-  owner_username: string;
+  access_level?: "viewer" | "editor";
+}
+
+// Escape a value for safe interpolation into HTML text/attribute contexts.
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Encode a value for safe use inside a URL path segment.
+function encodeSegment(value: unknown): string {
+  return encodeURIComponent(String(value ?? ""));
 }
 
 const corsHeaders = {
@@ -45,6 +57,36 @@ function checkMemoryRateLimit(clientIp: string): boolean {
   return true;
 }
 
+// Hash an IP for privacy before storing it in the rate-limit table.
+async function hashIp(ip: string): Promise<string> {
+  const data = new TextEncoder().encode(`rl:${ip}`);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// DB-backed rate limiting so limits hold across Edge Function instances.
+// Falls back to the in-memory limiter if the RPC is unavailable.
+async function allowRequest(clientIp: string, endpoint: string): Promise<boolean> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!supabaseUrl || !serviceKey) return checkMemoryRateLimit(clientIp);
+  try {
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    const { data, error } = await admin.rpc("check_rate_limit", {
+      p_ip_hash: await hashIp(clientIp),
+      p_endpoint: endpoint,
+      p_max_requests: RATE_LIMIT_MAX,
+      p_window_seconds: RATE_LIMIT_WINDOW / 1000,
+    });
+    if (error) return checkMemoryRateLimit(clientIp);
+    return data !== false;
+  } catch {
+    return checkMemoryRateLimit(clientIp);
+  }
+}
+
 serve(async (req) => {
   // Handle preflight
   if (req.method === "OPTIONS") {
@@ -63,7 +105,7 @@ serve(async (req) => {
     || req.headers.get("x-real-ip")
     || "unknown";
 
-  if (!checkMemoryRateLimit(clientIp)) {
+  if (!(await allowRequest(clientIp, "send-collaborator-invite"))) {
     return new Response(
       JSON.stringify({ error: "Too many requests. Please try again later." }),
       {
@@ -85,40 +127,136 @@ serve(async (req) => {
   }
 
   try {
+    // ── Authentication: require a valid Supabase JWT ──
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const token = authHeader.replace("Bearer ", "");
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    // Scoped client that acts as the caller (RLS applies).
+    const callerClient: SupabaseClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false },
+    });
+
+    const { data: { user }, error: userError } = await callerClient.auth.getUser(token);
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: userError?.message ?? "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const payload: InvitePayload = await req.json();
 
     const {
-      inviter_name,
-      inviter_email,
       invitee_email,
       item_type,
-      item_title,
       item_slug,
-      owner_username,
     } = payload;
 
+    // Title and owner username are derived server-side to prevent spoofing /
+    // HTML injection; inviter identity comes from the verified JWT.
+    const inviteeEmail = typeof invitee_email === "string" ? invitee_email.trim().toLowerCase() : "";
+
     // Validate required fields
-    if (!invitee_email || !item_title || !owner_username) {
+    if (!inviteeEmail || !item_type || !item_slug) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: invitee_email, item_title, owner_username" }),
+        JSON.stringify({ error: "Missing required fields: invitee_email, item_type, item_slug" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (item_type !== "folder" && item_type !== "note") {
+      return new Response(
+        JSON.stringify({ error: "item_type must be 'folder' or 'note'" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // Validate email format (basic)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(invitee_email)) {
+    if (!emailRegex.test(inviteeEmail)) {
       return new Response(
         JSON.stringify({ error: "Invalid invitee email format" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // Build the share link
+    // ── Authorization: confirm the caller owns / can edit the item ──
+    // RLS on these selects returns a row only if the caller has access;
+    // we additionally require owner for invites to keep sharing owner-only.
+    const { data: inviterProfile } = await callerClient
+      .from("profiles")
+      .select("full_name, username")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    let itemTitle = "";
+    let ownerUsername = "";
+    let ownerId: string | null = null;
+
+    if (item_type === "note") {
+      const { data: note } = await callerClient
+        .from("notes")
+        .select("title, owner_id, profiles:owner_id(username)")
+        .eq("slug", item_slug)
+        .eq("owner_id", user.id)
+        .maybeSingle();
+      if (!note) {
+        return new Response(
+          JSON.stringify({ error: "Item not found or you do not have permission to share it" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      itemTitle = note.title ?? "";
+      ownerId = note.owner_id;
+      // deno-lint-ignore no-explicit-any
+      ownerUsername = (note as any).profiles?.username ?? inviterProfile?.username ?? "";
+    } else {
+      const { data: folder } = await callerClient
+        .from("folders")
+        .select("name, owner_id, profiles:owner_id(username)")
+        .eq("slug", item_slug)
+        .eq("owner_id", user.id)
+        .maybeSingle();
+      if (!folder) {
+        return new Response(
+          JSON.stringify({ error: "Item not found or you do not have permission to share it" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      itemTitle = folder.name ?? "";
+      ownerId = folder.owner_id;
+      // deno-lint-ignore no-explicit-any
+      ownerUsername = (folder as any).profiles?.username ?? inviterProfile?.username ?? "";
+    }
+
+    if (!ownerId || !ownerUsername) {
+      return new Response(
+        JSON.stringify({ error: "Could not resolve item owner" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const inviterName = inviterProfile?.full_name ?? inviterProfile?.username ?? "A Confluence user";
+    const inviterEmail = user.email ?? "";
+
+    // Build the share link (path segments encoded to prevent injection)
     const itemPath = item_type === "folder" ? "folder" : "n";
-    const shareUrl = `${siteUrl}/${owner_username}/${itemPath}/${item_slug}`;
+    const shareUrl = `${siteUrl}/${encodeSegment(ownerUsername)}/${itemPath}/${encodeSegment(item_slug)}`;
 
     const itemLabel = item_type === "folder" ? "folder" : "note";
+
+    // Pre-escaped values for the HTML body
+    const safeInviterName = escapeHtml(inviterName);
+    const safeItemTitle = escapeHtml(itemTitle);
+    const safeShareUrl = escapeHtml(shareUrl);
 
     // Send email via Resend API directly (no SDK needed in Edge Functions)
     const res = await fetch("https://api.resend.com/emails", {
@@ -129,9 +267,9 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: `Confluence <${fromEmail}>`,
-        reply_to: inviter_email,
-        to: [invitee_email],
-        subject: `${inviter_name} invited you to collaborate on "${item_title}"`,
+        reply_to: inviterEmail,
+        to: [inviteeEmail],
+        subject: `${inviterName} invited you to collaborate on "${itemTitle}"`,
         html: `
           <!DOCTYPE html>
           <html>
@@ -150,7 +288,7 @@ serve(async (req) => {
                           You've been invited!
                         </h1>
                         <p style="margin:0 0 24px;font-size:14px;color:#86868b;">
-                          ${inviter_name} shared a private ${itemLabel} with you
+                          ${safeInviterName} shared a private ${itemLabel} with you
                         </p>
                       </td>
                     </tr>
@@ -161,10 +299,10 @@ serve(async (req) => {
                             ${item_type === "folder" ? "FOLDER" : "NOTE"}
                           </p>
                           <p style="margin:0 0 12px;font-size:16px;font-weight:600;color:#1d1d1f;">
-                            ${item_title}
+                            ${safeItemTitle}
                           </p>
                         </div>
-                        <a href="${shareUrl}" style="display:block;text-align:center;padding:12px 24px;border-radius:10px;background:#0d7f66;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;margin-bottom:24px;">
+                        <a href="${safeShareUrl}" style="display:block;text-align:center;padding:12px 24px;border-radius:10px;background:#0d7f66;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;margin-bottom:24px;">
                           Open ${itemLabel}
                         </a>
                       </td>

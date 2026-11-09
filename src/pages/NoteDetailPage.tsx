@@ -7,7 +7,8 @@ import { requireSupabase } from "@/lib/supabase";
 import { ShareModal } from "@/components/ShareModal";
 import { TransferOwnershipModal } from "@/components/TransferOwnershipModal";
 import { InviteCollaboratorInline } from "@/components/InviteCollaboratorInline";
-import { formatDate, detectVideoProvider, getVideoEmbedUrl, sanitizeImageUrl } from "@/lib/helpers";
+import { formatDate, detectVideoProvider, getVideoEmbedUrl } from "@/lib/helpers";
+import { NoteImage } from "@/components/NoteImage";
 import { ShareButtons } from "@/components/ShareButtons";
 import { useToast } from "@/components/Toast";
 import { Badge, Button } from "@/components/ui";
@@ -394,8 +395,8 @@ export function NoteDetailPage() {
                     </pre>
                   ) : block.type === "image" ? (
                     <div>
-                      <img
-                        src={sanitizeImageUrl(block.content) ?? ''}
+                      <NoteImage
+                        content={block.content}
                         alt={block.metadata?.alt || ""}
                         style={{
                           maxWidth: "100%",
