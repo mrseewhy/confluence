@@ -9,7 +9,15 @@ import { IC } from "@/components/layout/dashboardIconPaths";
 import styles from "@/styles/dashboard.module.css";
 import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
 import { PaginationBar } from "@/components/PaginationBar";
-import { safeStr, safeArray } from "@/lib/safeParse";
+import { safeStr } from "@/lib/safeParse";
+
+/** PostgREST returns many-to-one embedded relations as a single object, but as
+ *  an array when the relation is one-to-many. Accept either shape. */
+function toFirst(val: unknown): Record<string, unknown> | null {
+  if (Array.isArray(val)) return (val[0] as Record<string, unknown>) ?? null;
+  if (val && typeof val === "object") return val as Record<string, unknown>;
+  return null;
+}
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -100,10 +108,8 @@ export function DashboardCollaborations() {
       // Collect unique owner IDs from returned items
       const ownerIds = new Set<string>();
       (collaborators ?? []).forEach((c: Record<string, unknown>) => {
-        const folderArr = safeArray<Record<string, unknown>>(c.folder);
-        const noteArr = safeArray<Record<string, unknown>>(c.note);
-        const folder = folderArr.length > 0 ? folderArr[0] : null;
-        const note = noteArr.length > 0 ? noteArr[0] : null;
+        const folder = toFirst(c.folder);
+        const note = toFirst(c.note);
         if (folder && safeStr(folder.owner_id)) ownerIds.add(safeStr(folder.owner_id));
         if (note && safeStr(note.owner_id)) ownerIds.add(safeStr(note.owner_id));
       });
@@ -123,12 +129,9 @@ export function DashboardCollaborations() {
       }
 
       const mapped: CollaborationRow[] = (collaborators ?? []).map((c: Record<string, unknown>) => {
-        const folder2Arr = safeArray<Record<string, unknown>>(c.folder);
-        const note2Arr = safeArray<Record<string, unknown>>(c.note);
-        const inviterArr = safeArray<Record<string, unknown>>(c.inviter);
-        const folder = folder2Arr.length > 0 ? folder2Arr[0] : null;
-        const note = note2Arr.length > 0 ? note2Arr[0] : null;
-        const inviter = inviterArr.length > 0 ? inviterArr[0] : null;
+        const folder = toFirst(c.folder);
+        const note = toFirst(c.note);
+        const inviter = toFirst(c.inviter);
 
         const ownerId = folder ? safeStr(folder.owner_id) : note ? safeStr(note.owner_id) : "";
         const owner = ownerMap[ownerId];

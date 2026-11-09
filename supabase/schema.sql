@@ -171,12 +171,19 @@ create policy "Owners can delete collaborators on their items"
   );
 
 -- RLS: Invitees can read their own collaborator records (needed for "Collaborations" page)
+-- Uses a SECURITY DEFINER helper: auth.users has RLS, so a plain subquery
+-- for the caller's own email returns NULL under a normal API request.
+create or replace function public.current_user_email()
+returns text language sql stable security definer set search_path = public as $$
+  select email from auth.users where id = auth.uid();
+$$;
+revoke all on function public.current_user_email() from public;
+grant execute on function public.current_user_email() to authenticated;
+
 drop policy if exists "Invitees can read their own collaborator records" on public.collaborators;
 create policy "Invitees can read their own collaborator records"
   on public.collaborators for select to authenticated
-  using (
-    invitee_email = (select email from auth.users where id = auth.uid())
-  );
+  using (invitee_email = public.current_user_email());
 
 -- Ensure the authenticated role has base table permissions
 -- (RLS restricts rows within these grants, it does not grant base access)
@@ -354,7 +361,7 @@ create policy "Public note blocks are readable by everyone"
 drop policy if exists "Folders are visible by policy" on public.folders;
 create policy "Folders are visible by policy"
   on public.folders for select to authenticated
-  using (public.has_access_to_folder(id, auth.uid()));
+  using (owner_id = auth.uid() or public.has_access_to_folder(id, auth.uid()));
 
 drop policy if exists "Users can insert their own folders" on public.folders;
 create policy "Users can insert their own folders"
@@ -382,7 +389,7 @@ create policy "Users can delete their own folders"
 drop policy if exists "Notes are visible by policy" on public.notes;
 create policy "Notes are visible by policy"
   on public.notes for select to authenticated
-  using (public.has_access_to_note(id, auth.uid()));
+  using (owner_id = auth.uid() or public.has_access_to_note(id, auth.uid()));
 
 drop policy if exists "Users can insert their own notes" on public.notes;
 create policy "Users can insert their own notes"

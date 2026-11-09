@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+// These flows create and mutate shared records, so they must not run
+// concurrently against the same seeded database.
+test.describe.configure({ mode: 'serial' });
+
 test.describe('Notes Flow', () => {
   test('should allow creating a new note', async ({ page }) => {
     test.setTimeout(60000);
