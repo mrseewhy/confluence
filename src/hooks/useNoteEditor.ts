@@ -3,7 +3,7 @@ import type { BlockType, BlockMetadata, Visibility } from '@/types'
 import { requireSupabase } from '@/lib/supabase'
 import { safeVisibility, safeBlockType, safeBlockMetadata } from '@/lib/safeParse'
 import { buildSlug } from '@/lib/helpers'
-import { enqueueSave, dequeueSave, isOfflineError } from '@/lib/offlineQueue'
+import { enqueueSave, dequeueSave, isOfflineError, readQueue } from '@/lib/offlineQueue'
 import { threeWayMerge, type MergeBlock } from '@/lib/mergeBlocks'
 
 // ── EditorBlock (client-only, not a DB NoteBlock) ─────────────
@@ -871,7 +871,6 @@ export function useNoteEditor() {
   // the user closes the tab before reconnecting.
   useEffect(() => {
     const flush = async () => {
-      const { readQueue } = await import('@/lib/offlineQueue')
       const queue = readQueue()
       if (Object.keys(queue).length === 0) return
       if (!lastUserIdRef.current) return

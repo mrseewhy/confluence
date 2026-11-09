@@ -9,6 +9,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Shape of the embedded `profiles:owner_id(username)` join in note/folder selects.
+interface OwnerProfileJoin {
+  username: string | null;
+}
+
 interface InvitePayload {
   invitee_email: string;
   item_type: "folder" | "note";
@@ -207,7 +212,11 @@ serve(async (req) => {
         .select("title, owner_id, profiles:owner_id(username)")
         .eq("slug", item_slug)
         .eq("owner_id", user.id)
-        .maybeSingle();
+        .maybeSingle<{
+          title: string | null;
+          owner_id: string;
+          profiles: OwnerProfileJoin | null;
+        }>();
       if (!note) {
         return new Response(
           JSON.stringify({ error: "Item not found or you do not have permission to share it" }),
@@ -216,15 +225,18 @@ serve(async (req) => {
       }
       itemTitle = note.title ?? "";
       ownerId = note.owner_id;
-      // deno-lint-ignore no-explicit-any
-      ownerUsername = (note as any).profiles?.username ?? inviterProfile?.username ?? "";
+      ownerUsername = note.profiles?.username ?? inviterProfile?.username ?? "";
     } else {
       const { data: folder } = await callerClient
         .from("folders")
         .select("name, owner_id, profiles:owner_id(username)")
         .eq("slug", item_slug)
         .eq("owner_id", user.id)
-        .maybeSingle();
+        .maybeSingle<{
+          name: string | null;
+          owner_id: string;
+          profiles: OwnerProfileJoin | null;
+        }>();
       if (!folder) {
         return new Response(
           JSON.stringify({ error: "Item not found or you do not have permission to share it" }),
@@ -233,8 +245,7 @@ serve(async (req) => {
       }
       itemTitle = folder.name ?? "";
       ownerId = folder.owner_id;
-      // deno-lint-ignore no-explicit-any
-      ownerUsername = (folder as any).profiles?.username ?? inviterProfile?.username ?? "";
+      ownerUsername = folder.profiles?.username ?? inviterProfile?.username ?? "";
     }
 
     if (!ownerId || !ownerUsername) {
