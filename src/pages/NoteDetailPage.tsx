@@ -10,6 +10,8 @@ import { InviteCollaboratorInline } from "@/components/InviteCollaboratorInline"
 import { formatDate, detectVideoProvider, getVideoEmbedUrl } from "@/lib/helpers";
 import { NoteImage } from "@/components/NoteImage";
 import { ShareButtons } from "@/components/ShareButtons";
+import { ExportMenu } from "@/components/ExportMenu";
+import { CommentsPanel } from "@/components/CommentsPanel";
 import { useToast } from "@/components/Toast";
 import { Badge, Button } from "@/components/ui";
 import type { Note, NoteBlock } from "@/types";
@@ -311,6 +313,9 @@ export function NoteDetailPage() {
             >
               Updated {formatDate(note.updated_at)}
             </span>
+            <span style={{ marginLeft: "auto", alignSelf: "center" }}>
+              <ExportMenu note={note} blocks={blocks} />
+            </span>
           </div>
         </div>
 
@@ -558,6 +563,9 @@ export function NoteDetailPage() {
             <p>This note has no content blocks.</p>
           </div>
         )}
+
+        {/* Comments — readable by anyone who can see the note */}
+        <CommentsPanel noteId={note.id} noteOwnerId={note.owner_id} />
 
         {/* Social share — visible to everyone */}
         <div style={{ marginTop: "var(--space-8)", paddingTop: "var(--space-6)", borderTop: "1px solid var(--color-border)" }}>

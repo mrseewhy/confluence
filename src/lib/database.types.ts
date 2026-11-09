@@ -331,6 +331,49 @@ export interface Database {
           },
         ]
       }
+      note_comments: {
+        Row: {
+          id: string
+          note_id: string
+          author_id: string
+          parent_id: string | null
+          body: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          note_id: string
+          author_id: string
+          parent_id?: string | null
+          body: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          note_id?: string
+          author_id?: string
+          parent_id?: string | null
+          body?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'note_comments_note_id_fkey'
+            columns: ['note_id']
+            referencedRelation: 'notes'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'note_comments_author_id_fkey'
+            columns: ['author_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       public_profiles: {

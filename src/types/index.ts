@@ -85,3 +85,24 @@ export interface BlockMetadata {
   filename?: string
   level?: string
 }
+
+// ── Note Comment ─────────────────────────────────────────────
+
+/** A comment author as returned by a join on public_profiles. */
+export interface CommentAuthor {
+  id: string
+  full_name: string | null
+  username: string | null
+  avatar_url: string | null
+}
+
+export interface NoteComment {
+  id: string
+  note_id: string
+  author_id: string
+  parent_id: string | null
+  body: string
+  created_at: string
+  updated_at: string
+  author?: CommentAuthor | null
+}

@@ -10,7 +10,9 @@ A collaborative note-taking application with real-time editing, folder organizat
 - **Granular Sharing** — Share individual notes or entire folders as viewer or editor; transfer ownership
 - **Role-Based Access** — User dashboard for personal content; admin dashboard for user/note/folder management
 - **Activity Logging** — Track invitations, deletions, visibility changes, and admin actions
-- **Image Uploads** — Upload and embed images stored in Supabase Storage
+- **Image Uploads** — Upload and embed images stored in a private Supabase Storage bucket (`note-media`), served to authorized viewers via short-lived signed URLs
+- **Export** — Download any note as Markdown, HTML, or JSON
+- **Comments** — Threaded discussion on notes, visible to anyone with read access
 - **Dark Mode** — Built-in theme toggle with persistence
 
 ## Tech Stack
@@ -21,7 +23,7 @@ A collaborative note-taking application with real-time editing, folder organizat
 | **Build** | Vite, Babel |
 | **Backend / Database** | Supabase (PostgreSQL 17, Auth, Realtime, Storage, Edge Functions) |
 | **State / Data** | TanStack React Query, Supabase JS Client |
-| **UI / Interactions** | `@dnd-kit` (drag-and-drop), `react-syntax-highlighter` |
+| **UI / Interactions** | `@dnd-kit` (drag-and-drop), `marked` + `DOMPurify` (Markdown rendering) |
 | **Testing** | Vitest with jsdom/happy-dom (unit), Playwright (e2e) |
 | **Linting** | ESLint with `typescript-eslint` |
 
@@ -58,17 +60,30 @@ Key tables in the `public` schema:
 | `notes` | Notes owned by users, organized in folders |
 | `note_blocks` | Ordered content blocks within notes (text, code, image, video, heading) |
 | `collaborators` | Share permissions (viewer/editor) for folders or notes |
+| `note_comments` | Threaded comments on notes (anyone with read access may post) |
 | `activity_log` | Audit trail for user and admin actions |
 | `notification_preferences` | Per-user email notification settings |
+
+> **Authorization note:** writes to `note_blocks` and `note_comments` are gated by `can_edit_note()` / read access, so `viewer` collaborators can read but never mutate note content.
+
+### Storage
+
+Two Storage buckets back media:
+
+| Bucket | Public? | Purpose |
+|--------|---------|---------|
+| `note-media` | No | Note images. Uploads are namespaced by user id; reads require `can_read_note_media()` (owner, or anyone with access to a note that embeds the file) and are served via short-lived signed URLs. |
+| `avatars` | Yes | Profile pictures, readable by anyone. |
 
 ### Real-Time Collaboration
 
 Supabase Realtime enables:
 - **Presence tracking** — see which collaborators are currently viewing a note
 - **Block broadcasting** — live updates when a collaborator edits (debounced via auto-save)
+- **Notifications** — in-app notification bell for invites and activity
 
 Edge Functions handle:
-- `send-collaborator-invite` — sends sharing invitation emails
+- `send-collaborator-invite` — sends sharing invitation emails. Requires a valid JWT; verifies the caller owns the shared item; derives the item title and owner server-side; HTML-escapes all interpolated fields. Both functions are rate-limited via the DB-backed `check_rate_limit` RPC (in-memory fallback).
 - `delete-account` — handles full account deletion
 
 ## Getting Started
