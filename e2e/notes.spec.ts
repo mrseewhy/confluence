@@ -69,7 +69,8 @@ test('should create a note and verify it renders publicly', async ({ page }) => 
 
     const titleInput = page.getByPlaceholder('Note title');
     await expect(titleInput).toBeVisible({ timeout: 15000 });
-    await titleInput.fill('E2E Full Flow Note');
+    const uniqueTitle = `E2E Full Flow Note ${Date.now()}`;
+    await titleInput.fill(uniqueTitle);
 
     // Set a unique slug
     const uniqueSlug = `e2e-full-${Date.now()}`;
@@ -89,13 +90,13 @@ test('should create a note and verify it renders publicly', async ({ page }) => 
     await expect(page).toHaveURL(/\/dashboard\/notes/, { timeout: 15000 });
 
     // ── Verify the note appears in the dashboard notes list ─
-    await expect(page.getByText('E2E Full Flow Note')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(uniqueTitle).first()).toBeVisible({ timeout: 10000 });
 
     // ── Also navigate to the Edit page (SPA) to verify the editor loads ─
     await page.click('a[href*="/edit"]:has-text("Edit")');
     await expect(page.getByPlaceholder('Note title')).toBeVisible({ timeout: 15000 });
     const editorTitle = await page.getByPlaceholder('Note title').inputValue();
-    expect(editorTitle).toBe('E2E Full Flow Note');
+    expect(editorTitle).toBe(uniqueTitle);
   });
 
   test('should share a private note with a collaborator as editor', async ({ page, browser }) => {
@@ -115,7 +116,8 @@ test('should create a note and verify it renders publicly', async ({ page }) => 
 
     const titleInput = page.getByPlaceholder('Note title');
     await expect(titleInput).toBeVisible({ timeout: 15000 });
-    await titleInput.fill('Collaboration Editor Test');
+    const collabTitle = `Collaboration Editor Test ${Date.now()}`;
+    await titleInput.fill(collabTitle);
 
     const shareSlug = `collab-edit-${Date.now()}`;
     await page.click('button[title="Edit slug"]');
@@ -171,7 +173,7 @@ test('should create a note and verify it renders publicly', async ({ page }) => 
     await marcusPage.click('aside a[href="/dashboard/collaborations"]');
     await marcusPage.waitForURL('/dashboard/collaborations', { timeout: 10000 });
     // Verify marcus can see the shared note in his collaborations list
-    await expect(marcusPage.getByText('Collaboration Editor Test')).toBeVisible({ timeout: 15000 });
+    await expect(marcusPage.getByText(collabTitle).first()).toBeVisible({ timeout: 15000 });
 
     await marcusCtx.close();
   });

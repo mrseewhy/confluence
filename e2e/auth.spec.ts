@@ -49,10 +49,15 @@ test.describe('Authentication Flow', () => {
     // Navigate to personal Notes page via sidebar
     await page.click('aside a[href="/dashboard/notes"]');
     await expect(page.locator('body')).toContainText('Notes');
+    // Let the notes list finish loading: a re-render mid-click detaches the
+    // user-menu link and makes the click below flaky.
+    await page.waitForLoadState('networkidle');
 
     // Switch back to admin dashboard via user menu
     await page.click('button:has-text("Alex Johnson")');
-    await page.click('a[href="/admin/dashboard"]');
+    const adminLink = page.locator('a[href="/admin/dashboard"]');
+    await expect(adminLink).toBeVisible({ timeout: 10000 });
+    await adminLink.click();
     await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 10000 });
     await expect(page.locator('body')).toContainText('Admin');
   });
