@@ -169,7 +169,7 @@ describe('useNoteEditor', () => {
       });
 
       await waitFor(() => expect(result.current.saveStatus).toBe('conflict'));
-      expect(result.current.saveError).toMatch(/someone else saved/i);
+      expect(result.current.saveError).toMatch(/someone else (saved|edited)/i);
     });
 
     it('retries successfully after a conflict instead of staying stuck', async () => {
@@ -874,5 +874,128 @@ describe('useNoteEditor', () => {
 
       expect(result.current.saveStatus).toBe('error')
     })
+  })
+})
+
+// ── Three-way merge on conflict ───────────────────────────────
+describe('useNoteEditor — merges concurrent edits when it safely can', () => {
+  const note = {
+    id: 'note-m',
+    title: 'Merge',
+    description: '',
+    slug: 'merge-note',
+    folder_id: 'f1',
+    visibility: 'private',
+    updated_at: '2020-01-01T00:00:00Z',
+  }
+
+  function mergeMock(opts: { mergedRpcError?: boolean } = {}) {
+    let rpcCall = 0
+    const rpc = vi.fn((name: string) => {
+      if (name !== 'replace_note_blocks_checked') return Promise.resolve({ data: null, error: null })
+      rpcCall += 1
+      // 1st write: conflict. 2nd write (the merged retry): succeed.
+      return rpcCall === 1
+        ? Promise.resolve({ data: null, error: { message: 'version_conflict', code: 'P0001' } })
+        : Promise.resolve({ data: null, error: opts.mergedRpcError ? { message: 'boom' } : null })
+    })
+
+    const from = vi.fn((table: string) => {
+      if (table === 'note_blocks') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn(() =>
+                Promise.resolve({
+                  data: [
+                    { type: 'paragraph', content: 'one', order_index: 0 },
+                    { type: 'paragraph', content: 'two THEIRS', order_index: 1 },
+                    { type: 'paragraph', content: 'three', order_index: 2 },
+                  ],
+                  error: null,
+                }),
+              ),
+            })),
+          })),
+        }
+      }
+      // notes
+      return {
+        update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn(() =>
+              Promise.resolve({ data: { updated_at: '2020-02-02T00:00:00Z' }, error: null }),
+            ),
+          })),
+        })),
+      }
+    })
+
+    const client = { from, rpc }
+    vi.mocked(requireSupabase).mockReturnValue(
+      client as unknown as ReturnType<typeof requireSupabase>,
+    )
+    return { rpc, client }
+  }
+
+  it('persists the merged blocks instead of showing a conflict', async () => {
+    const { rpc } = mergeMock()
+    const { result } = renderHook(() => useNoteEditor())
+
+    act(() => {
+      result.current.loadFromExisting(note, [
+        { id: 'a', type: 'paragraph', content: 'one', metadata: null },
+        { id: 'b', type: 'paragraph', content: 'two', metadata: null },
+        { id: 'c', type: 'paragraph', content: 'three', metadata: null },
+      ])
+    })
+
+    // Must be a separate act: editing in the same act as load would be
+    // overwritten by the load's setState.
+    act(() => {
+      // I change block 0 only; the server changed block 1 -> mergeable.
+      result.current.updateBlock('existing-a', 'one MINE')
+    })
+
+    await act(async () => {
+      await result.current.save('u1').catch(() => {})
+    })
+
+    await waitFor(() => expect(result.current.saveStatus).toBe('saved'))
+
+    const writes = rpc.mock.calls.filter((c) => c[0] === 'replace_note_blocks_checked')
+    expect(writes.length).toBeGreaterThanOrEqual(2)
+    const mergedPayload = (writes[writes.length - 1] as unknown[])[1] as {
+      p_blocks: { content: string }[]
+    }
+    expect(mergedPayload.p_blocks.map((b) => b.content)).toEqual([
+      'one MINE',
+      'two THEIRS',
+      'three',
+    ])
+  })
+
+  it('falls back to a conflict when the merged write itself fails', async () => {
+    mergeMock({ mergedRpcError: true })
+    const { result } = renderHook(() => useNoteEditor())
+
+    act(() => {
+      result.current.loadFromExisting(note, [
+        { id: 'a', type: 'paragraph', content: 'one', metadata: null },
+        { id: 'b', type: 'paragraph', content: 'two', metadata: null },
+        { id: 'c', type: 'paragraph', content: 'three', metadata: null },
+      ])
+    })
+
+    act(() => {
+      result.current.updateBlock('existing-a', 'one MINE')
+    })
+
+    await act(async () => {
+      await result.current.save('u1').catch(() => {})
+    })
+
+    await waitFor(() => expect(result.current.saveStatus).toBe('conflict'))
   })
 })

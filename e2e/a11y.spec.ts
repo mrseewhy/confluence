@@ -37,6 +37,11 @@ async function audit(page: import('@playwright/test').Page, context: string) {
 }
 
 test.describe('Accessibility', () => {
+  // axe runs a full rule set against the page and Firefox is markedly slower
+  // than Chromium at it; the 30s default is too tight when suites run
+  // alongside each other.
+  test.describe.configure({ timeout: 90_000 })
+
   test('landing page has no serious/critical violations', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('h1').first()).toBeVisible()

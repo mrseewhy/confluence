@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+// These flows reorder shared folders, so they must not overlap with
+// other suites that read the same rows.
+test.describe.configure({ mode: 'serial' })
+
 test.describe('Drag-to-reorder', () => {
   test('folders page shows drag handles on table rows', async ({ page }) => {
     test.setTimeout(60000);

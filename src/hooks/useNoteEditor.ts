@@ -3,6 +3,8 @@ import type { BlockType, BlockMetadata, Visibility } from '@/types'
 import { requireSupabase } from '@/lib/supabase'
 import { safeVisibility, safeBlockType, safeBlockMetadata } from '@/lib/safeParse'
 import { buildSlug } from '@/lib/helpers'
+import { enqueueSave, dequeueSave, isOfflineError } from '@/lib/offlineQueue'
+import { threeWayMerge, type MergeBlock } from '@/lib/mergeBlocks'
 
 // ── EditorBlock (client-only, not a DB NoteBlock) ─────────────
 
@@ -26,7 +28,7 @@ interface EditorState {
   blocks:      EditorBlock[]
 }
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict'
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'queued'
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -165,6 +167,11 @@ export function useNoteEditor() {
   // The updated_at we last saw from the server. Used for optimistic
   // concurrency so a concurrent save is reported instead of clobbered.
   const lastUpdatedAtRef = useRef<string | null>(null)
+  // Remembers the user for the offline-flush effect, which must not depend
+  // on the save callback identity (it is recreated on every state change).
+  const lastUserIdRef = useRef<string | null>(null)
+  const baseBlocksRef = useRef<MergeBlock[]>([])
+  const saveRef = useRef<((userId: string) => Promise<string | undefined>) | null>(null)
   const [slugAvailable, setSlugAvailable] = useState(true)
   const [slugChecking, setSlugChecking] = useState(false)
   const slugCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -299,6 +306,10 @@ export function useNoteEditor() {
       setSlugManuallyEdited(true)
       // Remember the server timestamp so saves can detect concurrent edits.
       lastUpdatedAtRef.current = note.updated_at ?? null
+      // The blocks as last loaded are the common ancestor for a three-way
+      // merge. Captured here, at load time, because by the time a conflict is
+      // detected the server copy has already moved on.
+      baseBlocksRef.current = blocks.map(b => ({ type: b.type, content: b.content }))
 
       // Prefer localStorage draft over DB data
       const draft = loadDraft(note.id)
@@ -408,6 +419,7 @@ export function useNoteEditor() {
 
   const save = useCallback(async (userId: string) => {
     const s = stateRef.current
+    lastUserIdRef.current = userId || null
 
     if (!userId) {
       setSaveStatus('error')
@@ -471,6 +483,7 @@ export function useNoteEditor() {
         }
 
         clearDraft(s.noteId)
+        dequeueSave(s.noteId, slug)
         setSaveStatus('saved')
         return slug
       } else {
@@ -515,18 +528,137 @@ export function useNoteEditor() {
         }
 
         clearDraft(null)
+        dequeueSave(null, slug)
         setSaveStatus('saved')
         return noteData.slug
       }
     } catch (err) {
       console.error('[useNoteEditor] save error', err)
 
+      // Network gone: keep the work locally and retry when we're back online.
+      // Checked before the generic error path so an offline save is never
+      // reported as a hard failure.
+      if (isOfflineError(err)) {
+        enqueueSave({
+          noteId:      s.noteId,
+          slug,
+          userId,
+          title:       s.title,
+          description: s.description,
+          folder_id:   s.folder_id,
+          visibility:  s.visibility,
+          blocks:      s.blocks.map(b => ({ type: b.type, content: b.content, metadata: b.metadata })),
+          updatedAt:   lastUpdatedAtRef.current,
+        })
+        setSaveStatus('queued')
+        setSaveError('You are offline. Your changes are saved on this device and will sync when you reconnect.')
+        return
+      }
+
       // A concurrent save moved the note on: report it rather than overwrite.
       const conflictErr = err as { message?: string } | null
       if (typeof conflictErr?.message === 'string' && conflictErr.message.includes('version_conflict')) {
-        // Adopt the server's current timestamp so a deliberate retry succeeds
-        // as an overwrite. Without this the next save would conflict again
-        // forever and the "save again to overwrite" advice would be a lie.
+        // Try to combine both edits instead of forcing a choice. The base is
+        // the version snapshot taken just before this save; theirs is what is
+        // on the server now; mine is what the user has in the editor.
+        let mergedCleanly = false
+        let mergedForRetry: Array<{ id: string; type: BlockType; content: string; metadata: BlockMetadata; order_index: number }> = []
+        try {
+          const supabase = requireSupabase()
+          const { data: theirsBlocks } = await supabase
+            .from('note_blocks')
+            .select('type, content, order_index')
+            .eq('note_id', s.noteId)
+            .order('order_index', { ascending: true })
+
+          const toBlocks = (rows: unknown): MergeBlock[] =>
+            Array.isArray(rows)
+              ? rows.map((r) => {
+                  const row = r as { type?: string; content?: string }
+                  return { type: row.type ?? 'paragraph', content: row.content ?? '' }
+                })
+              : []
+
+          const theirBlocks = toBlocks(theirsBlocks)
+          const baseBlocks = baseBlocksRef.current
+
+          const mineWithIds = s.blocks.map((blk) => ({
+            id:         blk.id,
+            type:       blk.type,
+            content:    blk.content,
+            metadata:   blk.metadata,
+          }))
+
+          // Align by position: note_blocks rows carry no client block id.
+          const indexed = (arr: MergeBlock[]) =>
+            arr.map((blk, i) => ({ ...blk, id: `p${i}` }))
+
+          const result = threeWayMerge(
+            indexed(baseBlocks),
+            indexed(mineWithIds) as typeof mineWithIds,
+            indexed(theirBlocks),
+          )
+
+          if (result.clean) {
+            // Adopt the merged content and retry the save immediately.
+            mergedForRetry = result.merged.map((blk, i) => ({
+              id:        s.blocks[i]?.id ?? nextId(),
+              type:      blk.type as BlockType,
+              content:   blk.content,
+              metadata:  (blk.metadata ?? {}) as BlockMetadata,
+              order_index: i,
+            }))
+            setState((prev) => ({ ...prev, blocks: mergedForRetry }))
+            setContentVersion((v) => v + 1)
+            mergedCleanly = true
+          }
+        } catch {
+          // Merging is best-effort; fall through to the manual conflict path.
+        }
+
+        if (mergedCleanly) {
+          // Re-read the server timestamp so the retried save passes the CAS.
+          try {
+            const supabase = requireSupabase()
+            const { data: fresh } = await supabase
+              .from('notes')
+              .select('updated_at')
+              .eq('id', s.noteId)
+              .maybeSingle()
+            if (fresh?.updated_at) lastUpdatedAtRef.current = fresh.updated_at
+          } catch { /* fall through */ }
+
+          // Persist the merge now: setting state alone would leave the note
+          // unsaved until some later autosave happened to fire.
+          setSaveStatus('saving')
+          try {
+            const { error: mergedErr } = await requireSupabase().rpc('replace_note_blocks_checked', {
+              p_note_id: s.noteId,
+              p_blocks:  mergedForRetry.map((blk, i) => ({
+                type:       blk.type,
+                content:    blk.content,
+                order_index: i,
+                metadata:   blk.metadata,
+              })),
+              // Force the write: we have already reconciled both sides.
+              p_expected_updated_at: null,
+            })
+            if (mergedErr) throw mergedErr
+
+            clearDraft(s.noteId)
+            dequeueSave(s.noteId, slug)
+            setSaveStatus('saved')
+            setSaveError('Your changes were merged with the other edit.')
+          } catch (e) {
+            console.error('[useNoteEditor] merged save failed', e)
+            setSaveStatus('conflict')
+            setSaveError('Could not save the merged version. Your changes are safe here — please save again.')
+          }
+          return
+        }
+
+        // Could not merge automatically: adopt the server timestamp so a
+        // deliberate retry succeeds as an overwrite, then tell the user.
         try {
           const supabase = requireSupabase()
           const { data: fresh } = await supabase
@@ -540,7 +672,7 @@ export function useNoteEditor() {
         }
 
         setSaveStatus('conflict')
-        setSaveError('Someone else saved this note while you were editing. Your changes are safe here — reload to see their version, or save again to overwrite.')
+        setSaveError('Someone else edited the same part of this note. Your changes are safe here — reload to see their version, or save again to overwrite.')
         return
       }
 
@@ -563,6 +695,12 @@ export function useNoteEditor() {
       throw err
     }
   }, [saveVersion])  // saveVersion is a stable useCallback
+
+  // Expose the latest save to the offline-flush effect without adding it as a
+  // dependency (its identity changes on every state update).
+  useEffect(() => {
+    saveRef.current = save
+  }, [save])
 
   // ── Slug availability check (debounced) ─────────────────────
   // Calls the Postgres RPC function is_slug_available to
@@ -726,6 +864,37 @@ export function useNoteEditor() {
     },
     [],
   )
+
+  // ── Flush queued offline saves when the connection returns ────
+  // Only retries the note currently open in this editor instance; the queue
+  // persists across reloads, so a save made offline is never lost even if
+  // the user closes the tab before reconnecting.
+  useEffect(() => {
+    const flush = async () => {
+      const { readQueue } = await import('@/lib/offlineQueue')
+      const queue = readQueue()
+      if (Object.keys(queue).length === 0) return
+      if (!lastUserIdRef.current) return
+
+      const s = stateRef.current
+      const mine = Object.entries(queue).find(([k]) =>
+        s.noteId ? k === s.noteId : k === `slug:${s.slug || buildSlug(s.title)}`,
+      )
+      if (!mine) return
+
+      // The editor still holds the newest text, so just save it again.
+      void saveRef.current?.(lastUserIdRef.current)
+    }
+
+    const onOnline = () => { flush().catch(() => {}) }
+    window.addEventListener('online', onOnline)
+    // Also attempt a flush on mount, in case we are already back online.
+    if (typeof navigator === 'undefined' || navigator.onLine) {
+      const t = setTimeout(() => { flush().catch(() => {}) }, 1500)
+      return () => { clearTimeout(t); window.removeEventListener('online', onOnline) }
+    }
+    return () => window.removeEventListener('online', onOnline)
+  }, [])
 
   return {
     state,

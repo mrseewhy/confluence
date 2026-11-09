@@ -9,6 +9,9 @@ const footerLinks = {
     { label: 'Sign in',  href: '/login'   },
     { label: 'Sign up',  href: '/signup'  },
   ],
+  Resources: [
+    { label: 'Help',     href: '/help'    },
+  ],
   Legal: [
     { label: 'Privacy',  href: '/privacy' },
     { label: 'Terms',    href: '/terms'   },

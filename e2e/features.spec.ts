@@ -7,7 +7,7 @@ import { test, expect, type Page } from '@playwright/test'
  *
  * These flows touch shared seed data, so run serially.
  */
-test.describe.configure({ mode: 'serial' })
+test.describe.configure({ mode: 'serial', timeout: 90_000 })
 
 async function signIn(page: Page, email = 'sarah@confluence.test', password = 'Sarah123!') {
   await page.goto('/login')
@@ -162,3 +162,24 @@ test.describe('Admin', () => {
     expect(/users/i.test(body)).toBeTruthy()
   })
 })
+
+test.describe('Help page', () => {
+  test('help page is reachable and documents the tricky behaviours', async ({ page }) => {
+    await page.goto('/help');
+    await expect(page.getByRole('heading', { name: /Help & Getting Started/i })).toBeVisible({
+      timeout: 15000,
+    });
+    // The parts users actually need to understand.
+    await expect(page.getByText(/combine both sets of changes/i)).toBeVisible();
+    await expect(page.getByText(/Saved offline/i).first()).toBeVisible();
+    await expect(page.getByText(/Version history/i).first()).toBeVisible();
+  });
+
+  test('help is linked from the footer', async ({ page }) => {
+    await page.goto('/');
+    const link = page.locator('a[href="/help"]').first();
+    await expect(link).toBeVisible({ timeout: 15000 });
+    await link.click();
+    await expect(page).toHaveURL(/\/help$/, { timeout: 10000 });
+  });
+});

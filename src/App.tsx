@@ -24,6 +24,7 @@ const FolderDetailPage     = lazy(() => import('@/pages/FolderDetailPage').then(
 const UserProfilePage      = lazy(() => import('@/pages/UserProfilePage').then(m => ({ default: m.UserProfilePage })))
 const TermsPage            = lazy(() => import('@/pages/TermsPage').then(m => ({ default: m.TermsPage })))
 const PrivacyPage          = lazy(() => import('@/pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })))
+const HelpPage             = lazy(() => import('@/pages/HelpPage').then(m => ({ default: m.HelpPage })))
 const DashboardOverview    = lazy(() => import('@/pages/dashboard/Overview').then(m => ({ default: m.DashboardOverview })))
 const DashboardFolders     = lazy(() => import('@/pages/dashboard/Folders').then(m => ({ default: m.DashboardFolders })))
 const DashboardSubfolders  = lazy(() => import('@/pages/dashboard/Subfolders').then(m => ({ default: m.DashboardSubfolders })))
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="/auth/redirect" element={<RouteErrorBoundary><AuthRedirectPage /></RouteErrorBoundary>} />
           <Route path="/terms"   element={<RouteErrorBoundary><TermsPage /></RouteErrorBoundary>} />
           <Route path="/privacy" element={<RouteErrorBoundary><PrivacyPage /></RouteErrorBoundary>} />
+          <Route path="/help"    element={<RouteErrorBoundary><HelpPage /></RouteErrorBoundary>} />
 
           {/* ── User dashboard ── */}
           <Route path="/dashboard"            element={<RequireAuth userType="user"><RouteErrorBoundary><DashboardOverview /></RouteErrorBoundary></RequireAuth>} />
