@@ -251,7 +251,7 @@ export function AdminNotes() {
                   aria-label="Select all notes on this page" />
               </span>
               {["Note", "Folder", "Vis.", "Collabs", "Updated", "Owner", ""].map((h) => (
-                <span className={styles.tableHeaderCell}>{h}</span>
+                <span key={h} className={styles.tableHeaderCell}>{h}</span>
               ))}
             </div>
             {paginated.map((note, i) => (

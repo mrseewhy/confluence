@@ -303,8 +303,8 @@ export function AdminUsers() {
                   aria-label="Select all users on this page" />
               </span>
               {["User", "Email", "Plan", "Status", "Notes", "Folders", "Joined", ""].map((h) => (
-                <span className={styles.tableHeaderCell}>
-                  {h}
+                <span key={h} className={styles.tableHeaderCell}>
+
                 </span>
               ))}
             </div>

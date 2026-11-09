@@ -544,7 +544,7 @@ export function DashboardNotes() {
         <div className={styles.tableCard}>
           <div className={styles.tableHeader} style={{ gridTemplateColumns: "24px 1fr 160px 90px 120px 140px" }}>
             {["", "Note", "Folder", "Visibility", "Updated", "Actions"].map((h) => (
-              <span className={styles.tableHeaderCell}>{h}</span>
+              <span key={h} className={styles.tableHeaderCell}>{h}</span>
             ))}
           </div>
 

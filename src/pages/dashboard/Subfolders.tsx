@@ -751,7 +751,7 @@ export function DashboardSubfolders() {
               "Updated",
               "Actions",
             ].map((h) => (
-              <span className={styles.tableHeaderCell}>{h}</span>
+              <span key={h} className={styles.tableHeaderCell}>{h}</span>
             ))}
           </div>
           <DndContext

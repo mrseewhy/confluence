@@ -649,7 +649,7 @@ useEffect(() => {
         <div className={styles.tableCard}>
           <div className={styles.tableHeader} style={{ gridTemplateColumns: "24px 1fr 80px 100px 120px 140px" }}>
             {["", "Folder", "Notes", "Visibility", "Updated", "Actions"].map((h) => (
-              <span className={styles.tableHeaderCell}>{h}</span>
+              <span key={h} className={styles.tableHeaderCell}>{h}</span>
             ))}
           </div>
 

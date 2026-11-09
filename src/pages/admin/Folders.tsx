@@ -183,7 +183,7 @@ export function AdminFolders() {
           <div>
             <div className={`${styles.tableHeader} ${styles.cols7_Default}`}>
               {["Folder", "Type", "Vis.", "Collabs", "Updated", "Owner", ""].map((h) => (
-                <span className={styles.tableHeaderCell}>{h}</span>
+                <span key={h} className={styles.tableHeaderCell}>{h}</span>
               ))}
             </div>
             {paginated.map((folder) => (

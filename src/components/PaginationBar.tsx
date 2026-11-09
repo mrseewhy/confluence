@@ -58,6 +58,7 @@ export function PaginationBar({
         <button
           disabled={currentPage <= 1}
           onClick={() => onPageChange(currentPage - 1)}
+          aria-label="Previous page"
           style={{
             ...btnBase,
             ...getSizeStyles(size),
@@ -66,11 +67,12 @@ export function PaginationBar({
             cursor: currentPage <= 1 ? 'default' : 'pointer',
           }}
         >
-          ← Prev
+          <span aria-hidden="true">←</span> Prev
         </button>
         <button
           disabled={currentPage >= totalPages}
           onClick={() => onPageChange(currentPage + 1)}
+          aria-label="Next page"
           style={{
             ...btnBase,
             ...getSizeStyles(size),
@@ -79,7 +81,7 @@ export function PaginationBar({
             cursor: currentPage >= totalPages ? 'default' : 'pointer',
           }}
         >
-          Next →
+          Next <span aria-hidden="true">→</span>
         </button>
       </div>
     </div>
