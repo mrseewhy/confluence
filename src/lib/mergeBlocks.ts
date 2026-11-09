@@ -23,6 +23,8 @@
  * guess when both touched the same block.
  */
 
+import { mergeText } from './mergeText'
+
 export interface MergeBlock {
   id?: string
   type: string
@@ -155,9 +157,19 @@ export function threeWayMerge<T extends MergeBlock>(
       if (m) merged.push(m)
       continue
     }
-    // Both changed the same block differently. In a note this is a genuine
-    // disagreement (e.g. the same sentence edited two ways), so keep mine
-    // and report it rather than silently picking a winner.
+    // Both changed the same block differently. Try to reconcile inside the
+    // block at character level before giving up: two people often edit
+    // different sentences of the same paragraph, which is reconcilable.
+    if (b && m && t) {
+      const textMerge = mergeText(b.content ?? '', m.content ?? '', t.content ?? '')
+      if (textMerge.clean) {
+        merged.push({ ...m, content: textMerge.text })
+        continue
+      }
+    }
+
+    // Genuinely overlapping edits. Keep mine and report it rather than
+    // silently picking a winner.
     if (m) merged.push(m)
     conflicts.push(id)
   }

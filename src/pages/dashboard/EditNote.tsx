@@ -182,9 +182,13 @@ export function EditNote() {
     setFolderError("");
     justManuallySaved.current = true;
     try {
-      await editor.save(user.id);
+      // save() returns the slug only when the write actually landed. It returns
+      // undefined for errors, conflicts and offline queues, in which case the
+      // editor is still holding unsaved work and navigating away would throw it
+      // away (and hide the conflict warning the user needs to see).
+      const savedSlug = await editor.save(user.id);
       broadcastCurrentState();
-      navigate("/dashboard/notes");
+      if (savedSlug) navigate("/dashboard/notes");
     } catch {
       // Save failure is shown via editor.saveError in the UI
     } finally {

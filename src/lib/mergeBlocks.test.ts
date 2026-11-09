@@ -124,6 +124,27 @@ describe('threeWayMerge', () => {
     expect(r.merged.map((x) => x.content)).toEqual(['one MINE', 'two THEIRS'])
   })
 
+  it('merges two edits to DIFFERENT parts of the same paragraph', () => {
+    // Previously this was reported as a conflict at block level. Character
+    // level merging should reconcile it.
+    const base = [b('1', 'The quick brown fox jumps over the lazy dog.')]
+    const mine = [b('1', 'The VERY quick brown fox jumps over the lazy dog.')]
+    const theirs = [b('1', 'The quick brown fox jumps over the lazy dog!')]
+    const r = threeWayMerge(base, mine, theirs)
+    expect(r.clean).toBe(true)
+    expect(r.conflicts).toEqual([])
+    expect(r.merged[0].content).toBe('The VERY quick brown fox jumps over the lazy dog!')
+  })
+
+  it('still conflicts when both change the SAME word differently', () => {
+    const base = [b('1', 'the price is 10 dollars')]
+    const mine = [b('1', 'the price is 20 dollars')]
+    const theirs = [b('1', 'the price is 30 dollars')]
+    const r = threeWayMerge(base, mine, theirs)
+    expect(r.clean).toBe(false)
+    expect(r.conflicts).toEqual(['1'])
+  })
+
   it('ignores metadata differences in change detection', () => {
     const base = [{ id: '1', type: 'paragraph', content: 'x', metadata: { a: 1 } }]
     const mine = [{ id: '1', type: 'paragraph', content: 'x', metadata: { a: 2 } }]
