@@ -71,3 +71,14 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// ── Offline app shell ────────────────────────────────────────────
+// Registered only in production builds: during dev the module graph is
+// served unbundled and a service worker would cache stale modules.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Offline support is a progressive enhancement; never break the app for it.
+    })
+  })
+}

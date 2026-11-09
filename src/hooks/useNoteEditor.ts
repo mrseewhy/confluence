@@ -524,6 +524,21 @@ export function useNoteEditor() {
       // A concurrent save moved the note on: report it rather than overwrite.
       const conflictErr = err as { message?: string } | null
       if (typeof conflictErr?.message === 'string' && conflictErr.message.includes('version_conflict')) {
+        // Adopt the server's current timestamp so a deliberate retry succeeds
+        // as an overwrite. Without this the next save would conflict again
+        // forever and the "save again to overwrite" advice would be a lie.
+        try {
+          const supabase = requireSupabase()
+          const { data: fresh } = await supabase
+            .from('notes')
+            .select('updated_at')
+            .eq('id', s.noteId)
+            .maybeSingle()
+          if (fresh?.updated_at) lastUpdatedAtRef.current = fresh.updated_at
+        } catch {
+          // If we cannot read it, leave the ref alone; the user is told to reload.
+        }
+
         setSaveStatus('conflict')
         setSaveError('Someone else saved this note while you were editing. Your changes are safe here — reload to see their version, or save again to overwrite.')
         return

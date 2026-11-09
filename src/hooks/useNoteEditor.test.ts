@@ -171,6 +171,74 @@ describe('useNoteEditor', () => {
       await waitFor(() => expect(result.current.saveStatus).toBe('conflict'));
       expect(result.current.saveError).toMatch(/someone else saved/i);
     });
+
+    it('retries successfully after a conflict instead of staying stuck', async () => {
+      // First RPC call conflicts, the second succeeds. The hook must adopt the
+      // server's fresh timestamp after the conflict so the retry can pass the
+      // compare-and-swap instead of conflicting forever.
+      let call = 0;
+      const rpc = vi.fn(() => {
+        call += 1;
+        // call 1: note creation succeeds. call 2: the concurrent edit is
+        // detected. call 3: the user deliberately retries and succeeds.
+        return call === 2
+          ? Promise.resolve({ data: null, error: { message: 'version_conflict', code: 'P0001' } })
+          : Promise.resolve({ data: null, error: null });
+      });
+      const mock = {
+        from: vi.fn(() => ({
+          insert: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: vi.fn(() =>
+                Promise.resolve({
+                  data: { id: 'n1', slug: 's', updated_at: '2020-01-01T00:00:00Z' },
+                  error: null,
+                }),
+              ),
+            })),
+          })),
+          update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(() =>
+                Promise.resolve({ data: { updated_at: '2020-01-02T00:00:00Z' }, error: null }),
+              ),
+            })),
+          })),
+        })),
+        rpc,
+      };
+      vi.mocked(requireSupabase).mockReturnValue(
+        mock as unknown as ReturnType<typeof requireSupabase>,
+      );
+
+      const { result } = renderHook(() => useNoteEditor());
+      act(() => {
+        result.current.setTitle('Mine');
+        result.current.setSlug('mine');
+        result.current.setFolderId('f1');
+      });
+
+      await act(async () => {
+        await result.current.save(getUserId(1)); // creates the note
+      });
+      await act(async () => {
+        await result.current.save(getUserId(1)); // conflicts
+      });
+      await waitFor(() => expect(result.current.saveStatus).toBe('conflict'));
+
+      // The retry must clear the conflict and report success.
+      await act(async () => {
+        await result.current.save(getUserId(1));
+      });
+      await waitFor(() => expect(result.current.saveStatus).toBe('saved'));
+
+      // And the value sent on the retry must not be the stale one.
+      const sentTimestamps = rpc.mock.calls
+        .map((c: unknown[]) => (c[1] as { p_expected_updated_at?: string } | undefined)?.p_expected_updated_at)
+        .filter(Boolean);
+      expect(sentTimestamps[sentTimestamps.length - 1]).toBe('2020-01-02T00:00:00Z');
+    });
   });
 
   describe('save() — slug suggestion on 23505', () => {
