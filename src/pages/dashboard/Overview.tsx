@@ -38,7 +38,6 @@ function Pagination({
           disabled={currentPage <= 1}
           onClick={() => onPageChange(currentPage - 1)}
           className={styles.paginationBtn}
-          aria-label="Previous page"
         >
           ← Prev
         </button>
@@ -46,7 +45,6 @@ function Pagination({
           disabled={currentPage >= totalPages}
           onClick={() => onPageChange(currentPage + 1)}
           className={styles.paginationBtn}
-          aria-label="Next page"
         >
           Next →
         </button>

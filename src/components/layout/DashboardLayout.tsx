@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NotificationBell } from "@/components/NotificationBell";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { Icon } from "@/components/layout/DashboardIcon";
 import { IC } from "@/components/layout/dashboardIconPaths";
 import { useAuth } from "@/context/auth";
@@ -99,6 +100,8 @@ function SidebarInner({
         )}
         <button
           onClick={onToggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           style={{
             width: "28px",
             height: "28px",
@@ -664,6 +667,7 @@ export function DashboardLayout({
               gap: "var(--space-3)",
             }}
           >
+            <GlobalSearch />
             {variant === "user" && <NotificationBell userId={user.id} />}
             <ThemeToggle />
 

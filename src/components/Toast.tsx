@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -67,8 +67,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Memoise the context value so consumers' callbacks can safely depend on
+  // addToast without re-creating on every render.
+  const ctxValue = useMemo(() => ({ addToast }), [addToast])
+
   return (
-    <ToastContext value={{ addToast }}>
+    <ToastContext value={ctxValue}>
       {children}
 
       {/* Toast container */}

@@ -1,9 +1,12 @@
 // ── Avatar component ───────────────────────────────────────────
 // Extracted from @/lib/helpers to fix react-refresh/only-export-components
 
+// Every colour here must reach 4.5:1 against white text (WCAG AA).
+// The lighter amber/green variants (#B87009, #059669, #D97706) failed at
+// ~3.2–3.9:1, so we use their darker equivalents.
 const AVATAR_COLORS = [
-  '#0D7F66', '#B87009', '#4F46E5', '#BE185D',
-  '#059669', '#D97706', '#7C3AED', '#DB2777',
+  '#0D7F66', '#8A5406', '#4F46E5', '#BE185D',
+  '#047857', '#B45309', '#7C3AED', '#DB2777',
 ]
 
 function getInitials(name: string): string {

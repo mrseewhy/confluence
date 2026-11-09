@@ -65,10 +65,10 @@ describe('PaginationBar', () => {
     )
 
     expect(
-      screen.getByRole('button', { name: 'Previous page' }),
+      screen.getByRole('button', { name: '← Prev' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Next page' }),
+      screen.getByRole('button', { name: 'Next →' }),
     ).toBeInTheDocument()
   })
 
@@ -81,9 +81,9 @@ describe('PaginationBar', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '← Prev' })).toBeDisabled()
     expect(
-      screen.getByRole('button', { name: 'Next page' }),
+      screen.getByRole('button', { name: 'Next →' }),
     ).not.toBeDisabled()
   })
 
@@ -97,10 +97,10 @@ describe('PaginationBar', () => {
     )
 
     expect(
-      screen.getByRole('button', { name: 'Next page' }),
+      screen.getByRole('button', { name: 'Next →' }),
     ).toBeDisabled()
     expect(
-      screen.getByRole('button', { name: 'Previous page' }),
+      screen.getByRole('button', { name: '← Prev' }),
     ).not.toBeDisabled()
   })
 
@@ -118,7 +118,7 @@ describe('PaginationBar', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Previous page' }))
+    await user.click(screen.getByRole('button', { name: '← Prev' }))
     expect(handleChange).toHaveBeenCalledWith(2)
   })
 
@@ -134,7 +134,7 @@ describe('PaginationBar', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    await user.click(screen.getByRole('button', { name: 'Next →' }))
     expect(handleChange).toHaveBeenCalledWith(4)
   })
 

@@ -194,8 +194,8 @@ export function SignUpPage() {
 
             <p style={{ marginTop: 'var(--space-5)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', textAlign: 'center', lineHeight: 'var(--line-height-normal)' }}>
               By creating an account you agree to our{' '}
-              <Link to="/terms" style={{ color: 'var(--color-accent)' }}>Terms</Link>{' '}and{' '}
-              <Link to="/privacy" style={{ color: 'var(--color-accent)' }}>Privacy Policy</Link>.
+              <Link to="/terms" style={{ color: 'var(--color-accent)', textDecoration: 'underline' }}>Terms</Link>{' '}and{' '}
+              <Link to="/privacy" style={{ color: 'var(--color-accent)', textDecoration: 'underline' }}>Privacy Policy</Link>.
             </p>
           </div>
 

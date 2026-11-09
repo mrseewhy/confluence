@@ -66,7 +66,7 @@ export function DashboardTrash() {
     } finally {
       setLoading(false);
     }
-  }, [user, page]);
+  }, [user, page, addToast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

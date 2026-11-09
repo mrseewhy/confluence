@@ -366,6 +366,7 @@ export function SaveIndicator({
     saving: { text: "Saving\u2026", color: "var(--color-text-muted)" },
     saved: { text: "\u2713 Saved", color: "var(--color-success)" },
     error: { text: "\u2717 Error", color: "var(--color-danger)" },
+    conflict: { text: "\u26a0 Edited elsewhere", color: "var(--color-warning)" },
   };
   const config = configMap[status as string];
 

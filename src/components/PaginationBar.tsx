@@ -65,7 +65,6 @@ export function PaginationBar({
             color: currentPage <= 1 ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
             cursor: currentPage <= 1 ? 'default' : 'pointer',
           }}
-          aria-label="Previous page"
         >
           ← Prev
         </button>
@@ -79,7 +78,6 @@ export function PaginationBar({
             color: currentPage >= totalPages ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
             cursor: currentPage >= totalPages ? 'default' : 'pointer',
           }}
-          aria-label="Next page"
         >
           Next →
         </button>

@@ -26,7 +26,7 @@ interface EditorState {
   blocks:      EditorBlock[]
 }
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict'
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -162,6 +162,9 @@ export function useNoteEditor() {
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
+  // The updated_at we last saw from the server. Used for optimistic
+  // concurrency so a concurrent save is reported instead of clobbered.
+  const lastUpdatedAtRef = useRef<string | null>(null)
   const [slugAvailable, setSlugAvailable] = useState(true)
   const [slugChecking, setSlugChecking] = useState(false)
   const slugCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -290,10 +293,12 @@ export function useNoteEditor() {
 
   const loadFromExisting = useCallback(
     (
-      note: { id: string; title: string; description: string | null; slug: string; folder_id: string; visibility: string },
+      note: { id: string; title: string; description: string | null; slug: string; folder_id: string; visibility: string; updated_at?: string },
       blocks: { id: string; type: string; content: string; metadata: Record<string, unknown> | null }[],
     ) => {
       setSlugManuallyEdited(true)
+      // Remember the server timestamp so saves can detect concurrent edits.
+      lastUpdatedAtRef.current = note.updated_at ?? null
 
       // Prefer localStorage draft over DB data
       const draft = loadDraft(note.id)
@@ -435,9 +440,11 @@ export function useNoteEditor() {
 
         if (noteError) throw noteError
 
-        // Replace blocks atomically via stored procedure
-        // NOTE: Do NOT JSON.stringify here — supabase-js handles jsonb params automatically
-        const { error: rpcError } = await supabase.rpc('replace_note_blocks', {
+        // Replace blocks atomically via stored procedure.
+        // NOTE: Do NOT JSON.stringify here — supabase-js handles jsonb params automatically.
+        // Pass the updated_at we last observed so a concurrent save raises
+        // version_conflict instead of silently overwriting the other edit.
+        const { error: rpcError } = await supabase.rpc('replace_note_blocks_checked', {
           p_note_id: s.noteId,
           p_blocks:  s.blocks.map((block, i) => ({
             type:        block.type,
@@ -445,9 +452,23 @@ export function useNoteEditor() {
             order_index: i,
             metadata:    block.metadata,
           })),
+          p_expected_updated_at: lastUpdatedAtRef.current,
         })
 
         if (rpcError) throw rpcError
+
+        // Adopt the server's new timestamp so the next save is in sync.
+        // Best effort: a failure here must never fail the save itself.
+        try {
+          const { data: stamp } = await supabase
+            .from('notes')
+            .select('updated_at')
+            .eq('id', s.noteId)
+            .maybeSingle()
+          if (stamp?.updated_at) lastUpdatedAtRef.current = stamp.updated_at
+        } catch {
+          // Ignore: conflict detection degrades to last-write-wins.
+        }
 
         clearDraft(s.noteId)
         setSaveStatus('saved')
@@ -499,6 +520,15 @@ export function useNoteEditor() {
       }
     } catch (err) {
       console.error('[useNoteEditor] save error', err)
+
+      // A concurrent save moved the note on: report it rather than overwrite.
+      const conflictErr = err as { message?: string } | null
+      if (typeof conflictErr?.message === 'string' && conflictErr.message.includes('version_conflict')) {
+        setSaveStatus('conflict')
+        setSaveError('Someone else saved this note while you were editing. Your changes are safe here — reload to see their version, or save again to overwrite.')
+        return
+      }
+
       setSaveStatus('error')
 
       // Detect PostgreSQL unique constraint violation (code 23505)
@@ -517,7 +547,7 @@ export function useNoteEditor() {
 
       throw err
     }
-  }, [])  // stable — always reads latest via stateRef
+  }, [saveVersion])  // saveVersion is a stable useCallback
 
   // ── Slug availability check (debounced) ─────────────────────
   // Calls the Postgres RPC function is_slug_available to

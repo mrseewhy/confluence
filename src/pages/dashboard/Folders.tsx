@@ -278,7 +278,7 @@ export function DashboardFolders() {
     } finally {
       setLoading(false);
     }
-  }, [user, page, debouncedSearch]);
+  }, [user, page, debouncedSearch, PAGE_SIZE, addToast]);
 
   // Initial data load
   useEffect(() => {

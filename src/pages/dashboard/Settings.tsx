@@ -4,6 +4,7 @@ import { Button, Input } from "@/components/ui";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
 import { Modal } from "@/components/Modal";
+import { BillingComingSoonModal } from "@/components/BillingComingSoonModal";
 import styles from "@/styles/dashboard.module.css";
 import { uploadImage } from "@/lib/upload";
 
@@ -30,6 +31,7 @@ export function DashboardSettings() {
 
   // Delete account state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [billingTier, setBillingTier] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
@@ -645,13 +647,17 @@ export function DashboardSettings() {
                 }}
               >
                 {["bronze", "silver", "gold"].map((tier) => (
-                  <div
+                  <button
                     key={tier}
+                    type="button"
+                    onClick={() => setBillingTier(tier)}
+                    aria-label={`${tier} plan (coming soon)`}
                     style={{
                       flex: "1 0 80px",
                       padding: "var(--space-2) var(--space-3)",
                       background: "var(--color-bg-subtle)",
                       borderRadius: "var(--radius-md)",
+                      cursor: "pointer",
                       textAlign: "center",
                       fontSize: "11px",
                       fontWeight: "var(--font-weight-semibold)",
@@ -659,10 +665,11 @@ export function DashboardSettings() {
                       textTransform: "uppercase",
                       color: "var(--color-text-muted)",
                       opacity: 0.5,
+                      border: "1px solid var(--color-border)",
                     }}
                   >
                     {tier}
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -958,6 +965,12 @@ export function DashboardSettings() {
           </Button>
         </div>
       </Modal>
+
+      <BillingComingSoonModal
+        isOpen={billingTier !== null}
+        onClose={() => setBillingTier(null)}
+        tier={billingTier ?? undefined}
+      />
     </DashboardLayout>
   );
 }

@@ -302,7 +302,7 @@ export function DashboardNotes() {
     } finally {
       setLoading(false);
     }
-  }, [user, page, debouncedSearch, vis]);
+  }, [user, page, debouncedSearch, vis, PAGE_SIZE, addToast]);
 
   // Initial data load
   useEffect(() => {

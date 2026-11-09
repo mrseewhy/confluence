@@ -97,7 +97,7 @@ export function AdminFolders() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [addToast]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadFolders(debouncedSearch, vis, page); }, [page, debouncedSearch, vis, loadFolders]);

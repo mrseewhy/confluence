@@ -121,7 +121,7 @@ export function NotificationBell({ userId }: { userId: string }) {
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
-        aria-label="Notifications"
+        aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
         style={{
           position: "relative",
           width: "36px",
@@ -149,6 +149,7 @@ export function NotificationBell({ userId }: { userId: string }) {
         {"\uD83D\uDD14"}
         {unread > 0 && (
           <span
+            aria-hidden="true"
             style={{
               position: "absolute",
               top: "-2px",

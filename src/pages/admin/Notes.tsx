@@ -109,7 +109,7 @@ export function AdminNotes() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [addToast]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadNotes(debouncedSearch, vis, page); }, [page, debouncedSearch, vis, loadNotes]);

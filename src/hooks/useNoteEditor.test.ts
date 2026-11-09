@@ -131,6 +131,48 @@ describe('useNoteEditor', () => {
     })
   })
 
+  describe('save() — conflict detection', () => {
+    it('reports a conflict instead of overwriting when the note moved on', async () => {
+      const conflictRpc = vi.fn(() =>
+        Promise.resolve({ data: null, error: { message: 'version_conflict', code: 'P0001' } }),
+      );
+      const mock = {
+        from: vi.fn(() => ({
+          insert: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: vi.fn(() => Promise.resolve({ data: { id: 'n1', slug: 's' }, error: null })),
+            })),
+          })),
+          update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
+        })),
+        rpc: conflictRpc,
+      };
+      vi.mocked(requireSupabase).mockReturnValue(
+        mock as unknown as ReturnType<typeof requireSupabase>,
+      );
+
+      const { result } = renderHook(() => useNoteEditor());
+      act(() => {
+        result.current.setTitle('Mine');
+        result.current.setSlug('mine');
+        result.current.setFolderId('f1');
+      });
+
+      // First save creates the note.
+      await act(async () => {
+        await result.current.save(getUserId(1));
+      });
+
+      // Second save hits a version conflict from the server.
+      await act(async () => {
+        await result.current.save(getUserId(1));
+      });
+
+      await waitFor(() => expect(result.current.saveStatus).toBe('conflict'));
+      expect(result.current.saveError).toMatch(/someone else saved/i);
+    });
+  });
+
   describe('save() — slug suggestion on 23505', () => {
     it('suggests an alternative slug on unique constraint violation', async () => {
       // Mock supabase to throw a 23505 error on INSERT

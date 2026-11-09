@@ -16,11 +16,11 @@
   /* Text */
   --color-text-primary:   #111018;
   --color-text-secondary: #4C4A58;
-  --color-text-muted:     #908E9B;
+  --color-text-muted:     #6B6976;
   --color-text-inverted:  #F7F6F3;
 
   /* Accent — confident teal */
-  --color-accent:         #0D7F66;
+  --color-accent:         #0B7059;
   --color-accent-hover:   #0A6E58;
   --color-accent-subtle:  #E4F3F0;
   --color-accent-muted:   #A3D4CB;
@@ -133,7 +133,7 @@
 
   --color-text-primary:   #EDE9F8;
   --color-text-secondary: #9E9AAE;
-  --color-text-muted:     #5E5A6E;
+  --color-text-muted:     #928EA0;
   --color-text-inverted:  #0E0D11;
 
   --color-accent:         #10B891;

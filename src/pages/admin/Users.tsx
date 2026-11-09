@@ -5,6 +5,7 @@ import { IC } from "@/components/layout/dashboardIconPaths";
 import { Badge, Button, EmptyState, Card } from "@/components/ui";
 import { ActionPanel, ItemSelect, type SelectItem } from "@/components/admin";
 import { Modal } from "@/components/Modal";
+import { BillingComingSoonModal } from "@/components/BillingComingSoonModal";
 import { useToast } from "@/components/Toast";
 import { useAuth, fallbackProfile } from "@/context/auth";
 import { requireSupabase } from "@/lib/supabase";
@@ -47,6 +48,7 @@ export function AdminUsers() {
   const user = profile;
   const { addToast } = useToast();
 
+  const [billingTier, setBillingTier] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [usersList, setUsersList] = useState<UserRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -498,15 +500,7 @@ export function AdminUsers() {
                       size="sm"
                       style={{ textTransform: "capitalize" }}
                       disabled={target.subscription_tier === tier}
-                      onClick={async () => {
-                        try {
-                          const supabase = requireSupabase();
-                          await supabase.from("profiles").update({ subscription_tier: tier }).eq("id", target.id);
-                          setUsersList((prev) => prev.map((r) => r.id === target.id ? { ...r, subscription_tier: tier } : r));
-                          addToast(`${target.full_name} set to ${tier}`, "success");
-                          void logActivity(target.email, target.full_name, "tier_changed", `Admin ${user.full_name} changed ${target.full_name}'s tier to ${tier}`);
-                        } catch { addToast("Failed to update tier. Try again.", "error"); }
-                      }}
+                      onClick={() => setBillingTier(tier)}
                     >
                       {tier}
                     </Button>
@@ -697,6 +691,11 @@ export function AdminUsers() {
       </Modal>
 
 
+      <BillingComingSoonModal
+        isOpen={billingTier !== null}
+        onClose={() => setBillingTier(null)}
+        tier={billingTier ?? undefined}
+      />
     </DashboardLayout>
   );
 }

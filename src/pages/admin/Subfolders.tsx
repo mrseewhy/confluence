@@ -96,7 +96,7 @@ export function AdminSubfolders() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [addToast]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadSubfolders(debouncedSearch, vis, page); }, [page, debouncedSearch, vis, loadSubfolders]);
